@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package service;
+
+option go_package = "CommandCenter/proto";
+
+service MatchingServerService {
+  rpc SendHeartbeat(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
+  rpc DefinePool(PoolDefinitionRequest) returns (PoolDefinitionResponseEnvelope);
+  rpc SendOrder(stream OrderNew) returns (stream OrderNewResponseEnvelope);
+  rpc CancelOrder(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
+}
+
+enum MessageType {
+  HEARTBEAT = 0;
+  GENERAL_REJECT = 1;
+  POOL_DEFINITION_REQUEST = 2;
+  POOL_DEFINITION_RESPONSE = 3;
+  ORDER_NEW = 4;
+  ORDER_NEW_ACKNOWLEDGEMENT = 5;
+  ORDER_CANCEL = 6;
+  ORDER_CANCEL_ACKNOWLEDGEMENT = 7;
+  ORDER_FILL = 8;
+}
+
+enum OrderType {
+  LIMIT = 1;
+  MARKET = 2;
+}
+
+message MessageBase {
+  uint32 versionMajor = 1;
+  uint32 versionMinor = 2;
+  MessageType messageType = 3;
+}
+
+message SequencedMessageBase {
+  uint64 sequenceNumber = 1;
+}
+
+message ResponseBase {
+  uint64 requestSequenceNumber = 1;
+}
+
+// Some response types can fail if the request has invalid information, in which case they compose themselves with this message
+message FallibleBase {
+  bool success = 1;
+  string errorDescription = 2;
+}
+
+message Heartbeat {
+  MessageBase messageBase = 1;
+}
+
+message GeneralReject {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  ResponseBase responseBase = 3;
+  string errorDescription = 4;
+}
+
+message PoolDefinitionRequest {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  repeated uint64 legSecurityIds = 3;
+}
+
+message PoolDefinitionResponse {
+  message Lineup {
+    message Leg {
+      uint64 securityId = 1;
+      bool isOver = 2;
+    }
+
+    uint64 lineupId = 1;
+    repeated Leg legs = 2;
+  }
+
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  ResponseBase responseBase = 3;
+  FallibleBase fallibleBase = 4;
+  uint64 poolId = 5;
+  bool isNew = 6; // explains whether the user's request to create the pool resulted in finding an existing pool with the same entries
+  repeated Lineup lineups = 7; // contains a list of all possible lineups that fall into this pool
+}
+
+message OrderNew {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  uint64 lineupId = 3;
+  OrderType orderType = 4;
+  uint64 price = 5;
+  uint64 quantity = 6;
+  uint64 selfMatchId = 7; // protects a user from filling against orders entirely from that same user
+}
+
+message OrderNewAcknowledgement {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  ResponseBase responseBase = 3;
+  FallibleBase fallibleBase = 4;
+  uint64 orderId = 5;
+}
+
+message OrderCancel {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  uint64 orderId = 3;
+}
+
+message OrderCancelAcknowledgement {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  ResponseBase responseBase = 3;
+  FallibleBase fallibleBase = 4;
+  uint64 orderId = 5;
+}
+
+// Similar to OrderCancelAcknowledgement but sent if the order is cancelled when the user has not requested a cancel (e.g., during Matcher shutdown)
+message OrderElimination {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  uint64 orderId = 3;
+  string eliminationDescription = 4;
+}
+
+message OrderFill {
+  MessageBase messageBase = 1;
+  SequencedMessageBase sequencedMessageBase = 2;
+  uint64 orderId = 3;
+  uint64 price = 4;
+  uint64 quantity = 5;
+  uint64 cumulativeQuantity = 6; // filled quantity up to and including this fill
+  uint64 remainingQuantity = 7;
+}
+
+// Encapsulate all possible messages that can be sent as a result of Heartbeat
+message HeartbeatResponseEnvelope {
+  oneof contents {
+    GeneralReject generalReject = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+// Encapsulate all possible messages that can be sent as a result of PoolDefinitionRequest
+message PoolDefinitionResponseEnvelope {
+  oneof contents {
+    GeneralReject generalReject = 1;
+    PoolDefinitionResponse response = 2;
+  }
+}
+
+// Encapsulate all possible messages that can be sent as a result of OrderNew
+message OrderNewResponseEnvelope {
+  oneof contents {
+    GeneralReject generalReject = 1;
+    OrderNewAcknowledgement acknowledgement = 2;
+    OrderElimination elimination = 3;
+    OrderFill fill = 4;
+  }
+}
+
+// Encapsulate all possible messages that can be sent as a result of OrderCancel
+message OrderCancelResponseEnvelope {
+  oneof contents {
+    GeneralReject generalReject = 1;
+    OrderCancelAcknowledgement acknowledgement = 2;
+  }
+}
