@@ -1,14 +1,14 @@
 syntax = "proto3";
 
-package service;
+package MatchingServicePackage;
 
 option go_package = "CommandCenter/proto";
 
 service MatchingServerService {
-  rpc SendHeartbeat(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
-  rpc DefinePool(PoolDefinitionRequest) returns (PoolDefinitionResponseEnvelope);
-  rpc SendOrder(stream OrderNew) returns (stream OrderNewResponseEnvelope);
-  rpc CancelOrder(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
+  rpc OnHeartbeat(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
+  rpc OnPoolDefinitionRequest(PoolDefinitionRequest) returns (PoolDefinitionResponseEnvelope);
+  rpc OnOrderNew(stream OrderNew) returns (stream OrderNewResponseEnvelope);
+  rpc OnOrderCancel(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
 }
 
 enum MessageType {
@@ -24,8 +24,8 @@ enum MessageType {
 }
 
 enum OrderType {
-  LIMIT = 1;
-  MARKET = 2;
+  LIMIT = 0;
+  MARKET = 1;
 }
 
 message MessageBase {
