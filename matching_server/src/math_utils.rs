@@ -29,7 +29,7 @@ fn gcd(a: u64, b: u64) -> u64 {
 /// # Example
 /// ```
 /// let nums = vec![10, 20, 30];
-/// let gcd = crate::MatchingServer::math_utils::highest_common_denominator(&nums);
+/// let gcd = crate::matching_server::math_utils::highest_common_denominator(&nums);
 /// assert_eq!(gcd, 10);
 /// ```
 pub fn highest_common_denominator(numbers: &[u64]) -> u64 {
