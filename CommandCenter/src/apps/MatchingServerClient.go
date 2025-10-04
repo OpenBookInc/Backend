@@ -163,7 +163,13 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 		}
 		price, _ := strconv.ParseUint(r.FormValue("price"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
-		selfMatchId, _ := strconv.ParseUint(r.FormValue("selfMatchId"), 10, 64)
+
+		// handle optional selfMatchId (pointer presence)
+		var selfMatchIdPtr *uint64
+		if v := r.FormValue("selfMatchId"); v != "" {
+			parsed, _ := strconv.ParseUint(v, 10, 64)
+			selfMatchIdPtr = &parsed
+		}
 
 		stream, err := wc.client.OnOrderNew(context.Background())
 		if err != nil {
@@ -184,7 +190,7 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 			OrderType:   orderType,
 			Price:       price,
 			Quantity:    quantity,
-			SelfMatchId: selfMatchId,
+			SelfMatchId: selfMatchIdPtr,
 		}
 
 		if err := stream.Send(order); err != nil {
@@ -404,8 +410,8 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             <input type="number" name="quantity" value="10" required>
         </div>
         <div class="form-group">
-            <label>Self Match ID:</label>
-            <input type="number" name="selfMatchId" value="0" required>
+            <label>Self Match ID (optional):</label>
+            <input type="number" name="selfMatchId" placeholder="Leave blank for no self-match protection">
         </div>
         <button type="submit">Send Order</button>
     </form>

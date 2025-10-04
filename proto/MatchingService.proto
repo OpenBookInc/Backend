@@ -92,7 +92,7 @@ message OrderNew {
   OrderType orderType = 4;
   uint64 price = 5;
   uint64 quantity = 6;
-  uint64 selfMatchId = 7; // protects a user from filling against orders entirely from that same user
+  optional uint64 selfMatchId = 7; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
 }
 
 message OrderNewAcknowledgement {

@@ -607,7 +607,7 @@ type OrderNew struct {
 	OrderType            OrderType              `protobuf:"varint,4,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
 	Price                uint64                 `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"`
 	Quantity             uint64                 `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId          uint64                 `protobuf:"varint,7,opt,name=selfMatchId,proto3" json:"selfMatchId,omitempty"` // protects a user from filling against orders entirely from that same user
+	SelfMatchId          *uint64                `protobuf:"varint,7,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -685,8 +685,8 @@ func (x *OrderNew) GetQuantity() uint64 {
 }
 
 func (x *OrderNew) GetSelfMatchId() uint64 {
-	if x != nil {
-		return x.SelfMatchId
+	if x != nil && x.SelfMatchId != nil {
+		return *x.SelfMatchId
 	}
 	return 0
 }
@@ -1574,15 +1574,16 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\n" +
 	"securityId\x18\x01 \x01(\x04R\n" +
 	"securityId\x12\x16\n" +
-	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"\xe4\x02\n" +
+	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"\xf9\x02\n" +
 	"\bOrderNew\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x1a\n" +
 	"\blineupId\x18\x03 \x01(\x04R\blineupId\x12?\n" +
 	"\torderType\x18\x04 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x14\n" +
 	"\x05price\x18\x05 \x01(\x04R\x05price\x12\x1a\n" +
-	"\bquantity\x18\x06 \x01(\x04R\bquantity\x12 \n" +
-	"\vselfMatchId\x18\a \x01(\x04R\vselfMatchId\"\xf0\x02\n" +
+	"\bquantity\x18\x06 \x01(\x04R\bquantity\x12%\n" +
+	"\vselfMatchId\x18\a \x01(\x04H\x00R\vselfMatchId\x88\x01\x01B\x0e\n" +
+	"\f_selfMatchId\"\xf0\x02\n" +
 	"\x17OrderNewAcknowledgement\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
@@ -1755,6 +1756,7 @@ func file_MatchingService_proto_init() {
 	if File_MatchingService_proto != nil {
 		return
 	}
+	file_MatchingService_proto_msgTypes[8].OneofWrappers = []any{}
 	file_MatchingService_proto_msgTypes[14].OneofWrappers = []any{
 		(*HeartbeatResponseEnvelope_GeneralReject)(nil),
 		(*HeartbeatResponseEnvelope_Heartbeat)(nil),
