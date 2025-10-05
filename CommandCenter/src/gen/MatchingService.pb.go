@@ -384,7 +384,7 @@ type GeneralReject struct {
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
 	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
 	ResponseBase         *ResponseBase          `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	ErrorDescription     string                 `protobuf:"bytes,4,opt,name=errorDescription,proto3" json:"errorDescription,omitempty"`
+	Body                 *GeneralReject_Body    `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -440,18 +440,18 @@ func (x *GeneralReject) GetResponseBase() *ResponseBase {
 	return nil
 }
 
-func (x *GeneralReject) GetErrorDescription() string {
+func (x *GeneralReject) GetBody() *GeneralReject_Body {
 	if x != nil {
-		return x.ErrorDescription
+		return x.Body
 	}
-	return ""
+	return nil
 }
 
 type PoolDefinitionRequest struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	LegSecurityIds       []uint64               `protobuf:"varint,3,rep,packed,name=legSecurityIds,proto3" json:"legSecurityIds,omitempty"`
+	state                protoimpl.MessageState      `protogen:"open.v1"`
+	MessageBase          *MessageBase                `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
+	SequencedMessageBase *SequencedMessageBase       `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	Body                 *PoolDefinitionRequest_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -500,22 +500,20 @@ func (x *PoolDefinitionRequest) GetSequencedMessageBase() *SequencedMessageBase 
 	return nil
 }
 
-func (x *PoolDefinitionRequest) GetLegSecurityIds() []uint64 {
+func (x *PoolDefinitionRequest) GetBody() *PoolDefinitionRequest_Body {
 	if x != nil {
-		return x.LegSecurityIds
+		return x.Body
 	}
 	return nil
 }
 
 type PoolDefinitionResponse struct {
-	state                protoimpl.MessageState           `protogen:"open.v1"`
-	MessageBase          *MessageBase                     `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase            `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	ResponseBase         *ResponseBase                    `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase         *FallibleBase                    `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
-	PoolId               uint64                           `protobuf:"varint,5,opt,name=poolId,proto3" json:"poolId,omitempty"`
-	IsNew                bool                             `protobuf:"varint,6,opt,name=isNew,proto3" json:"isNew,omitempty"`    // explains whether the user's request to create the pool resulted in finding an existing pool with the same entries
-	Lineups              []*PoolDefinitionResponse_Lineup `protobuf:"bytes,7,rep,name=lineups,proto3" json:"lineups,omitempty"` // contains a list of all possible lineups that fall into this pool
+	state                protoimpl.MessageState       `protogen:"open.v1"`
+	MessageBase          *MessageBase                 `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
+	SequencedMessageBase *SequencedMessageBase        `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	ResponseBase         *ResponseBase                `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
+	FallibleBase         *FallibleBase                `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
+	Body                 *PoolDefinitionResponse_Body `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -578,23 +576,9 @@ func (x *PoolDefinitionResponse) GetFallibleBase() *FallibleBase {
 	return nil
 }
 
-func (x *PoolDefinitionResponse) GetPoolId() uint64 {
+func (x *PoolDefinitionResponse) GetBody() *PoolDefinitionResponse_Body {
 	if x != nil {
-		return x.PoolId
-	}
-	return 0
-}
-
-func (x *PoolDefinitionResponse) GetIsNew() bool {
-	if x != nil {
-		return x.IsNew
-	}
-	return false
-}
-
-func (x *PoolDefinitionResponse) GetLineups() []*PoolDefinitionResponse_Lineup {
-	if x != nil {
-		return x.Lineups
+		return x.Body
 	}
 	return nil
 }
@@ -603,11 +587,7 @@ type OrderNew struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
 	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	LineupId             uint64                 `protobuf:"varint,3,opt,name=lineupId,proto3" json:"lineupId,omitempty"`
-	OrderType            OrderType              `protobuf:"varint,4,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
-	Price                uint64                 `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"`
-	Quantity             uint64                 `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId          *uint64                `protobuf:"varint,7,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+	Body                 *OrderNew_Body         `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -656,48 +636,20 @@ func (x *OrderNew) GetSequencedMessageBase() *SequencedMessageBase {
 	return nil
 }
 
-func (x *OrderNew) GetLineupId() uint64 {
+func (x *OrderNew) GetBody() *OrderNew_Body {
 	if x != nil {
-		return x.LineupId
+		return x.Body
 	}
-	return 0
-}
-
-func (x *OrderNew) GetOrderType() OrderType {
-	if x != nil {
-		return x.OrderType
-	}
-	return OrderType_LIMIT
-}
-
-func (x *OrderNew) GetPrice() uint64 {
-	if x != nil {
-		return x.Price
-	}
-	return 0
-}
-
-func (x *OrderNew) GetQuantity() uint64 {
-	if x != nil {
-		return x.Quantity
-	}
-	return 0
-}
-
-func (x *OrderNew) GetSelfMatchId() uint64 {
-	if x != nil && x.SelfMatchId != nil {
-		return *x.SelfMatchId
-	}
-	return 0
+	return nil
 }
 
 type OrderNewAcknowledgement struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	ResponseBase         *ResponseBase          `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase         *FallibleBase          `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
-	OrderId              uint64                 `protobuf:"varint,5,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	state                protoimpl.MessageState        `protogen:"open.v1"`
+	MessageBase          *MessageBase                  `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
+	SequencedMessageBase *SequencedMessageBase         `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	ResponseBase         *ResponseBase                 `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
+	FallibleBase         *FallibleBase                 `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
+	Body                 *OrderNewAcknowledgement_Body `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -760,18 +712,18 @@ func (x *OrderNewAcknowledgement) GetFallibleBase() *FallibleBase {
 	return nil
 }
 
-func (x *OrderNewAcknowledgement) GetOrderId() uint64 {
+func (x *OrderNewAcknowledgement) GetBody() *OrderNewAcknowledgement_Body {
 	if x != nil {
-		return x.OrderId
+		return x.Body
 	}
-	return 0
+	return nil
 }
 
 type OrderCancel struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
 	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	OrderId              uint64                 `protobuf:"varint,3,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	Body                 *OrderCancel_Body      `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -820,20 +772,20 @@ func (x *OrderCancel) GetSequencedMessageBase() *SequencedMessageBase {
 	return nil
 }
 
-func (x *OrderCancel) GetOrderId() uint64 {
+func (x *OrderCancel) GetBody() *OrderCancel_Body {
 	if x != nil {
-		return x.OrderId
+		return x.Body
 	}
-	return 0
+	return nil
 }
 
 type OrderCancelAcknowledgement struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	ResponseBase         *ResponseBase          `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase         *FallibleBase          `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
-	OrderId              uint64                 `protobuf:"varint,5,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	state                protoimpl.MessageState           `protogen:"open.v1"`
+	MessageBase          *MessageBase                     `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
+	SequencedMessageBase *SequencedMessageBase            `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	ResponseBase         *ResponseBase                    `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
+	FallibleBase         *FallibleBase                    `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
+	Body                 *OrderCancelAcknowledgement_Body `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -896,22 +848,22 @@ func (x *OrderCancelAcknowledgement) GetFallibleBase() *FallibleBase {
 	return nil
 }
 
-func (x *OrderCancelAcknowledgement) GetOrderId() uint64 {
+func (x *OrderCancelAcknowledgement) GetBody() *OrderCancelAcknowledgement_Body {
 	if x != nil {
-		return x.OrderId
+		return x.Body
 	}
-	return 0
+	return nil
 }
 
 // Similar to OrderCancelAcknowledgement but sent if the order is cancelled when the user has not requested a cancel (e.g., during Matcher shutdown)
 type OrderElimination struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	MessageBase            *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase   *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	OrderId                uint64                 `protobuf:"varint,3,opt,name=orderId,proto3" json:"orderId,omitempty"`
-	EliminationDescription string                 `protobuf:"bytes,4,opt,name=eliminationDescription,proto3" json:"eliminationDescription,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
+	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	OrderId              uint64                 `protobuf:"varint,3,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	Body                 *OrderElimination_Body `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *OrderElimination) Reset() {
@@ -965,40 +917,36 @@ func (x *OrderElimination) GetOrderId() uint64 {
 	return 0
 }
 
-func (x *OrderElimination) GetEliminationDescription() string {
+func (x *OrderElimination) GetBody() *OrderElimination_Body {
 	if x != nil {
-		return x.EliminationDescription
+		return x.Body
 	}
-	return ""
+	return nil
 }
 
-type OrderFill struct {
+type FillEvent struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
 	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	OrderId              uint64                 `protobuf:"varint,3,opt,name=orderId,proto3" json:"orderId,omitempty"`
-	Price                uint64                 `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
-	Quantity             uint64                 `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	CumulativeQuantity   uint64                 `protobuf:"varint,6,opt,name=cumulativeQuantity,proto3" json:"cumulativeQuantity,omitempty"` // filled quantity up to and including this fill
-	RemainingQuantity    uint64                 `protobuf:"varint,7,opt,name=remainingQuantity,proto3" json:"remainingQuantity,omitempty"`
+	Body                 *FillEvent_Body        `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
-func (x *OrderFill) Reset() {
-	*x = OrderFill{}
+func (x *FillEvent) Reset() {
+	*x = FillEvent{}
 	mi := &file_MatchingService_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OrderFill) String() string {
+func (x *FillEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OrderFill) ProtoMessage() {}
+func (*FillEvent) ProtoMessage() {}
 
-func (x *OrderFill) ProtoReflect() protoreflect.Message {
+func (x *FillEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_MatchingService_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1010,58 +958,30 @@ func (x *OrderFill) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OrderFill.ProtoReflect.Descriptor instead.
-func (*OrderFill) Descriptor() ([]byte, []int) {
+// Deprecated: Use FillEvent.ProtoReflect.Descriptor instead.
+func (*FillEvent) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *OrderFill) GetMessageBase() *MessageBase {
+func (x *FillEvent) GetMessageBase() *MessageBase {
 	if x != nil {
 		return x.MessageBase
 	}
 	return nil
 }
 
-func (x *OrderFill) GetSequencedMessageBase() *SequencedMessageBase {
+func (x *FillEvent) GetSequencedMessageBase() *SequencedMessageBase {
 	if x != nil {
 		return x.SequencedMessageBase
 	}
 	return nil
 }
 
-func (x *OrderFill) GetOrderId() uint64 {
+func (x *FillEvent) GetBody() *FillEvent_Body {
 	if x != nil {
-		return x.OrderId
+		return x.Body
 	}
-	return 0
-}
-
-func (x *OrderFill) GetPrice() uint64 {
-	if x != nil {
-		return x.Price
-	}
-	return 0
-}
-
-func (x *OrderFill) GetQuantity() uint64 {
-	if x != nil {
-		return x.Quantity
-	}
-	return 0
-}
-
-func (x *OrderFill) GetCumulativeQuantity() uint64 {
-	if x != nil {
-		return x.CumulativeQuantity
-	}
-	return 0
-}
-
-func (x *OrderFill) GetRemainingQuantity() uint64 {
-	if x != nil {
-		return x.RemainingQuantity
-	}
-	return 0
+	return nil
 }
 
 // Encapsulate all possible messages that can be sent as a result of Heartbeat
@@ -1308,7 +1228,7 @@ func (x *OrderNewResponseEnvelope) GetElimination() *OrderElimination {
 	return nil
 }
 
-func (x *OrderNewResponseEnvelope) GetFill() *OrderFill {
+func (x *OrderNewResponseEnvelope) GetFill() *FillEvent {
 	if x != nil {
 		if x, ok := x.Contents.(*OrderNewResponseEnvelope_Fill); ok {
 			return x.Fill
@@ -1334,7 +1254,7 @@ type OrderNewResponseEnvelope_Elimination struct {
 }
 
 type OrderNewResponseEnvelope_Fill struct {
-	Fill *OrderFill `protobuf:"bytes,4,opt,name=fill,proto3,oneof"`
+	Fill *FillEvent `protobuf:"bytes,4,opt,name=fill,proto3,oneof"`
 }
 
 func (*OrderNewResponseEnvelope_GeneralReject) isOrderNewResponseEnvelope_Contents() {}
@@ -1428,28 +1348,27 @@ func (*OrderCancelResponseEnvelope_GeneralReject) isOrderCancelResponseEnvelope_
 
 func (*OrderCancelResponseEnvelope_Acknowledgement) isOrderCancelResponseEnvelope_Contents() {}
 
-type PoolDefinitionResponse_Lineup struct {
-	state         protoimpl.MessageState               `protogen:"open.v1"`
-	LineupId      uint64                               `protobuf:"varint,1,opt,name=lineupId,proto3" json:"lineupId,omitempty"`
-	Legs          []*PoolDefinitionResponse_Lineup_Leg `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+type GeneralReject_Body struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorDescription string                 `protobuf:"bytes,1,opt,name=errorDescription,proto3" json:"errorDescription,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
-func (x *PoolDefinitionResponse_Lineup) Reset() {
-	*x = PoolDefinitionResponse_Lineup{}
+func (x *GeneralReject_Body) Reset() {
+	*x = GeneralReject_Body{}
 	mi := &file_MatchingService_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PoolDefinitionResponse_Lineup) String() string {
+func (x *GeneralReject_Body) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PoolDefinitionResponse_Lineup) ProtoMessage() {}
+func (*GeneralReject_Body) ProtoMessage() {}
 
-func (x *PoolDefinitionResponse_Lineup) ProtoReflect() protoreflect.Message {
+func (x *GeneralReject_Body) ProtoReflect() protoreflect.Message {
 	mi := &file_MatchingService_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1461,26 +1380,183 @@ func (x *PoolDefinitionResponse_Lineup) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PoolDefinitionResponse_Lineup.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse_Lineup) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
+// Deprecated: Use GeneralReject_Body.ProtoReflect.Descriptor instead.
+func (*GeneralReject_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{5, 0}
 }
 
-func (x *PoolDefinitionResponse_Lineup) GetLineupId() uint64 {
+func (x *GeneralReject_Body) GetErrorDescription() string {
 	if x != nil {
-		return x.LineupId
+		return x.ErrorDescription
+	}
+	return ""
+}
+
+type PoolDefinitionRequest_Body struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PoolId         uint64                 `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
+	TotalUnits     uint64                 `protobuf:"varint,2,opt,name=totalUnits,proto3" json:"totalUnits,omitempty"`
+	LegSecurityIds []uint64               `protobuf:"varint,3,rep,packed,name=legSecurityIds,proto3" json:"legSecurityIds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PoolDefinitionRequest_Body) Reset() {
+	*x = PoolDefinitionRequest_Body{}
+	mi := &file_MatchingService_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDefinitionRequest_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDefinitionRequest_Body) ProtoMessage() {}
+
+func (x *PoolDefinitionRequest_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDefinitionRequest_Body.ProtoReflect.Descriptor instead.
+func (*PoolDefinitionRequest_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
+}
+
+func (x *PoolDefinitionRequest_Body) GetPoolId() uint64 {
+	if x != nil {
+		return x.PoolId
 	}
 	return 0
 }
 
-func (x *PoolDefinitionResponse_Lineup) GetLegs() []*PoolDefinitionResponse_Lineup_Leg {
+func (x *PoolDefinitionRequest_Body) GetTotalUnits() uint64 {
+	if x != nil {
+		return x.TotalUnits
+	}
+	return 0
+}
+
+func (x *PoolDefinitionRequest_Body) GetLegSecurityIds() []uint64 {
+	if x != nil {
+		return x.LegSecurityIds
+	}
+	return nil
+}
+
+type PoolDefinitionResponse_Body struct {
+	state         protoimpl.MessageState                `protogen:"open.v1"`
+	PoolId        uint64                                `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
+	Lineups       []*PoolDefinitionResponse_Body_Lineup `protobuf:"bytes,2,rep,name=lineups,proto3" json:"lineups,omitempty"` // contains a list of all possible lineups that fall into this pool
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDefinitionResponse_Body) Reset() {
+	*x = PoolDefinitionResponse_Body{}
+	mi := &file_MatchingService_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDefinitionResponse_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDefinitionResponse_Body) ProtoMessage() {}
+
+func (x *PoolDefinitionResponse_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDefinitionResponse_Body.ProtoReflect.Descriptor instead.
+func (*PoolDefinitionResponse_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
+}
+
+func (x *PoolDefinitionResponse_Body) GetPoolId() uint64 {
+	if x != nil {
+		return x.PoolId
+	}
+	return 0
+}
+
+func (x *PoolDefinitionResponse_Body) GetLineups() []*PoolDefinitionResponse_Body_Lineup {
+	if x != nil {
+		return x.Lineups
+	}
+	return nil
+}
+
+type PoolDefinitionResponse_Body_Lineup struct {
+	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	LineupIndex   uint64                                    `protobuf:"varint,1,opt,name=lineupIndex,proto3" json:"lineupIndex,omitempty"`
+	Legs          []*PoolDefinitionResponse_Body_Lineup_Leg `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDefinitionResponse_Body_Lineup) Reset() {
+	*x = PoolDefinitionResponse_Body_Lineup{}
+	mi := &file_MatchingService_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDefinitionResponse_Body_Lineup) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDefinitionResponse_Body_Lineup) ProtoMessage() {}
+
+func (x *PoolDefinitionResponse_Body_Lineup) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDefinitionResponse_Body_Lineup.ProtoReflect.Descriptor instead.
+func (*PoolDefinitionResponse_Body_Lineup) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0}
+}
+
+func (x *PoolDefinitionResponse_Body_Lineup) GetLineupIndex() uint64 {
+	if x != nil {
+		return x.LineupIndex
+	}
+	return 0
+}
+
+func (x *PoolDefinitionResponse_Body_Lineup) GetLegs() []*PoolDefinitionResponse_Body_Lineup_Leg {
 	if x != nil {
 		return x.Legs
 	}
 	return nil
 }
 
-type PoolDefinitionResponse_Lineup_Leg struct {
+type PoolDefinitionResponse_Body_Lineup_Leg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SecurityId    uint64                 `protobuf:"varint,1,opt,name=securityId,proto3" json:"securityId,omitempty"`
 	IsOver        bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
@@ -1488,21 +1564,21 @@ type PoolDefinitionResponse_Lineup_Leg struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PoolDefinitionResponse_Lineup_Leg) Reset() {
-	*x = PoolDefinitionResponse_Lineup_Leg{}
-	mi := &file_MatchingService_proto_msgTypes[19]
+func (x *PoolDefinitionResponse_Body_Lineup_Leg) Reset() {
+	*x = PoolDefinitionResponse_Body_Lineup_Leg{}
+	mi := &file_MatchingService_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PoolDefinitionResponse_Lineup_Leg) String() string {
+func (x *PoolDefinitionResponse_Body_Lineup_Leg) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PoolDefinitionResponse_Lineup_Leg) ProtoMessage() {}
+func (*PoolDefinitionResponse_Body_Lineup_Leg) ProtoMessage() {}
 
-func (x *PoolDefinitionResponse_Lineup_Leg) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[19]
+func (x *PoolDefinitionResponse_Body_Lineup_Leg) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1513,23 +1589,419 @@ func (x *PoolDefinitionResponse_Lineup_Leg) ProtoReflect() protoreflect.Message 
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PoolDefinitionResponse_Lineup_Leg.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse_Lineup_Leg) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0}
+// Deprecated: Use PoolDefinitionResponse_Body_Lineup_Leg.ProtoReflect.Descriptor instead.
+func (*PoolDefinitionResponse_Body_Lineup_Leg) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0, 0}
 }
 
-func (x *PoolDefinitionResponse_Lineup_Leg) GetSecurityId() uint64 {
+func (x *PoolDefinitionResponse_Body_Lineup_Leg) GetSecurityId() uint64 {
 	if x != nil {
 		return x.SecurityId
 	}
 	return 0
 }
 
-func (x *PoolDefinitionResponse_Lineup_Leg) GetIsOver() bool {
+func (x *PoolDefinitionResponse_Body_Lineup_Leg) GetIsOver() bool {
 	if x != nil {
 		return x.IsOver
 	}
 	return false
+}
+
+type OrderNew_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PoolId        uint64                 `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
+	LineupIndex   uint64                 `protobuf:"varint,2,opt,name=lineupIndex,proto3" json:"lineupIndex,omitempty"`
+	OrderType     OrderType              `protobuf:"varint,3,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
+	Portion       uint64                 `protobuf:"varint,4,opt,name=portion,proto3" json:"portion,omitempty"`
+	Quantity      uint64                 `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	SelfMatchId   *uint64                `protobuf:"varint,6,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderNew_Body) Reset() {
+	*x = OrderNew_Body{}
+	mi := &file_MatchingService_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderNew_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderNew_Body) ProtoMessage() {}
+
+func (x *OrderNew_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderNew_Body.ProtoReflect.Descriptor instead.
+func (*OrderNew_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{8, 0}
+}
+
+func (x *OrderNew_Body) GetPoolId() uint64 {
+	if x != nil {
+		return x.PoolId
+	}
+	return 0
+}
+
+func (x *OrderNew_Body) GetLineupIndex() uint64 {
+	if x != nil {
+		return x.LineupIndex
+	}
+	return 0
+}
+
+func (x *OrderNew_Body) GetOrderType() OrderType {
+	if x != nil {
+		return x.OrderType
+	}
+	return OrderType_LIMIT
+}
+
+func (x *OrderNew_Body) GetPortion() uint64 {
+	if x != nil {
+		return x.Portion
+	}
+	return 0
+}
+
+func (x *OrderNew_Body) GetQuantity() uint64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *OrderNew_Body) GetSelfMatchId() uint64 {
+	if x != nil && x.SelfMatchId != nil {
+		return *x.SelfMatchId
+	}
+	return 0
+}
+
+type OrderNewAcknowledgement_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderNewAcknowledgement_Body) Reset() {
+	*x = OrderNewAcknowledgement_Body{}
+	mi := &file_MatchingService_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderNewAcknowledgement_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderNewAcknowledgement_Body) ProtoMessage() {}
+
+func (x *OrderNewAcknowledgement_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderNewAcknowledgement_Body.ProtoReflect.Descriptor instead.
+func (*OrderNewAcknowledgement_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{9, 0}
+}
+
+func (x *OrderNewAcknowledgement_Body) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+type OrderCancel_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderCancel_Body) Reset() {
+	*x = OrderCancel_Body{}
+	mi := &file_MatchingService_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderCancel_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderCancel_Body) ProtoMessage() {}
+
+func (x *OrderCancel_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderCancel_Body.ProtoReflect.Descriptor instead.
+func (*OrderCancel_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{10, 0}
+}
+
+func (x *OrderCancel_Body) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+type OrderCancelAcknowledgement_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderCancelAcknowledgement_Body) Reset() {
+	*x = OrderCancelAcknowledgement_Body{}
+	mi := &file_MatchingService_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderCancelAcknowledgement_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderCancelAcknowledgement_Body) ProtoMessage() {}
+
+func (x *OrderCancelAcknowledgement_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderCancelAcknowledgement_Body.ProtoReflect.Descriptor instead.
+func (*OrderCancelAcknowledgement_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{11, 0}
+}
+
+func (x *OrderCancelAcknowledgement_Body) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+type OrderElimination_Body struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	EliminationDescription string                 `protobuf:"bytes,1,opt,name=eliminationDescription,proto3" json:"eliminationDescription,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *OrderElimination_Body) Reset() {
+	*x = OrderElimination_Body{}
+	mi := &file_MatchingService_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderElimination_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderElimination_Body) ProtoMessage() {}
+
+func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderElimination_Body.ProtoReflect.Descriptor instead.
+func (*OrderElimination_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{12, 0}
+}
+
+func (x *OrderElimination_Body) GetEliminationDescription() string {
+	if x != nil {
+		return x.EliminationDescription
+	}
+	return ""
+}
+
+type FillEvent_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransactionId uint64                 `protobuf:"varint,1,opt,name=transactionId,proto3" json:"transactionId,omitempty"`
+	FillEventId   uint64                 `protobuf:"varint,2,opt,name=fillEventId,proto3" json:"fillEventId,omitempty"`
+	Fills         []*FillEvent_Body_Fill `protobuf:"bytes,3,rep,name=fills,proto3" json:"fills,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FillEvent_Body) Reset() {
+	*x = FillEvent_Body{}
+	mi := &file_MatchingService_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FillEvent_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FillEvent_Body) ProtoMessage() {}
+
+func (x *FillEvent_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FillEvent_Body.ProtoReflect.Descriptor instead.
+func (*FillEvent_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{13, 0}
+}
+
+func (x *FillEvent_Body) GetTransactionId() uint64 {
+	if x != nil {
+		return x.TransactionId
+	}
+	return 0
+}
+
+func (x *FillEvent_Body) GetFillEventId() uint64 {
+	if x != nil {
+		return x.FillEventId
+	}
+	return 0
+}
+
+func (x *FillEvent_Body) GetFills() []*FillEvent_Body_Fill {
+	if x != nil {
+		return x.Fills
+	}
+	return nil
+}
+
+type FillEvent_Body_Fill struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	FillId          uint64                 `protobuf:"varint,1,opt,name=fillId,proto3" json:"fillId,omitempty"`
+	OrderId         uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	IsAggressor     bool                   `protobuf:"varint,3,opt,name=isAggressor,proto3" json:"isAggressor,omitempty"`
+	MatchedPortion  uint64                 `protobuf:"varint,4,opt,name=matchedPortion,proto3" json:"matchedPortion,omitempty"`
+	MatchedQuantity uint64                 `protobuf:"varint,5,opt,name=matchedQuantity,proto3" json:"matchedQuantity,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FillEvent_Body_Fill) Reset() {
+	*x = FillEvent_Body_Fill{}
+	mi := &file_MatchingService_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FillEvent_Body_Fill) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FillEvent_Body_Fill) ProtoMessage() {}
+
+func (x *FillEvent_Body_Fill) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FillEvent_Body_Fill.ProtoReflect.Descriptor instead.
+func (*FillEvent_Body_Fill) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{13, 0, 0}
+}
+
+func (x *FillEvent_Body_Fill) GetFillId() uint64 {
+	if x != nil {
+		return x.FillId
+	}
+	return 0
+}
+
+func (x *FillEvent_Body_Fill) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *FillEvent_Body_Fill) GetIsAggressor() bool {
+	if x != nil {
+		return x.IsAggressor
+	}
+	return false
+}
+
+func (x *FillEvent_Body_Fill) GetMatchedPortion() uint64 {
+	if x != nil {
+		return x.MatchedPortion
+	}
+	return 0
+}
+
+func (x *FillEvent_Body_Fill) GetMatchedQuantity() uint64 {
+	if x != nil {
+		return x.MatchedQuantity
+	}
+	return 0
 }
 
 var File_MatchingService_proto protoreflect.FileDescriptor
@@ -1549,70 +2021,96 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12*\n" +
 	"\x10errorDescription\x18\x02 \x01(\tR\x10errorDescription\"R\n" +
 	"\tHeartbeat\x12E\n" +
-	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\"\xae\x02\n" +
+	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\"\xf6\x02\n" +
 	"\rGeneralReject\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
-	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12*\n" +
-	"\x10errorDescription\x18\x04 \x01(\tR\x10errorDescription\"\xe8\x01\n" +
+	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12>\n" +
+	"\x04body\x18\x04 \x01(\v2*.MatchingServicePackage.GeneralReject.BodyR\x04body\x1a2\n" +
+	"\x04Body\x12*\n" +
+	"\x10errorDescription\x18\x01 \x01(\tR\x10errorDescription\"\xf0\x02\n" +
 	"\x15PoolDefinitionRequest\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12&\n" +
-	"\x0elegSecurityIds\x18\x03 \x03(\x04R\x0elegSecurityIds\"\x89\x05\n" +
+	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12F\n" +
+	"\x04body\x18\x03 \x01(\v22.MatchingServicePackage.PoolDefinitionRequest.BodyR\x04body\x1af\n" +
+	"\x04Body\x12\x16\n" +
+	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12\x1e\n" +
+	"\n" +
+	"totalUnits\x18\x02 \x01(\x04R\n" +
+	"totalUnits\x12&\n" +
+	"\x0elegSecurityIds\x18\x03 \x03(\x04R\x0elegSecurityIds\"\xd5\x05\n" +
 	"\x16PoolDefinitionResponse\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12H\n" +
-	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12\x16\n" +
-	"\x06poolId\x18\x05 \x01(\x04R\x06poolId\x12\x14\n" +
-	"\x05isNew\x18\x06 \x01(\bR\x05isNew\x12O\n" +
-	"\alineups\x18\a \x03(\v25.MatchingServicePackage.PoolDefinitionResponse.LineupR\alineups\x1a\xb2\x01\n" +
-	"\x06Lineup\x12\x1a\n" +
-	"\blineupId\x18\x01 \x01(\x04R\blineupId\x12M\n" +
-	"\x04legs\x18\x02 \x03(\v29.MatchingServicePackage.PoolDefinitionResponse.Lineup.LegR\x04legs\x1a=\n" +
+	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12G\n" +
+	"\x04body\x18\x05 \x01(\v23.MatchingServicePackage.PoolDefinitionResponse.BodyR\x04body\x1a\xb4\x02\n" +
+	"\x04Body\x12\x16\n" +
+	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12T\n" +
+	"\alineups\x18\x02 \x03(\v2:.MatchingServicePackage.PoolDefinitionResponse.Body.LineupR\alineups\x1a\xbd\x01\n" +
+	"\x06Lineup\x12 \n" +
+	"\vlineupIndex\x18\x01 \x01(\x04R\vlineupIndex\x12R\n" +
+	"\x04legs\x18\x02 \x03(\v2>.MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.LegR\x04legs\x1a=\n" +
 	"\x03Leg\x12\x1e\n" +
 	"\n" +
 	"securityId\x18\x01 \x01(\x04R\n" +
 	"securityId\x12\x16\n" +
-	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"\xf9\x02\n" +
+	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"\xdf\x03\n" +
 	"\bOrderNew\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x1a\n" +
-	"\blineupId\x18\x03 \x01(\x04R\blineupId\x12?\n" +
-	"\torderType\x18\x04 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x14\n" +
-	"\x05price\x18\x05 \x01(\x04R\x05price\x12\x1a\n" +
-	"\bquantity\x18\x06 \x01(\x04R\bquantity\x12%\n" +
-	"\vselfMatchId\x18\a \x01(\x04H\x00R\vselfMatchId\x88\x01\x01B\x0e\n" +
-	"\f_selfMatchId\"\xf0\x02\n" +
+	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x129\n" +
+	"\x04body\x18\x03 \x01(\v2%.MatchingServicePackage.OrderNew.BodyR\x04body\x1a\xee\x01\n" +
+	"\x04Body\x12\x16\n" +
+	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12 \n" +
+	"\vlineupIndex\x18\x02 \x01(\x04R\vlineupIndex\x12?\n" +
+	"\torderType\x18\x03 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x18\n" +
+	"\aportion\x18\x04 \x01(\x04R\aportion\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12%\n" +
+	"\vselfMatchId\x18\x06 \x01(\x04H\x00R\vselfMatchId\x88\x01\x01B\x0e\n" +
+	"\f_selfMatchId\"\xc2\x03\n" +
 	"\x17OrderNewAcknowledgement\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12H\n" +
-	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12\x18\n" +
-	"\aorderId\x18\x05 \x01(\x04R\aorderId\"\xd0\x01\n" +
+	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12H\n" +
+	"\x04body\x18\x05 \x01(\v24.MatchingServicePackage.OrderNewAcknowledgement.BodyR\x04body\x1a \n" +
+	"\x04Body\x12\x18\n" +
+	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\x96\x02\n" +
 	"\vOrderCancel\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x18\n" +
-	"\aorderId\x18\x03 \x01(\x04R\aorderId\"\xf3\x02\n" +
+	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12<\n" +
+	"\x04body\x18\x03 \x01(\v2(.MatchingServicePackage.OrderCancel.BodyR\x04body\x1a \n" +
+	"\x04Body\x12\x18\n" +
+	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\xc8\x03\n" +
 	"\x1aOrderCancelAcknowledgement\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12H\n" +
-	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12\x18\n" +
-	"\aorderId\x18\x05 \x01(\x04R\aorderId\"\x8d\x02\n" +
+	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12K\n" +
+	"\x04body\x18\x05 \x01(\v27.MatchingServicePackage.OrderCancelAcknowledgement.BodyR\x04body\x1a \n" +
+	"\x04Body\x12\x18\n" +
+	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\xd8\x02\n" +
 	"\x10OrderElimination\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x18\n" +
-	"\aorderId\x18\x03 \x01(\x04R\aorderId\x126\n" +
-	"\x16eliminationDescription\x18\x04 \x01(\tR\x16eliminationDescription\"\xde\x02\n" +
-	"\tOrderFill\x12E\n" +
+	"\aorderId\x18\x03 \x01(\x04R\aorderId\x12A\n" +
+	"\x04body\x18\x04 \x01(\v2-.MatchingServicePackage.OrderElimination.BodyR\x04body\x1a>\n" +
+	"\x04Body\x126\n" +
+	"\x16eliminationDescription\x18\x01 \x01(\tR\x16eliminationDescription\"\xb3\x04\n" +
+	"\tFillEvent\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x18\n" +
-	"\aorderId\x18\x03 \x01(\x04R\aorderId\x12\x14\n" +
-	"\x05price\x18\x04 \x01(\x04R\x05price\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12.\n" +
-	"\x12cumulativeQuantity\x18\x06 \x01(\x04R\x12cumulativeQuantity\x12,\n" +
-	"\x11remainingQuantity\x18\a \x01(\x04R\x11remainingQuantity\"\xb9\x01\n" +
+	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12:\n" +
+	"\x04body\x18\x03 \x01(\v2&.MatchingServicePackage.FillEvent.BodyR\x04body\x1a\xc0\x02\n" +
+	"\x04Body\x12$\n" +
+	"\rtransactionId\x18\x01 \x01(\x04R\rtransactionId\x12 \n" +
+	"\vfillEventId\x18\x02 \x01(\x04R\vfillEventId\x12A\n" +
+	"\x05fills\x18\x03 \x03(\v2+.MatchingServicePackage.FillEvent.Body.FillR\x05fills\x1a\xac\x01\n" +
+	"\x04Fill\x12\x16\n" +
+	"\x06fillId\x18\x01 \x01(\x04R\x06fillId\x12\x18\n" +
+	"\aorderId\x18\x02 \x01(\x04R\aorderId\x12 \n" +
+	"\visAggressor\x18\x03 \x01(\bR\visAggressor\x12&\n" +
+	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\x12(\n" +
+	"\x0fmatchedQuantity\x18\x05 \x01(\x04R\x0fmatchedQuantity\"\xb9\x01\n" +
 	"\x19HeartbeatResponseEnvelope\x12M\n" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12A\n" +
 	"\theartbeat\x18\x02 \x01(\v2!.MatchingServicePackage.HeartbeatH\x00R\theartbeatB\n" +
@@ -1627,7 +2125,7 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12[\n" +
 	"\x0facknowledgement\x18\x02 \x01(\v2/.MatchingServicePackage.OrderNewAcknowledgementH\x00R\x0facknowledgement\x12L\n" +
 	"\velimination\x18\x03 \x01(\v2(.MatchingServicePackage.OrderEliminationH\x00R\velimination\x127\n" +
-	"\x04fill\x18\x04 \x01(\v2!.MatchingServicePackage.OrderFillH\x00R\x04fillB\n" +
+	"\x04fill\x18\x04 \x01(\v2!.MatchingServicePackage.FillEventH\x00R\x04fillB\n" +
 	"\n" +
 	"\bcontents\"\xd8\x01\n" +
 	"\x1bOrderCancelResponseEnvelope\x12M\n" +
@@ -1670,30 +2168,40 @@ func file_MatchingService_proto_rawDescGZIP() []byte {
 }
 
 var file_MatchingService_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_MatchingService_proto_goTypes = []any{
-	(MessageType)(0),                          // 0: MatchingServicePackage.MessageType
-	(OrderType)(0),                            // 1: MatchingServicePackage.OrderType
-	(*MessageBase)(nil),                       // 2: MatchingServicePackage.MessageBase
-	(*SequencedMessageBase)(nil),              // 3: MatchingServicePackage.SequencedMessageBase
-	(*ResponseBase)(nil),                      // 4: MatchingServicePackage.ResponseBase
-	(*FallibleBase)(nil),                      // 5: MatchingServicePackage.FallibleBase
-	(*Heartbeat)(nil),                         // 6: MatchingServicePackage.Heartbeat
-	(*GeneralReject)(nil),                     // 7: MatchingServicePackage.GeneralReject
-	(*PoolDefinitionRequest)(nil),             // 8: MatchingServicePackage.PoolDefinitionRequest
-	(*PoolDefinitionResponse)(nil),            // 9: MatchingServicePackage.PoolDefinitionResponse
-	(*OrderNew)(nil),                          // 10: MatchingServicePackage.OrderNew
-	(*OrderNewAcknowledgement)(nil),           // 11: MatchingServicePackage.OrderNewAcknowledgement
-	(*OrderCancel)(nil),                       // 12: MatchingServicePackage.OrderCancel
-	(*OrderCancelAcknowledgement)(nil),        // 13: MatchingServicePackage.OrderCancelAcknowledgement
-	(*OrderElimination)(nil),                  // 14: MatchingServicePackage.OrderElimination
-	(*OrderFill)(nil),                         // 15: MatchingServicePackage.OrderFill
-	(*HeartbeatResponseEnvelope)(nil),         // 16: MatchingServicePackage.HeartbeatResponseEnvelope
-	(*PoolDefinitionResponseEnvelope)(nil),    // 17: MatchingServicePackage.PoolDefinitionResponseEnvelope
-	(*OrderNewResponseEnvelope)(nil),          // 18: MatchingServicePackage.OrderNewResponseEnvelope
-	(*OrderCancelResponseEnvelope)(nil),       // 19: MatchingServicePackage.OrderCancelResponseEnvelope
-	(*PoolDefinitionResponse_Lineup)(nil),     // 20: MatchingServicePackage.PoolDefinitionResponse.Lineup
-	(*PoolDefinitionResponse_Lineup_Leg)(nil), // 21: MatchingServicePackage.PoolDefinitionResponse.Lineup.Leg
+	(MessageType)(0),                               // 0: MatchingServicePackage.MessageType
+	(OrderType)(0),                                 // 1: MatchingServicePackage.OrderType
+	(*MessageBase)(nil),                            // 2: MatchingServicePackage.MessageBase
+	(*SequencedMessageBase)(nil),                   // 3: MatchingServicePackage.SequencedMessageBase
+	(*ResponseBase)(nil),                           // 4: MatchingServicePackage.ResponseBase
+	(*FallibleBase)(nil),                           // 5: MatchingServicePackage.FallibleBase
+	(*Heartbeat)(nil),                              // 6: MatchingServicePackage.Heartbeat
+	(*GeneralReject)(nil),                          // 7: MatchingServicePackage.GeneralReject
+	(*PoolDefinitionRequest)(nil),                  // 8: MatchingServicePackage.PoolDefinitionRequest
+	(*PoolDefinitionResponse)(nil),                 // 9: MatchingServicePackage.PoolDefinitionResponse
+	(*OrderNew)(nil),                               // 10: MatchingServicePackage.OrderNew
+	(*OrderNewAcknowledgement)(nil),                // 11: MatchingServicePackage.OrderNewAcknowledgement
+	(*OrderCancel)(nil),                            // 12: MatchingServicePackage.OrderCancel
+	(*OrderCancelAcknowledgement)(nil),             // 13: MatchingServicePackage.OrderCancelAcknowledgement
+	(*OrderElimination)(nil),                       // 14: MatchingServicePackage.OrderElimination
+	(*FillEvent)(nil),                              // 15: MatchingServicePackage.FillEvent
+	(*HeartbeatResponseEnvelope)(nil),              // 16: MatchingServicePackage.HeartbeatResponseEnvelope
+	(*PoolDefinitionResponseEnvelope)(nil),         // 17: MatchingServicePackage.PoolDefinitionResponseEnvelope
+	(*OrderNewResponseEnvelope)(nil),               // 18: MatchingServicePackage.OrderNewResponseEnvelope
+	(*OrderCancelResponseEnvelope)(nil),            // 19: MatchingServicePackage.OrderCancelResponseEnvelope
+	(*GeneralReject_Body)(nil),                     // 20: MatchingServicePackage.GeneralReject.Body
+	(*PoolDefinitionRequest_Body)(nil),             // 21: MatchingServicePackage.PoolDefinitionRequest.Body
+	(*PoolDefinitionResponse_Body)(nil),            // 22: MatchingServicePackage.PoolDefinitionResponse.Body
+	(*PoolDefinitionResponse_Body_Lineup)(nil),     // 23: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup
+	(*PoolDefinitionResponse_Body_Lineup_Leg)(nil), // 24: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.Leg
+	(*OrderNew_Body)(nil),                          // 25: MatchingServicePackage.OrderNew.Body
+	(*OrderNewAcknowledgement_Body)(nil),           // 26: MatchingServicePackage.OrderNewAcknowledgement.Body
+	(*OrderCancel_Body)(nil),                       // 27: MatchingServicePackage.OrderCancel.Body
+	(*OrderCancelAcknowledgement_Body)(nil),        // 28: MatchingServicePackage.OrderCancelAcknowledgement.Body
+	(*OrderElimination_Body)(nil),                  // 29: MatchingServicePackage.OrderElimination.Body
+	(*FillEvent_Body)(nil),                         // 30: MatchingServicePackage.FillEvent.Body
+	(*FillEvent_Body_Fill)(nil),                    // 31: MatchingServicePackage.FillEvent.Body.Fill
 }
 var file_MatchingService_proto_depIdxs = []int32{
 	0,  // 0: MatchingServicePackage.MessageBase.messageType:type_name -> MatchingServicePackage.MessageType
@@ -1701,54 +2209,64 @@ var file_MatchingService_proto_depIdxs = []int32{
 	2,  // 2: MatchingServicePackage.GeneralReject.messageBase:type_name -> MatchingServicePackage.MessageBase
 	3,  // 3: MatchingServicePackage.GeneralReject.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
 	4,  // 4: MatchingServicePackage.GeneralReject.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	2,  // 5: MatchingServicePackage.PoolDefinitionRequest.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 6: MatchingServicePackage.PoolDefinitionRequest.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	2,  // 7: MatchingServicePackage.PoolDefinitionResponse.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 8: MatchingServicePackage.PoolDefinitionResponse.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 9: MatchingServicePackage.PoolDefinitionResponse.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 10: MatchingServicePackage.PoolDefinitionResponse.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	20, // 11: MatchingServicePackage.PoolDefinitionResponse.lineups:type_name -> MatchingServicePackage.PoolDefinitionResponse.Lineup
-	2,  // 12: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 13: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	1,  // 14: MatchingServicePackage.OrderNew.orderType:type_name -> MatchingServicePackage.OrderType
-	2,  // 15: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 16: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 17: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 18: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	2,  // 19: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 20: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	2,  // 21: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 22: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 23: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 24: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	2,  // 25: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 26: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	2,  // 27: MatchingServicePackage.OrderFill.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 28: MatchingServicePackage.OrderFill.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	7,  // 29: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	6,  // 30: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
-	7,  // 31: MatchingServicePackage.PoolDefinitionResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	9,  // 32: MatchingServicePackage.PoolDefinitionResponseEnvelope.response:type_name -> MatchingServicePackage.PoolDefinitionResponse
-	7,  // 33: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	11, // 34: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
-	14, // 35: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
-	15, // 36: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.OrderFill
-	7,  // 37: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	13, // 38: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
-	21, // 39: MatchingServicePackage.PoolDefinitionResponse.Lineup.legs:type_name -> MatchingServicePackage.PoolDefinitionResponse.Lineup.Leg
-	6,  // 40: MatchingServicePackage.MatchingServerService.OnHeartbeat:input_type -> MatchingServicePackage.Heartbeat
-	8,  // 41: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:input_type -> MatchingServicePackage.PoolDefinitionRequest
-	10, // 42: MatchingServicePackage.MatchingServerService.OnOrderNew:input_type -> MatchingServicePackage.OrderNew
-	12, // 43: MatchingServicePackage.MatchingServerService.OnOrderCancel:input_type -> MatchingServicePackage.OrderCancel
-	16, // 44: MatchingServicePackage.MatchingServerService.OnHeartbeat:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
-	17, // 45: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:output_type -> MatchingServicePackage.PoolDefinitionResponseEnvelope
-	18, // 46: MatchingServicePackage.MatchingServerService.OnOrderNew:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
-	19, // 47: MatchingServicePackage.MatchingServerService.OnOrderCancel:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
-	44, // [44:48] is the sub-list for method output_type
-	40, // [40:44] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	20, // 5: MatchingServicePackage.GeneralReject.body:type_name -> MatchingServicePackage.GeneralReject.Body
+	2,  // 6: MatchingServicePackage.PoolDefinitionRequest.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 7: MatchingServicePackage.PoolDefinitionRequest.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	21, // 8: MatchingServicePackage.PoolDefinitionRequest.body:type_name -> MatchingServicePackage.PoolDefinitionRequest.Body
+	2,  // 9: MatchingServicePackage.PoolDefinitionResponse.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 10: MatchingServicePackage.PoolDefinitionResponse.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	4,  // 11: MatchingServicePackage.PoolDefinitionResponse.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	5,  // 12: MatchingServicePackage.PoolDefinitionResponse.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	22, // 13: MatchingServicePackage.PoolDefinitionResponse.body:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body
+	2,  // 14: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 15: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	25, // 16: MatchingServicePackage.OrderNew.body:type_name -> MatchingServicePackage.OrderNew.Body
+	2,  // 17: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 18: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	4,  // 19: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	5,  // 20: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	26, // 21: MatchingServicePackage.OrderNewAcknowledgement.body:type_name -> MatchingServicePackage.OrderNewAcknowledgement.Body
+	2,  // 22: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 23: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	27, // 24: MatchingServicePackage.OrderCancel.body:type_name -> MatchingServicePackage.OrderCancel.Body
+	2,  // 25: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 26: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	4,  // 27: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	5,  // 28: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	28, // 29: MatchingServicePackage.OrderCancelAcknowledgement.body:type_name -> MatchingServicePackage.OrderCancelAcknowledgement.Body
+	2,  // 30: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 31: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	29, // 32: MatchingServicePackage.OrderElimination.body:type_name -> MatchingServicePackage.OrderElimination.Body
+	2,  // 33: MatchingServicePackage.FillEvent.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 34: MatchingServicePackage.FillEvent.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	30, // 35: MatchingServicePackage.FillEvent.body:type_name -> MatchingServicePackage.FillEvent.Body
+	7,  // 36: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	6,  // 37: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
+	7,  // 38: MatchingServicePackage.PoolDefinitionResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	9,  // 39: MatchingServicePackage.PoolDefinitionResponseEnvelope.response:type_name -> MatchingServicePackage.PoolDefinitionResponse
+	7,  // 40: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	11, // 41: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
+	14, // 42: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
+	15, // 43: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.FillEvent
+	7,  // 44: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	13, // 45: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
+	23, // 46: MatchingServicePackage.PoolDefinitionResponse.Body.lineups:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body.Lineup
+	24, // 47: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.legs:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.Leg
+	1,  // 48: MatchingServicePackage.OrderNew.Body.orderType:type_name -> MatchingServicePackage.OrderType
+	31, // 49: MatchingServicePackage.FillEvent.Body.fills:type_name -> MatchingServicePackage.FillEvent.Body.Fill
+	6,  // 50: MatchingServicePackage.MatchingServerService.OnHeartbeat:input_type -> MatchingServicePackage.Heartbeat
+	8,  // 51: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:input_type -> MatchingServicePackage.PoolDefinitionRequest
+	10, // 52: MatchingServicePackage.MatchingServerService.OnOrderNew:input_type -> MatchingServicePackage.OrderNew
+	12, // 53: MatchingServicePackage.MatchingServerService.OnOrderCancel:input_type -> MatchingServicePackage.OrderCancel
+	16, // 54: MatchingServicePackage.MatchingServerService.OnHeartbeat:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
+	17, // 55: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:output_type -> MatchingServicePackage.PoolDefinitionResponseEnvelope
+	18, // 56: MatchingServicePackage.MatchingServerService.OnOrderNew:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
+	19, // 57: MatchingServicePackage.MatchingServerService.OnOrderCancel:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
+	54, // [54:58] is the sub-list for method output_type
+	50, // [50:54] is the sub-list for method input_type
+	50, // [50:50] is the sub-list for extension type_name
+	50, // [50:50] is the sub-list for extension extendee
+	0,  // [0:50] is the sub-list for field type_name
 }
 
 func init() { file_MatchingService_proto_init() }
@@ -1756,7 +2274,6 @@ func file_MatchingService_proto_init() {
 	if File_MatchingService_proto != nil {
 		return
 	}
-	file_MatchingService_proto_msgTypes[8].OneofWrappers = []any{}
 	file_MatchingService_proto_msgTypes[14].OneofWrappers = []any{
 		(*HeartbeatResponseEnvelope_GeneralReject)(nil),
 		(*HeartbeatResponseEnvelope_Heartbeat)(nil),
@@ -1775,13 +2292,14 @@ func file_MatchingService_proto_init() {
 		(*OrderCancelResponseEnvelope_GeneralReject)(nil),
 		(*OrderCancelResponseEnvelope_Acknowledgement)(nil),
 	}
+	file_MatchingService_proto_msgTypes[23].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_MatchingService_proto_rawDesc), len(file_MatchingService_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   20,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
