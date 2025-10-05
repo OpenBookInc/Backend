@@ -1,3 +1,5 @@
+pub mod entry_pool;
+
 use tonic::{transport::Server, Request, Response, Status};
 
 pub mod matching_service_package {
