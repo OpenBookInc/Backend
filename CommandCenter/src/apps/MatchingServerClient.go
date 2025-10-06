@@ -106,6 +106,8 @@ func (wc *WebClient) handlePoolDefinition(w http.ResponseWriter, r *http.Request
 		}
 
 		seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+		poolId, _ := strconv.ParseUint(r.FormValue("poolId"), 10, 64)
+		totalUnits, _ := strconv.ParseUint(r.FormValue("totalUnits"), 10, 64)
 		legIdsStr := r.FormValue("legSecurityIds")
 		
 		var legIds []uint64
@@ -125,7 +127,11 @@ func (wc *WebClient) handlePoolDefinition(w http.ResponseWriter, r *http.Request
 			SequencedMessageBase: &pb.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
-			LegSecurityIds: legIds,
+			Body: &pb.PoolDefinitionRequest_Body{
+				PoolId:         poolId,
+				TotalUnits:     totalUnits,
+				LegSecurityIds: legIds,
+			},
 		}
 
 		resp, err := wc.client.OnPoolDefinitionRequest(context.Background(), req)
@@ -156,12 +162,13 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 		}
 
 		seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
-		lineupId, _ := strconv.ParseUint(r.FormValue("lineupId"), 10, 64)
+		poolId, _ := strconv.ParseUint(r.FormValue("poolId"), 10, 64)
+		lineupIndex, _ := strconv.ParseUint(r.FormValue("lineupIndex"), 10, 64)
 		orderType := pb.OrderType_LIMIT
 		if r.FormValue("orderType") == "MARKET" {
 			orderType = pb.OrderType_MARKET
 		}
-		price, _ := strconv.ParseUint(r.FormValue("price"), 10, 64)
+		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
 
 		// handle optional selfMatchId (pointer presence)
@@ -186,11 +193,14 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 			SequencedMessageBase: &pb.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
-			LineupId:    lineupId,
-			OrderType:   orderType,
-			Price:       price,
-			Quantity:    quantity,
-			SelfMatchId: selfMatchIdPtr,
+			Body: &pb.OrderNew_Body{
+				PoolId:      poolId,
+				LineupIndex: lineupIndex,
+				OrderType:   orderType,
+				Portion:     portion,
+				Quantity:    quantity,
+				SelfMatchId: selfMatchIdPtr,
+			},
 		}
 
 		if err := stream.Send(order); err != nil {
@@ -254,7 +264,9 @@ func (wc *WebClient) handleOrderCancel(w http.ResponseWriter, r *http.Request) {
 			SequencedMessageBase: &pb.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
-			OrderId: orderId,
+			Body: &pb.OrderCancel_Body{
+				OrderId: orderId,
+			},
 		}
 
 		if err := stream.Send(cancel); err != nil {
@@ -376,6 +388,14 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             <input type="number" name="sequenceNumber" value="1" required>
         </div>
         <div class="form-group">
+            <label>Pool ID:</label>
+            <input type="number" name="poolId" value="1" required>
+        </div>
+        <div class="form-group">
+            <label>Total Units:</label>
+            <input type="number" name="totalUnits" value="1000" required>
+        </div>
+        <div class="form-group">
             <label>Leg Security IDs (comma-separated):</label>
             <input type="text" name="legSecurityIds" placeholder="101,102,103" required>
         </div>
@@ -391,8 +411,12 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             <input type="number" name="sequenceNumber" value="1" required>
         </div>
         <div class="form-group">
-            <label>Lineup ID:</label>
-            <input type="number" name="lineupId" value="1" required>
+            <label>Pool ID:</label>
+            <input type="number" name="poolId" value="1" required>
+        </div>
+        <div class="form-group">
+            <label>Lineup Index:</label>
+            <input type="number" name="lineupIndex" value="0" required>
         </div>
         <div class="form-group">
             <label>Order Type:</label>
@@ -402,8 +426,8 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             </select>
         </div>
         <div class="form-group">
-            <label>Price:</label>
-            <input type="number" name="price" value="100" required>
+            <label>Portion:</label>
+            <input type="number" name="portion" value="100" required>
         </div>
         <div class="form-group">
             <label>Quantity:</label>
