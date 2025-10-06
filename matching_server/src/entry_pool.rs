@@ -29,6 +29,8 @@ pub enum EntryType {
 /// Parameters for submitting an entry
 #[derive(Debug, Clone, Copy)]
 pub struct EntryParameters {
+    /// unique ID for the entry
+    pub entry_id: u64,
     /// Type of entry (Limit or Market)
     pub entry_type: EntryType,
     /// Portion of the pool this entry backs (in units)
@@ -112,6 +114,11 @@ impl BookState {
         self.entries.retain(|entry| entry.has_remaining_quantity());
     }
     
+    /// Removes all market entries (i.e., entries that should not rest)
+    pub fn remove_market_entries(&mut self) {
+        self.entries.retain(|entry| entry.entry_type != EntryType::Market);
+    }
+
     /// Finds and returns a mutable reference to an entry by ID
     pub fn find_entry_mut(&mut self, id: EntryId) -> Option<&mut Entry> {
         self.entries.iter_mut().find(|e| e.id == id)
@@ -190,15 +197,15 @@ impl fmt::Display for PoolState {
     }
 }
 
-/// Represents a single fill in a fill event, including original and final portions
+/// Represents a single fill in a fill event, including original and matched portions
 #[derive(Debug, Clone)]
 pub struct FilledEntry {
     /// The entry that was matched
     pub entry: Entry,
     /// Original portion before any aggressor adjustment
     pub original_portion: u64,
-    /// Final portion after aggressor adjustment (may differ from original for aggressor)
-    pub final_portion: u64,
+    /// matched portion after aggressor adjustment (may differ from original for aggressor)
+    pub matched_portion: u64,
     /// Quantity that was matched in this fill
     pub matched_quantity: u64,
 }
@@ -227,7 +234,7 @@ impl fmt::Display for FillEvent {
                 fill.entry.lineup_index,
                 fill.entry.id,
                 fill.original_portion,
-                fill.final_portion,
+                fill.matched_portion,
                 fill.matched_quantity,
                 aggressor_marker
             )?;
@@ -239,10 +246,10 @@ impl fmt::Display for FillEvent {
 /// Information returned when an entry is successfully submitted
 #[derive(Debug, Clone)]
 pub struct SubmitInfo {
-    /// The ID of the submitted entry
-    pub entry_id: EntryId,
     /// Any fill events that occurred as a result of this submission
-    pub fillEvents: Vec<FillEvent>,
+    pub fill_events: Vec<FillEvent>,
+    /// All entries that are no longer resting on the book as a result of this submitted entry (includes the sunbmitted entry if applicable)
+    pub completed_entry_ids: Vec<u64>,
 }
 
 /// Result of submitting an entry - either success with SubmitInfo or error message
@@ -252,8 +259,6 @@ pub type SubmitResult = Result<SubmitInfo, String>;
 pub struct EntryPool {
     /// Current state of all books
     state: PoolState,
-    /// Counter for generating unique entry IDs
-    next_entry_id: EntryId,
     /// Counter for sequence numbers (for FIFO ordering)
     next_sequence: u64,
 }
@@ -267,7 +272,6 @@ impl EntryPool {
     pub fn new(total_units: u64, num_legs: usize) -> Self {
         EntryPool {
             state: PoolState::new(total_units, num_legs),
-            next_entry_id: 1,
             next_sequence: 0,
         }
     }
@@ -308,13 +312,13 @@ impl EntryPool {
         
         // Handle market vs limit entries differently
         match params.entry_type {
-            EntryType::Market => self.submit_market_entry(lineup_index, params.quantity),
-            EntryType::Limit => self.submit_limit_entry(lineup_index, params.portion, params.quantity),
+            EntryType::Market => self.submit_market_entry(params.entry_id, lineup_index, params.quantity),
+            EntryType::Limit => self.submit_limit_entry(params.entry_id, lineup_index, params.portion, params.quantity),
         }
     }
     
     /// Submits a market entry - attempts immediate fill or rejects
-    fn submit_market_entry(&mut self, lineup_index: usize, quantity: u64) -> SubmitResult {
+    fn submit_market_entry(&mut self, entry_id: u64, lineup_index: usize, quantity: u64) -> SubmitResult {
         // Calculate what portion is needed to complete the pool
         let other_lineups: Vec<usize> = (0..self.state.num_lineups())
             .filter(|&i| i != lineup_index)
@@ -349,9 +353,6 @@ impl EntryPool {
         }
         
         // Create the market entry
-        let entry_id = self.next_entry_id;
-        self.next_entry_id += 1;
-        
         let entry = Entry {
             id: entry_id,
             lineup_index,
@@ -366,16 +367,33 @@ impl EntryPool {
         self.state.books[lineup_index].add_entry(entry);
         
         // Attempt fills (market entries should match immediately)
-        let fillEvents = self.attempt_fills();
-        
+        let fill_events = self.attempt_fills();
+
+        // Iterate over fillfill_eventsEvents and collect entry IDs that are no longer on the book
+        let mut completed_entry_ids = Vec::new();
+        for fill_event in &fill_events {
+            for filled_entry in &fill_event.filled_entries {
+                let lineup_idx = filled_entry.entry.lineup_index;
+                let entry_id = filled_entry.entry.id;
+                // If the entry is no longer present in the book, add its ID
+                let still_on_book = self.state.books[lineup_idx]
+                    .entries
+                    .iter()
+                    .any(|e| e.id == entry_id);
+                if !still_on_book {
+                    completed_entry_ids.push(entry_id);
+                }
+            }
+        }
+
         Ok(SubmitInfo {
-            entry_id,
-            fillEvents,
+            fill_events,
+            completed_entry_ids
         })
     }
     
     /// Submits a limit entry - adds to book and attempts fills
-    fn submit_limit_entry(&mut self, lineup_index: usize, portion: u64, quantity: u64) -> SubmitResult {
+    fn submit_limit_entry(&mut self, entry_id: u64, lineup_index: usize, portion: u64, quantity: u64) -> SubmitResult {
         // Validate quantity is multiple of portion
         if quantity % portion != 0 {
             return Err(format!(
@@ -389,10 +407,7 @@ impl EntryPool {
             return Err("Portion must be greater than 0".to_string());
         }
         
-        // Create the entry
-        let entry_id = self.next_entry_id;
-        self.next_entry_id += 1;
-        
+        // Create the limit entry
         let entry = Entry {
             id: entry_id,
             lineup_index,
@@ -406,28 +421,50 @@ impl EntryPool {
         // Add to book
         self.state.books[lineup_index].add_entry(entry);
         
-        // Attempt fills - may trigger multiple fillEvents
-        let fillEvents = self.attempt_fills();
+        // Attempt fills - may trigger multiple fill_events
+        let fill_events = self.attempt_fills();
+
+        // Iterate over fill_events and collect entry IDs that are no longer on the book
+        let mut completed_entry_ids = Vec::new();
+        for fill_event in &fill_events {
+            for filled_entry in &fill_event.filled_entries {
+                let lineup_idx = filled_entry.entry.lineup_index;
+                let entry_id = filled_entry.entry.id;
+                // If the entry is no longer present in the book, add its ID
+                let still_on_book = self.state.books[lineup_idx]
+                    .entries
+                    .iter()
+                    .any(|e| e.id == entry_id);
+                if !still_on_book {
+                    completed_entry_ids.push(entry_id);
+                }
+            }
+        }
         
         Ok(SubmitInfo {
-            entry_id,
-            fillEvents,
+            fill_events,
+            completed_entry_ids
         })
     }
     
     /// Attempts to create fills from the current book state
     /// Continues attempting fills until no valid fill can be made
     fn attempt_fills(&mut self) -> Vec<FillEvent> {
-        let mut fillEvents = Vec::new();
+        let mut fill_events = Vec::new();
         
         loop {
             match self.try_create_fill() {
-                Some(fillEvent) => fillEvents.push(fillEvent),
+                Some(fill_event) => fill_events.push(fill_event),
                 None => break,
             }
         }
+
+        // Remove market entries from all books
+        for book in &mut self.state.books {
+            book.remove_market_entries();
+        }
         
-        fillEvents
+        fill_events
     }
     
     /// Attempts to create a single fill event from best entries across all lineups
@@ -472,23 +509,23 @@ impl EntryPool {
         }
         
         // Calculate minimum number of times we can match across all entries
-        // Each entry can match (quantity / final_portion) times
+        // Each entry can match (quantity / matched_portion) times
         let mut min_times_matchable = u64::MAX;
         
         for (idx, (_lineup_idx, entry)) in best_entries.iter().enumerate() {
-            let final_portion = if idx == aggressor_idx {
+            let matched_portion = if idx == aggressor_idx {
                 entry.portion.saturating_sub(aggressor_portion_adjustment)
             } else {
                 entry.portion
             };
             
             // Can't have zero portion
-            if final_portion == 0 {
+            if matched_portion == 0 {
                 return None;
             }
             
-            // Calculate how many times this entry can match with its final portion
-            let times_matchable = entry.quantity / final_portion;
+            // Calculate how many times this entry can match with its matched portion
+            let times_matchable = entry.quantity / matched_portion;
             min_times_matchable = min_times_matchable.min(times_matchable);
         }
         
@@ -500,19 +537,19 @@ impl EntryPool {
         // Create filled entries
         for (idx, (_lineup_idx, entry)) in best_entries.iter().enumerate() {
             let original_portion = entry.portion;
-            let final_portion = if idx == aggressor_idx {
+            let matched_portion = if idx == aggressor_idx {
                 entry.portion.saturating_sub(aggressor_portion_adjustment)
             } else {
                 entry.portion
             };
             
-            // Matched quantity is: (number of times we match) * (final portion for this entry)
-            let matched_quantity = min_times_matchable * final_portion;
+            // Matched quantity is: (number of times we match) * (matched portion for this entry)
+            let matched_quantity = min_times_matchable * matched_portion;
             
             filled_entries.push(FilledEntry {
                 entry: entry.clone(),
                 original_portion,
-                final_portion,
+                matched_portion,
                 matched_quantity,
             });
         }
@@ -548,31 +585,35 @@ mod tests {
         
         // Submit entries to all 4 lineups
         let submit0 = pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         let submit1 = pool.submit_entry(1, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         let submit2 = pool.submit_entry(2, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         let submit3 = pool.submit_entry(3, EntryParameters {
+            entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         
         // Last submission should trigger a fill event
-        assert_eq!(submit0.fillEvents.len(), 0);
-        assert_eq!(submit1.fillEvents.len(), 0);
-        assert_eq!(submit2.fillEvents.len(), 0);
-        assert_eq!(submit3.fillEvents.len(), 1);
+        assert_eq!(submit0.fill_events.len(), 0);
+        assert_eq!(submit1.fill_events.len(), 0);
+        assert_eq!(submit2.fill_events.len(), 0);
+        assert_eq!(submit3.fill_events.len(), 1);
         
         // All entries should be consumed in a fill event
         let state = pool.get_state();
@@ -587,16 +628,19 @@ mod tests {
         
         // Submit passive entries
         pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 300,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 300,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 300,
@@ -604,21 +648,22 @@ mod tests {
         
         // Aggressor with portion that would overfill
         let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 200,
         }).unwrap();
         
         // Should have 1 fill event
-        assert_eq!(submit.fillEvents.len(), 1);
+        assert_eq!(submit.fill_events.len(), 1);
         
         // Aggressor should have portion reduced from 200 to 100
-        let fillEvent = &submit.fillEvents[0];
-        let aggressor_entry = fillEvent.filled_entries.iter()
+        let fill_event = &submit.fill_events[0];
+        let aggressor_entry = fill_event.filled_entries.iter()
             .find(|e| e.entry.lineup_index == 3)
             .unwrap();
         assert_eq!(aggressor_entry.original_portion, 200);
-        assert_eq!(aggressor_entry.final_portion, 100);
+        assert_eq!(aggressor_entry.matched_portion, 100);
         
         // All entries consumed
         let state = pool.get_state();
@@ -633,16 +678,19 @@ mod tests {
         
         // Submit passive entries totaling 700
         pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 200,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
@@ -650,13 +698,15 @@ mod tests {
         
         // Market entry should calculate portion = 300
         let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 3,
             entry_type: EntryType::Market,
-            portion: 0,
+            portion: 0, // this field should get ignored by submit_entry()
             quantity: 300,
         }).unwrap();
         
         // Should have 1 fill event
-        assert_eq!(submit.fillEvents.len(), 1);
+        assert_eq!(submit.fill_events.len(), 1);
+        assert_eq!(submit.fill_events[0].filled_entries[submit.fill_events[0].aggressor_lineup_index].matched_portion, 300);
         
         // All consumed
         let state = pool.get_state();
@@ -671,11 +721,13 @@ mod tests {
         
         // Only 2 lineups have entries
         pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 500,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 500,
@@ -683,6 +735,7 @@ mod tests {
         
         // Market entry should be rejected - missing lineups
         let result = pool.submit_entry(2, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Market,
             portion: 0,
             quantity: 300,
@@ -696,21 +749,25 @@ mod tests {
         
         // Submit passive entries with enough quantity for 2 fill events each
         pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 500,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 500,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
+            entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 250,
@@ -718,13 +775,14 @@ mod tests {
         
         // Aggressor with enough quantity for 2 fill events
         let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 4,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 500,
         }).unwrap();
 
         // Should have 2 fill events
-        assert_eq!(submit.fillEvents.len(), 2);
+        assert_eq!(submit.fill_events.len(), 2);
         
         // All should be consumed in 2 fill events
         let state = pool.get_state();
@@ -739,16 +797,19 @@ mod tests {
         
         // Submit entries with different portions to lineup 0
         pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 300,
         }).unwrap();
         pool.submit_entry(0, EntryParameters {
+            entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 500,
         }).unwrap(); // Largest
         pool.submit_entry(0, EntryParameters {
+            entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 400,
             quantity: 400,
@@ -764,6 +825,7 @@ mod tests {
         let mut pool = EntryPool::new(1000, 1);
         
         let result = pool.submit_entry(0, EntryParameters {
+            entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 251,

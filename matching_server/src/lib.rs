@@ -1,5 +1,6 @@
 pub mod entry_pool;
 pub mod math_utils;
+pub mod pool_manager;
 pub mod pool_utils;
 
 pub mod matching_service_package {
