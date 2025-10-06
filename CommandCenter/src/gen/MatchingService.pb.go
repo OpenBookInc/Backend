@@ -1869,12 +1869,13 @@ func (x *OrderElimination_Body) GetEliminationDescription() string {
 }
 
 type FillEvent_Body struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TransactionId uint64                 `protobuf:"varint,1,opt,name=transactionId,proto3" json:"transactionId,omitempty"`
-	FillEventId   uint64                 `protobuf:"varint,2,opt,name=fillEventId,proto3" json:"fillEventId,omitempty"`
-	Fills         []*FillEvent_Body_Fill `protobuf:"bytes,3,rep,name=fills,proto3" json:"fills,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TransactionId   uint64                 `protobuf:"varint,1,opt,name=transactionId,proto3" json:"transactionId,omitempty"`
+	FillEventId     uint64                 `protobuf:"varint,2,opt,name=fillEventId,proto3" json:"fillEventId,omitempty"`
+	MatchedQuantity uint64                 `protobuf:"varint,3,opt,name=matchedQuantity,proto3" json:"matchedQuantity,omitempty"`
+	Fills           []*FillEvent_Body_Fill `protobuf:"bytes,4,rep,name=fills,proto3" json:"fills,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FillEvent_Body) Reset() {
@@ -1921,6 +1922,13 @@ func (x *FillEvent_Body) GetFillEventId() uint64 {
 	return 0
 }
 
+func (x *FillEvent_Body) GetMatchedQuantity() uint64 {
+	if x != nil {
+		return x.MatchedQuantity
+	}
+	return 0
+}
+
 func (x *FillEvent_Body) GetFills() []*FillEvent_Body_Fill {
 	if x != nil {
 		return x.Fills
@@ -1929,14 +1937,13 @@ func (x *FillEvent_Body) GetFills() []*FillEvent_Body_Fill {
 }
 
 type FillEvent_Body_Fill struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	FillId          uint64                 `protobuf:"varint,1,opt,name=fillId,proto3" json:"fillId,omitempty"`
-	OrderId         uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
-	IsAggressor     bool                   `protobuf:"varint,3,opt,name=isAggressor,proto3" json:"isAggressor,omitempty"`
-	MatchedPortion  uint64                 `protobuf:"varint,4,opt,name=matchedPortion,proto3" json:"matchedPortion,omitempty"`
-	MatchedQuantity uint64                 `protobuf:"varint,5,opt,name=matchedQuantity,proto3" json:"matchedQuantity,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	FillId         uint64                 `protobuf:"varint,1,opt,name=fillId,proto3" json:"fillId,omitempty"`
+	OrderId        uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	IsAggressor    bool                   `protobuf:"varint,3,opt,name=isAggressor,proto3" json:"isAggressor,omitempty"`
+	MatchedPortion uint64                 `protobuf:"varint,4,opt,name=matchedPortion,proto3" json:"matchedPortion,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FillEvent_Body_Fill) Reset() {
@@ -1993,13 +2000,6 @@ func (x *FillEvent_Body_Fill) GetIsAggressor() bool {
 func (x *FillEvent_Body_Fill) GetMatchedPortion() uint64 {
 	if x != nil {
 		return x.MatchedPortion
-	}
-	return 0
-}
-
-func (x *FillEvent_Body_Fill) GetMatchedQuantity() uint64 {
-	if x != nil {
-		return x.MatchedQuantity
 	}
 	return 0
 }
@@ -2103,14 +2103,14 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\x04body\x18\x03 \x01(\v2&.MatchingServicePackage.FillEvent.BodyR\x04body\x1a\xc0\x02\n" +
 	"\x04Body\x12$\n" +
 	"\rtransactionId\x18\x01 \x01(\x04R\rtransactionId\x12 \n" +
-	"\vfillEventId\x18\x02 \x01(\x04R\vfillEventId\x12A\n" +
-	"\x05fills\x18\x03 \x03(\v2+.MatchingServicePackage.FillEvent.Body.FillR\x05fills\x1a\xac\x01\n" +
+	"\vfillEventId\x18\x02 \x01(\x04R\vfillEventId\x12(\n" +
+	"\x0fmatchedQuantity\x18\x03 \x01(\x04R\x0fmatchedQuantity\x12A\n" +
+	"\x05fills\x18\x04 \x03(\v2+.MatchingServicePackage.FillEvent.Body.FillR\x05fills\x1a\x82\x01\n" +
 	"\x04Fill\x12\x16\n" +
 	"\x06fillId\x18\x01 \x01(\x04R\x06fillId\x12\x18\n" +
 	"\aorderId\x18\x02 \x01(\x04R\aorderId\x12 \n" +
 	"\visAggressor\x18\x03 \x01(\bR\visAggressor\x12&\n" +
-	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\x12(\n" +
-	"\x0fmatchedQuantity\x18\x05 \x01(\x04R\x0fmatchedQuantity\"\xb9\x01\n" +
+	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\"\xb9\x01\n" +
 	"\x19HeartbeatResponseEnvelope\x12M\n" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12A\n" +
 	"\theartbeat\x18\x02 \x01(\v2!.MatchingServicePackage.HeartbeatH\x00R\theartbeatB\n" +

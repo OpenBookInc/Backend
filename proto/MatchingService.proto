@@ -167,12 +167,12 @@ message FillEvent {
       uint64 orderId = 2;
       bool isAggressor = 3;
       uint64 matchedPortion = 4;
-      uint64 matchedQuantity = 5;
     }
 
     uint64 transactionId = 1;
     uint64 fillEventId = 2;
-    repeated Fill fills = 3;
+    uint64 matchedQuantity = 3;
+    repeated Fill fills = 4;
   }
 
   MessageBase messageBase = 1;

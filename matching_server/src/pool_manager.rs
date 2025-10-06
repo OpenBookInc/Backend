@@ -188,13 +188,13 @@ impl PoolManager {
                     is_aggressor: filled_entry.entry.lineup_index
                         == fill_event.aggressor_lineup_index,
                     matched_portion: filled_entry.matched_portion,
-                    matched_quantity: filled_entry.matched_quantity,
                 });
             }
 
             fill_event_bodies.push(fill_event::Body {
                 transaction_id,
                 fill_event_id,
+                matched_quantity: fill_event.matched_quantity,
                 fills,
             });
         }
