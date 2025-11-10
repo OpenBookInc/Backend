@@ -69,53 +69,40 @@ func FetchNFLData(apiClient *client.Client, dataStore *models.DataStore) error {
 	}
 
 	// Process conferences, divisions, and teams
-	teamIDs := []string{}
+	teamVendorIDs := []string{}
 	for _, conferenceData := range hierarchyResp.Conferences {
-		// Add conference
+		// Add conference (LeagueID will be set during persistence in main.go)
 		conference := &models.Conference{
-			ID:        conferenceData.ID,
-			Name:      conferenceData.Name,
-			Alias:     conferenceData.Alias,
-			Sport:     models.SportNFL,
-			CreatedAt: time.Now(),
+			Name:     conferenceData.Name,
+			VendorID: conferenceData.ID,
+			Alias:    conferenceData.Alias,
 		}
 		dataStore.AddConference(conference)
 
 		for _, divisionData := range conferenceData.Divisions {
-			// Add division
+			// Add division (ConferenceID will be set during persistence in main.go)
 			division := &models.Division{
-				ID:           divisionData.ID,
-				Name:         divisionData.Name,
-				Alias:        divisionData.Alias,
-				Sport:        models.SportNFL,
-				ConferenceID: conferenceData.ID,
-				CreatedAt:    time.Now(),
+				Name:     divisionData.Name,
+				VendorID: divisionData.ID,
+				Alias:    divisionData.Alias,
 			}
+			division.Conference = conference // Set pointer relationship
 			dataStore.AddDivision(division)
 
 			for _, teamData := range divisionData.Teams {
-				// Add team
+				// Add team (DivisionID will be set during persistence in main.go)
 				team := &models.Team{
-					ID:           teamData.ID,
-					Name:         teamData.Name,
-					Market:       teamData.Market,
-					Alias:        teamData.Alias,
-					Sport:        models.SportNFL,
-					ConferenceID: conferenceData.ID,
-					Conference:   conferenceData.Name,
-					DivisionID:   divisionData.ID,
-					Division:     divisionData.Name,
-					Venue: &models.Venue{
-						ID:       teamData.Venue.ID,
-						Name:     teamData.Venue.Name,
-						City:     teamData.Venue.City,
-						State:    teamData.Venue.State,
-						Capacity: teamData.Venue.Capacity,
-					},
-					CreatedAt: time.Now(),
+					Name:       teamData.Name,
+					Market:     teamData.Market,
+					Alias:      teamData.Alias,
+					VendorID:   teamData.ID,
+					VenueName:  teamData.Venue.Name,
+					VenueCity:  teamData.Venue.City,
+					VenueState: teamData.Venue.State,
 				}
+				team.Division = division // Set pointer relationship
 				dataStore.AddTeam(team)
-				teamIDs = append(teamIDs, team.ID)
+				teamVendorIDs = append(teamVendorIDs, teamData.ID)
 			}
 		}
 	}
@@ -124,20 +111,20 @@ func FetchNFLData(apiClient *client.Client, dataStore *models.DataStore) error {
 	apiClient.RateLimitWait()
 
 	// Fetch rosters for each team
-	for _, teamID := range teamIDs {
+	for _, teamVendorID := range teamVendorIDs {
 		// Rate limiting - wait before each API request
 		apiClient.RateLimitWait()
 
-		if err := fetchNFLTeamRoster(apiClient, dataStore, teamID); err != nil {
-			return fmt.Errorf("failed to fetch roster for team %s: %w", teamID, err)
+		if err := fetchNFLTeamRoster(apiClient, dataStore, teamVendorID); err != nil {
+			return fmt.Errorf("failed to fetch roster for team %s: %w", teamVendorID, err)
 		}
 	}
 
 	return nil
 }
 
-func fetchNFLTeamRoster(apiClient *client.Client, dataStore *models.DataStore, teamID string) error {
-	rosterData, err := apiClient.GetNFLTeamRoster(teamID)
+func fetchNFLTeamRoster(apiClient *client.Client, dataStore *models.DataStore, teamVendorID string) error {
+	rosterData, err := apiClient.GetNFLTeamRoster(teamVendorID)
 	if err != nil {
 		return err
 	}
@@ -147,36 +134,41 @@ func fetchNFLTeamRoster(apiClient *client.Client, dataStore *models.DataStore, t
 		return fmt.Errorf("failed to parse team roster response: %w", err)
 	}
 
+	// Get the team from dataStore to link roster
+	team := dataStore.Teams[teamVendorID]
+
 	roster := &models.Roster{
-		ID:        teamID,
-		TeamID:    teamID,
-		Sport:     models.SportNFL,
-		Season:    "current",
-		Players:   []models.Individual{},
-		UpdatedAt: time.Now(),
+		Team:    team,
+		Players: []*models.Individual{},
+		// TeamID and IndividualIDs will be set during persistence in main.go
 	}
 
 	for _, playerData := range rosterResp.Players {
-		// Parse height and weight (can be int or float from API)
-		height := parseHeight(playerData.Height)
-		weight := parseWeight(playerData.Weight)
-
-		individual := models.Individual{
-			ID:           playerData.ID,
-			FirstName:    playerData.FirstName,
-			LastName:     playerData.LastName,
-			FullName:     fmt.Sprintf("%s %s", playerData.FirstName, playerData.LastName),
-			Sport:        models.SportNFL,
-			Position:     playerData.Position,
-			JerseyNumber: playerData.JerseyNum,
-			Height:       height,
-			Weight:       weight,
-			BirthDate:    playerData.BirthDate,
-			Status:       playerData.Status,
-			CreatedAt:    time.Now(),
+		// Parse birth date
+		var dateOfBirth *time.Time
+		if playerData.BirthDate != "" {
+			if parsedDate, err := time.Parse("2006-01-02", playerData.BirthDate); err == nil {
+				dateOfBirth = &parsedDate
+			}
 		}
 
-		dataStore.AddIndividual(&individual)
+		// Create abbreviated name (e.g., "J.Smith" from "John Smith")
+		abbreviatedName := playerData.FirstName
+		if len(playerData.FirstName) > 0 && len(playerData.LastName) > 0 {
+			abbreviatedName = fmt.Sprintf("%c.%s", playerData.FirstName[0], playerData.LastName)
+		}
+
+		individual := &models.Individual{
+			VendorID:        playerData.ID,
+			DisplayName:     fmt.Sprintf("%s %s", playerData.FirstName, playerData.LastName),
+			AbbreviatedName: abbreviatedName,
+			DateOfBirth:     dateOfBirth,
+			Position:        playerData.Position,
+			JerseyNumber:    playerData.JerseyNum,
+			// LeagueID will be set during persistence in main.go
+		}
+
+		dataStore.AddIndividual(individual)
 		roster.Players = append(roster.Players, individual)
 	}
 

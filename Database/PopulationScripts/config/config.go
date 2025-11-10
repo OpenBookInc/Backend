@@ -15,6 +15,14 @@ type Config struct {
 
 	// Rate Limiting Configuration
 	RateLimitDelayMilliseconds int
+
+	// Database Configuration
+	PGHost     string
+	PGPort     string
+	PGDatabase string
+	PGUser     string
+	PGPassword string
+	PGKeyPath  string // Path to SSL certificate file
 }
 
 // LoadFromFile loads environment variables from the specified file, then reads configuration
@@ -42,13 +50,19 @@ func LoadFromFile(envFile string) (*Config, error) {
 }
 
 // Load reads configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY
+// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
 // Optional fields (with defaults): RATE_LIMIT_DELAY_MS (default: 1000)
 // This does not load any .env files - use LoadFromFile for that
 func Load() *Config {
 	cfg := &Config{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
 		RateLimitDelayMilliseconds: getEnvAsInt("RATE_LIMIT_DELAY_MS", 1000),
+		PGHost:                     os.Getenv("PG_HOST"),
+		PGPort:                     os.Getenv("PG_PORT"),
+		PGDatabase:                 os.Getenv("PG_DATABASE"),
+		PGUser:                     os.Getenv("PG_USER"),
+		PGPassword:                 os.Getenv("PG_PASSWORD"),
+		PGKeyPath:                  os.Getenv("PG_KEY_PATH"),
 	}
 
 	return cfg
@@ -58,6 +72,26 @@ func Load() *Config {
 func (c *Config) Validate() error {
 	if c.SportradarAPIKey == "" {
 		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEY")
+	}
+
+	// Database configuration validation
+	if c.PGHost == "" {
+		return fmt.Errorf("missing required environment variable: PG_HOST")
+	}
+	if c.PGPort == "" {
+		return fmt.Errorf("missing required environment variable: PG_PORT")
+	}
+	if c.PGDatabase == "" {
+		return fmt.Errorf("missing required environment variable: PG_DATABASE")
+	}
+	if c.PGUser == "" {
+		return fmt.Errorf("missing required environment variable: PG_USER")
+	}
+	if c.PGPassword == "" {
+		return fmt.Errorf("missing required environment variable: PG_PASSWORD")
+	}
+	if c.PGKeyPath == "" {
+		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
 	}
 
 	return nil

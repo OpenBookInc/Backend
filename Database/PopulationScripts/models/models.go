@@ -6,157 +6,160 @@ import (
 	"time"
 )
 
-// Sport represents the type of sport
-type Sport string
+// League represents a sports league (NFL, NBA, etc.)
+type League struct {
+	ID      int    `json:"id"`       // Database ID (auto-increment)
+	SportID int64  `json:"sport_id"` // References sports table
+	Name    string `json:"name"`     // e.g., "NFL", "NBA"
+}
 
-const (
-	SportNBA Sport = "NBA"
-	SportNFL Sport = "NFL"
-)
+// String returns a formatted string representation of the League
+func (l *League) String() string {
+	return fmt.Sprintf("\n%s (ID: %d, Sport ID: %d)\n", l.Name, l.ID, l.SportID)
+}
 
 // Conference represents a conference in a sports league
 type Conference struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Alias     string    `json:"alias"`
-	Sport     Sport     `json:"sport"`
-	CreatedAt time.Time `json:"created_at"`
+	ID       int      `json:"id"`        // Database ID (auto-increment)
+	Name     string   `json:"name"`      // e.g., "AFC", "NFC"
+	LeagueID int64    `json:"league_id"` // Foreign key to leagues table
+	VendorID string   `json:"vendor_id"` // Sportradar UUID
+	Alias    string   `json:"alias"`     // Short name
+	League   *League  `json:"-"`         // Pointer to parent League (not stored in DB)
 }
 
 // String returns a formatted string representation of the Conference
 func (c *Conference) String() string {
-	return fmt.Sprintf("\n%s (%s)\n  ID: %s\n  Sport: %s\n", c.Name, c.Alias, c.ID, c.Sport)
+	leagueName := "Unknown"
+	if c.League != nil {
+		leagueName = c.League.Name
+	}
+	return fmt.Sprintf("\n%s (%s) - League: %s\n  DB ID: %d | Vendor ID: %s\n",
+		c.Name, c.Alias, leagueName, c.ID, c.VendorID)
 }
 
 // Division represents a division within a conference
 type Division struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Alias        string    `json:"alias"`
-	Sport        Sport     `json:"sport"`
-	ConferenceID string    `json:"conference_id"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           int         `json:"id"`             // Database ID (auto-increment)
+	Name         string      `json:"name"`           // e.g., "AFC East", "NFC North"
+	ConferenceID int64       `json:"conference_id"`  // Foreign key to conferences table
+	VendorID     string      `json:"vendor_id"`      // Sportradar UUID
+	Alias        string      `json:"alias"`          // Short name
+	Conference   *Conference `json:"-"`              // Pointer to parent Conference (not stored in DB)
 }
 
 // String returns a formatted string representation of the Division
 func (d *Division) String() string {
-	return fmt.Sprintf("\n%s (%s)\n  ID: %s\n  Conference ID: %s\n  Sport: %s\n", d.Name, d.Alias, d.ID, d.ConferenceID, d.Sport)
+	conferenceName := "Unknown"
+	if d.Conference != nil {
+		conferenceName = d.Conference.Name
+	}
+	return fmt.Sprintf("\n%s (%s) - Conference: %s\n  DB ID: %d | Vendor ID: %s\n",
+		d.Name, d.Alias, conferenceName, d.ID, d.VendorID)
 }
 
-// Team represents a sports team across all sports
+// Team represents a sports team
 type Team struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Market       string    `json:"market"`       // City or region (e.g., "Los Angeles")
-	Alias        string    `json:"alias"`        // Short name/abbreviation (e.g., "LAL")
-	Sport        Sport     `json:"sport"`
-	ConferenceID string    `json:"conference_id"` // Conference ID reference
-	Conference   string    `json:"conference"`    // Conference name (denormalized for convenience)
-	DivisionID   string    `json:"division_id"`   // Division ID reference
-	Division     string    `json:"division"`      // Division name (denormalized for convenience)
-	Venue        *Venue    `json:"venue,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID         int       `json:"id"`          // Database ID (auto-increment)
+	Name       string    `json:"name"`        // Team name (e.g., "Cowboys")
+	Market     string    `json:"market"`      // City/region (e.g., "Dallas")
+	Alias      string    `json:"alias"`       // Short name (e.g., "DAL")
+	VendorID   string    `json:"vendor_id"`   // Sportradar UUID
+	DivisionID int64     `json:"division_id"` // Foreign key to divisions table
+	VenueName  string    `json:"venue_name"`  // Venue name
+	VenueCity  string    `json:"venue_city"`  // Venue city
+	VenueState string    `json:"venue_state"` // Venue state
+	Division   *Division `json:"-"`           // Pointer to parent Division (not stored in DB)
 }
 
 // String returns a formatted string representation of the Team
 func (t *Team) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s %s (%s)\n", t.Market, t.Name, t.Alias))
-	sb.WriteString(fmt.Sprintf("  ID: %s\n", t.ID))
-	sb.WriteString(fmt.Sprintf("  Conference: %s\n", t.Conference))
-	sb.WriteString(fmt.Sprintf("  Division: %s\n", t.Division))
-	if t.Venue != nil {
-		sb.WriteString(fmt.Sprintf("  Venue: %s\n", t.Venue.String()))
+	sb.WriteString(fmt.Sprintf("  DB ID: %d | Vendor ID: %s\n", t.ID, t.VendorID))
+	if t.Division != nil {
+		sb.WriteString(fmt.Sprintf("  Division: %s", t.Division.Name))
+		if t.Division.Conference != nil {
+			sb.WriteString(fmt.Sprintf(" (%s)", t.Division.Conference.Name))
+		}
+		sb.WriteString("\n")
+	}
+	if t.VenueName != "" {
+		sb.WriteString(fmt.Sprintf("  Venue: %s, %s, %s\n", t.VenueName, t.VenueCity, t.VenueState))
 	}
 	return sb.String()
 }
 
-// Individual represents a player across all sports
+// Individual represents a player/individual athlete
 type Individual struct {
-	ID           string    `json:"id"`
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	FullName     string    `json:"full_name"`
-	Sport        Sport     `json:"sport"`
-	Position     string    `json:"position"`     // Generic position field
-	JerseyNumber string    `json:"jersey_number"`
-	Height       int       `json:"height"`       // Height in inches
-	Weight       int       `json:"weight"`       // Weight in pounds
-	BirthDate    string    `json:"birth_date"`   // ISO date string
-	Status       string    `json:"status"`       // Active, Injured, etc.
-	CreatedAt    time.Time `json:"created_at"`
+	ID               int       `json:"id"`                // Database ID (auto-increment)
+	DisplayName      string    `json:"display_name"`      // Full display name
+	AbbreviatedName  string    `json:"abbreviated_name"`  // Short name
+	DateOfBirth      *time.Time `json:"date_of_birth"`    // Can be null in DB
+	VendorID         string    `json:"vendor_id"`         // Sportradar UUID
+	LeagueID         int64     `json:"league_id"`         // Foreign key to leagues table
+	Position         string    `json:"position"`          // e.g., "QB", "PG"
+	JerseyNumber     string    `json:"jersey_number"`     // Jersey number as string
+	League           *League   `json:"-"`                 // Pointer to parent League (not stored in DB)
 }
 
 // String returns a formatted string representation of the Individual
 func (i *Individual) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n%s (#%s)\n", i.FullName, i.JerseyNumber))
-	sb.WriteString(fmt.Sprintf("  ID: %s\n", i.ID))
-	sb.WriteString(fmt.Sprintf("  Position: %s\n", i.Position))
-	sb.WriteString(fmt.Sprintf("  Height: %d inches | Weight: %d lbs\n", i.Height, i.Weight))
-	sb.WriteString(fmt.Sprintf("  Birth Date: %s | Status: %s\n", i.BirthDate, i.Status))
+	sb.WriteString(fmt.Sprintf("\n%s (#%s) - %s\n", i.DisplayName, i.JerseyNumber, i.Position))
+	sb.WriteString(fmt.Sprintf("  DB ID: %d | Vendor ID: %s\n", i.ID, i.VendorID))
+	if i.DateOfBirth != nil {
+		sb.WriteString(fmt.Sprintf("  Birth Date: %s\n", i.DateOfBirth.Format("2006-01-02")))
+	}
+	if i.League != nil {
+		sb.WriteString(fmt.Sprintf("  League: %s\n", i.League.Name))
+	}
 	return sb.String()
 }
 
 // Roster represents a team's roster
 type Roster struct {
-	ID          string       `json:"id"`
-	TeamID      string       `json:"team_id"`
-	Sport       Sport        `json:"sport"`
-	Season      string       `json:"season"`      // Season identifier (e.g., "2024")
-	Players     []Individual `json:"players"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	ID            int           `json:"id"`              // Database ID (auto-increment)
+	TeamID        int64         `json:"team_id"`         // Foreign key to teams table
+	IndividualIDs []int64       `json:"individual_ids"`  // Array of individual IDs (for DB persistence)
+	Team          *Team         `json:"-"`               // Pointer to parent Team (not stored in DB)
+	Players       []*Individual `json:"players"`         // Full player objects (in-memory only)
 }
 
 // String returns a formatted string representation of the Roster
 func (r *Roster) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("  Roster ID: %s\n", r.ID))
-	sb.WriteString(fmt.Sprintf("  Team ID: %s\n", r.TeamID))
-	sb.WriteString(fmt.Sprintf("  Season: %s | Sport: %s\n", r.Season, r.Sport))
+	teamName := "Unknown"
+	if r.Team != nil {
+		teamName = fmt.Sprintf("%s %s", r.Team.Market, r.Team.Name)
+	}
+	sb.WriteString(fmt.Sprintf("\n%s Roster (DB ID: %d)\n", teamName, r.ID))
+	sb.WriteString(fmt.Sprintf("  Team ID: %d\n", r.TeamID))
 	sb.WriteString(fmt.Sprintf("  Player Count: %d\n", len(r.Players)))
-	sb.WriteString(fmt.Sprintf("  Last Updated: %s\n", r.UpdatedAt.Format("2006-01-02 15:04:05")))
 	sb.WriteString("  Players:\n")
 	for _, player := range r.Players {
-		sb.WriteString(fmt.Sprintf("    - %s (#%s) - %s\n", player.FullName, player.JerseyNumber, player.Position))
+		if player != nil {
+			sb.WriteString(fmt.Sprintf("    - %s (#%s) - %s\n",
+				player.DisplayName, player.JerseyNumber, player.Position))
+		}
 	}
 	return sb.String()
 }
 
-// StringWithTeamName returns a formatted string with team name included
-func (r *Roster) StringWithTeamName(teamName string) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n%s - %s %s Roster\n", teamName, r.Season, r.Sport))
-	sb.WriteString(r.String())
-	return sb.String()
-}
-
-// Venue represents a sports venue
-type Venue struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	City     string `json:"city"`
-	State    string `json:"state"`
-	Capacity int    `json:"capacity"`
-}
-
-// String returns a formatted string representation of the Venue
-func (v *Venue) String() string {
-	return fmt.Sprintf("%s (%s, %s) - Capacity: %d", v.Name, v.City, v.State, v.Capacity)
-}
-
 // DataStore holds all sports data in memory
 type DataStore struct {
-	Conferences map[string]*Conference // Key: conference ID
-	Divisions   map[string]*Division   // Key: division ID
-	Teams       map[string]*Team       // Key: team ID
-	Individuals map[string]*Individual // Key: individual ID
-	Rosters     map[string]*Roster     // Key: roster ID
+	Leagues     map[int]*League        // Key: league DB ID
+	Conferences map[string]*Conference // Key: vendor_id
+	Divisions   map[string]*Division   // Key: vendor_id
+	Teams       map[string]*Team       // Key: vendor_id
+	Individuals map[string]*Individual // Key: vendor_id
+	Rosters     map[string]*Roster     // Key: team vendor_id (one roster per team)
 }
 
 // NewDataStore creates a new in-memory data store
 func NewDataStore() *DataStore {
 	return &DataStore{
+		Leagues:     make(map[int]*League),
 		Conferences: make(map[string]*Conference),
 		Divisions:   make(map[string]*Division),
 		Teams:       make(map[string]*Team),
@@ -165,69 +168,85 @@ func NewDataStore() *DataStore {
 	}
 }
 
+// AddLeague adds a league to the data store
+func (ds *DataStore) AddLeague(league *League) {
+	ds.Leagues[league.ID] = league
+}
+
 // AddConference adds a conference to the data store
 func (ds *DataStore) AddConference(conference *Conference) {
-	ds.Conferences[conference.ID] = conference
+	ds.Conferences[conference.VendorID] = conference
 }
 
 // AddDivision adds a division to the data store
 func (ds *DataStore) AddDivision(division *Division) {
-	ds.Divisions[division.ID] = division
+	ds.Divisions[division.VendorID] = division
 }
 
 // AddTeam adds a team to the data store
 func (ds *DataStore) AddTeam(team *Team) {
-	ds.Teams[team.ID] = team
+	ds.Teams[team.VendorID] = team
 }
 
 // AddIndividual adds an individual to the data store
 func (ds *DataStore) AddIndividual(individual *Individual) {
-	ds.Individuals[individual.ID] = individual
+	ds.Individuals[individual.VendorID] = individual
 }
 
 // AddRoster adds a roster to the data store
+// Requires roster.Team to be set (will panic if nil)
 func (ds *DataStore) AddRoster(roster *Roster) {
-	ds.Rosters[roster.ID] = roster
+	ds.Rosters[roster.Team.VendorID] = roster
 }
 
-// GetConferencesBySport returns all conferences for a given sport
-func (ds *DataStore) GetConferencesBySport(sport Sport) []*Conference {
+// GetLeagueByName returns a league by name (e.g., "NFL", "NBA")
+func (ds *DataStore) GetLeagueByName(name string) *League {
+	for _, league := range ds.Leagues {
+		if league.Name == name {
+			return league
+		}
+	}
+	return nil
+}
+
+// GetConferencesByLeagueID returns all conferences for a given league
+func (ds *DataStore) GetConferencesByLeagueID(leagueID int64) []*Conference {
 	conferences := []*Conference{}
 	for _, conference := range ds.Conferences {
-		if conference.Sport == sport {
+		if conference.LeagueID == leagueID {
 			conferences = append(conferences, conference)
 		}
 	}
 	return conferences
 }
 
-// GetDivisionsBySport returns all divisions for a given sport
-func (ds *DataStore) GetDivisionsBySport(sport Sport) []*Division {
+// GetDivisionsByConferenceID returns all divisions for a given conference
+func (ds *DataStore) GetDivisionsByConferenceID(conferenceID int64) []*Division {
 	divisions := []*Division{}
 	for _, division := range ds.Divisions {
-		if division.Sport == sport {
+		if division.ConferenceID == conferenceID {
 			divisions = append(divisions, division)
 		}
 	}
 	return divisions
 }
 
-// GetTeamsBySport returns all teams for a given sport
-func (ds *DataStore) GetTeamsBySport(sport Sport) []*Team {
+// GetTeamsByDivisionID returns all teams for a given division
+func (ds *DataStore) GetTeamsByDivisionID(divisionID int64) []*Team {
 	teams := []*Team{}
 	for _, team := range ds.Teams {
-		if team.Sport == sport {
+		if team.DivisionID == divisionID {
 			teams = append(teams, team)
 		}
 	}
 	return teams
 }
 
-// GetIndividualsBySport returns all individuals for a given sport
-func (ds *DataStore) GetIndividualsBySport(sport Sport) []*Individual {
+// GetIndividualsByLeagueID returns all individuals for a given league
+func (ds *DataStore) GetIndividualsByLeagueID(leagueID int64) []*Individual {
 	individuals := []*Individual{}
 	for _, individual := range ds.Individuals {
-		if individual.Sport == sport {
+		if individual.LeagueID == leagueID {
 			individuals = append(individuals, individual)
 		}
 	}
