@@ -148,23 +148,27 @@ func (r *Roster) String() string {
 
 // DataStore holds all sports data in memory
 type DataStore struct {
-	Leagues     map[int]*League        // Key: league DB ID
-	Conferences map[string]*Conference // Key: vendor_id
-	Divisions   map[string]*Division   // Key: vendor_id
-	Teams       map[string]*Team       // Key: vendor_id
-	Individuals map[string]*Individual // Key: vendor_id
-	Rosters     map[string]*Roster     // Key: team vendor_id (one roster per team)
+	Leagues           map[int]*League               // Key: league DB ID
+	Conferences       map[string]*Conference        // Key: vendor_id
+	Divisions         map[string]*Division          // Key: vendor_id
+	Teams             map[string]*Team              // Key: vendor_id
+	Individuals       map[string]*Individual        // Key: vendor_id
+	Rosters           map[string]*Roster            // Key: team vendor_id (one roster per team)
+	Games             map[string]*Game              // Key: vendor_id (game ID)
+	IndividualStatuses map[string]*IndividualStatus // Key: individual vendor_id (one status per player)
 }
 
 // NewDataStore creates a new in-memory data store
 func NewDataStore() *DataStore {
 	return &DataStore{
-		Leagues:     make(map[int]*League),
-		Conferences: make(map[string]*Conference),
-		Divisions:   make(map[string]*Division),
-		Teams:       make(map[string]*Team),
-		Individuals: make(map[string]*Individual),
-		Rosters:     make(map[string]*Roster),
+		Leagues:            make(map[int]*League),
+		Conferences:        make(map[string]*Conference),
+		Divisions:          make(map[string]*Division),
+		Teams:              make(map[string]*Team),
+		Individuals:        make(map[string]*Individual),
+		Rosters:            make(map[string]*Roster),
+		Games:              make(map[string]*Game),
+		IndividualStatuses: make(map[string]*IndividualStatus),
 	}
 }
 
@@ -197,6 +201,19 @@ func (ds *DataStore) AddIndividual(individual *Individual) {
 // Requires roster.Team to be set (will panic if nil)
 func (ds *DataStore) AddRoster(roster *Roster) {
 	ds.Rosters[roster.Team.VendorID] = roster
+}
+
+// AddGame adds a game to the data store
+func (ds *DataStore) AddGame(game *Game) {
+	ds.Games[game.VendorID] = game
+}
+
+// AddIndividualStatus adds or updates an individual's status in the data store
+// Uses individual vendor_id as key for upsert behavior (only one status per player)
+func (ds *DataStore) AddIndividualStatus(status *IndividualStatus) {
+	if status.Individual != nil {
+		ds.IndividualStatuses[status.Individual.VendorID] = status
+	}
 }
 
 // GetLeagueByName returns a league by name (e.g., "NFL", "NBA")
@@ -251,4 +268,50 @@ func (ds *DataStore) GetIndividualsByLeagueID(leagueID int64) []*Individual {
 		}
 	}
 	return individuals
+}
+
+// Game represents a scheduled or completed game
+type Game struct {
+	ID                   int       `json:"id"`                      // Database ID (auto-increment)
+	ContenderIDA         int64     `json:"contender_id_a"`          // Foreign key to teams table (home team)
+	ContenderIDB         int64     `json:"contender_id_b"`          // Foreign key to teams table (away team)
+	VendorID             string    `json:"vendor_id"`               // Sportradar UUID
+	ScheduledStartTime   time.Time `json:"scheduled_start_time"`    // Game start time
+	TeamA                *Team     `json:"-"`                       // Pointer to home team (not stored in DB)
+	TeamB                *Team     `json:"-"`                       // Pointer to away team (not stored in DB)
+}
+
+// String returns a formatted string representation of the Game
+func (g *Game) String() string {
+	var sb strings.Builder
+	teamAName := "Unknown"
+	teamBName := "Unknown"
+	if g.TeamA != nil {
+		teamAName = fmt.Sprintf("%s %s", g.TeamA.Market, g.TeamA.Name)
+	}
+	if g.TeamB != nil {
+		teamBName = fmt.Sprintf("%s %s", g.TeamB.Market, g.TeamB.Name)
+	}
+	sb.WriteString(fmt.Sprintf("\n%s vs %s (DB ID: %d)\n", teamAName, teamBName, g.ID))
+	sb.WriteString(fmt.Sprintf("  Vendor ID: %s\n", g.VendorID))
+	sb.WriteString(fmt.Sprintf("  Scheduled: %s\n", g.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
+	return sb.String()
+}
+
+// IndividualStatus represents the current status of a player
+type IndividualStatus struct {
+	ID           int                  `json:"id"`             // Database ID (auto-increment)
+	IndividualID int64                `json:"individual_id"`  // Foreign key to individuals table
+	Status       IndividualStatusType `json:"status"`         // Individual status enum (Active, Day To Day, Doubtful, Out, Out For Season, Questionable)
+	Individual   *Individual          `json:"-"`              // Pointer to individual (not stored in DB)
+}
+
+// String returns a formatted string representation of the IndividualStatus
+func (is *IndividualStatus) String() string {
+	individualName := "Unknown"
+	if is.Individual != nil {
+		individualName = is.Individual.DisplayName
+	}
+	return fmt.Sprintf("\n%s - Status: %s (DB ID: %d, Individual ID: %d)\n",
+		individualName, string(is.Status), is.ID, is.IndividualID)
 }

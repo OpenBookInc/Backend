@@ -70,6 +70,43 @@ func main() {
 	}
 	fmt.Printf("Successfully fetched NBA data\n")
 
+	// Fetch NFL game schedules
+	fmt.Println("\nFetching NFL game schedules...")
+	apiClient.RateLimitWait()
+	if err := fetcher.FetchNFLGames(apiClient, dataStore, cfg.NFLSeasonYear, cfg.NFLSeasonType); err != nil {
+		fatal("Failed to fetch NFL games: %v", err)
+	}
+	fmt.Printf("Successfully fetched NFL games\n")
+
+	// Fetch NBA game schedules
+	fmt.Println("\nFetching NBA game schedules...")
+	apiClient.RateLimitWait()
+	if err := fetcher.FetchNBAGames(apiClient, dataStore, cfg.NBASeasonYear, cfg.NBASeasonType); err != nil {
+		fatal("Failed to fetch NBA games: %v", err)
+	}
+	fmt.Printf("Successfully fetched NBA games\n")
+
+	// Fetch NFL player statuses (injuries)
+	fmt.Println("\nFetching NFL player statuses...")
+	apiClient.RateLimitWait()
+	if err := fetcher.FetchNFLPlayerStatuses(apiClient, dataStore, cfg.NFLSeasonYear, cfg.NFLSeasonType, cfg.NFLWeek); err != nil {
+		fatal("Failed to fetch NFL player statuses: %v", err)
+	}
+	fmt.Printf("Successfully fetched NFL player statuses\n")
+
+	// Fetch NBA player statuses (injuries)
+	fmt.Println("\nFetching NBA player statuses...")
+	apiClient.RateLimitWait()
+	if err := fetcher.FetchNBAPlayerStatuses(apiClient, dataStore); err != nil {
+		fatal("Failed to fetch NBA player statuses: %v", err)
+	}
+	fmt.Printf("Successfully fetched NBA player statuses\n")
+
+	// Set default "Active" status for all players without an injury status
+	fmt.Println("\nSetting default active statuses for remaining players...")
+	fetcher.SetDefaultActiveStatuses(dataStore)
+	fmt.Printf("Successfully set default statuses\n")
+
 	// Persist data to database
 	fmt.Println("\nPersisting data to database...")
 	fmt.Println(strings.Repeat("=", 72))
@@ -88,6 +125,8 @@ func main() {
 	fmt.Printf("Total Teams: %d\n", len(dataStore.Teams))
 	fmt.Printf("Total Players: %d\n", len(dataStore.Individuals))
 	fmt.Printf("Total Rosters: %d\n", len(dataStore.Rosters))
+	fmt.Printf("Total Games: %d\n", len(dataStore.Games))
+	fmt.Printf("Total Player Statuses: %d\n", len(dataStore.IndividualStatuses))
 
 	fmt.Println("\n" + strings.Repeat("=", 72))
 	fmt.Println("Data successfully persisted to database!")
@@ -151,6 +190,34 @@ func printPersistedData(dataStore *models.DataStore) {
 	fmt.Println(strings.Repeat("=", 72))
 	for _, roster := range dataStore.Rosters {
 		fmt.Print(roster)
+	}
+
+	// Print Games (sample - showing first 10)
+	fmt.Println("\n" + strings.Repeat("=", 72))
+	fmt.Printf("GAMES (showing first 10 of %d)\n", len(dataStore.Games))
+	fmt.Println(strings.Repeat("=", 72))
+	gameCount := 0
+	for _, game := range dataStore.Games {
+		if gameCount >= 10 {
+			fmt.Printf("\n... and %d more games\n", len(dataStore.Games)-10)
+			break
+		}
+		fmt.Print(game)
+		gameCount++
+	}
+
+	// Print Individual Statuses (sample - showing first 20)
+	fmt.Println("\n" + strings.Repeat("=", 72))
+	fmt.Printf("INDIVIDUAL STATUSES (showing first 20 of %d)\n", len(dataStore.IndividualStatuses))
+	fmt.Println(strings.Repeat("=", 72))
+	statusCount := 0
+	for _, status := range dataStore.IndividualStatuses {
+		if statusCount >= 20 {
+			fmt.Printf("\n... and %d more statuses\n", len(dataStore.IndividualStatuses)-20)
+			break
+		}
+		fmt.Print(status)
+		statusCount++
 	}
 }
 
@@ -277,6 +344,45 @@ func persistToDatabase(ctx context.Context, dbStore *store.Store, dataStore *mod
 	}
 	fmt.Printf("  Upserted %d rosters\n", rosterCount)
 	fmt.Printf("  Upserted %d individuals\n", individualCount)
+
+	// Step 7: Upsert games
+	fmt.Println("Upserting games...")
+	gameCount := 0
+	for _, game := range dataStore.Games {
+		// Set team IDs from the pointer relationships
+		if game.TeamA != nil {
+			game.ContenderIDA = int64(game.TeamA.ID)
+		}
+		if game.TeamB != nil {
+			game.ContenderIDB = int64(game.TeamB.ID)
+		}
+
+		gameID, err := dbStore.UpsertGame(ctx, game)
+		if err != nil {
+			return fmt.Errorf("failed to upsert game %s: %w", game.VendorID, err)
+		}
+		game.ID = gameID
+		gameCount++
+	}
+	fmt.Printf("  Upserted %d games\n", gameCount)
+
+	// Step 8: Upsert individual statuses
+	fmt.Println("Upserting individual statuses...")
+	statusCount := 0
+	for _, status := range dataStore.IndividualStatuses {
+		// Set individual ID from the pointer relationship
+		if status.Individual != nil {
+			status.IndividualID = int64(status.Individual.ID)
+		}
+
+		statusID, err := dbStore.UpsertIndividualStatus(ctx, status)
+		if err != nil {
+			return fmt.Errorf("failed to upsert individual status for individual_id %d: %w", status.IndividualID, err)
+		}
+		status.ID = statusID
+		statusCount++
+	}
+	fmt.Printf("  Upserted %d individual statuses\n", statusCount)
 
 	return nil
 }
