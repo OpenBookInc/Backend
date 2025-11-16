@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/openbook/population-scripts/client"
-	"github.com/openbook/population-scripts/models"
+	"github.com/openbook/shared/models"
 )
 
 // NFLHierarchyResponse represents the NFL league hierarchy API response

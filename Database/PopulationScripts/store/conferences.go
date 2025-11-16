@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openbook/population-scripts/models"
+	"github.com/openbook/shared/models"
 )
 
 // UpsertConference inserts or updates a conference in the database

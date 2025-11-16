@@ -38,8 +38,34 @@ check-codegen: codegen
 		echo "✅ Generated code is up to date."; \
 	fi
 
-# Compile the MatchingServer client
+# Find all Go files in src/apps/
+APP_SOURCES := $(wildcard src/apps/*.go)
+# Generate binary names from source files (remove .go extension and path)
+APP_BINARIES := $(patsubst src/apps/%.go,$(BUILD_DIR)/%,$(APP_SOURCES))
+
+# Build all applications
+.PHONY: all
+all: $(APP_BINARIES)
+
+# Pattern rule to build each app
+$(BUILD_DIR)/%: src/apps/%.go
+	@mkdir -p "$(BUILD_DIR)"
+	go build -o $@ $<
+	@echo "✅ Built $@"
+
+# Individual app targets for backwards compatibility
 .PHONY: matching-server-client
 matching-server-client:
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_DIR)/matching-server-client" ./src/apps/MatchingServerClient.go
+	go build -o "$(BUILD_DIR)/MatchingServerClient" ./src/apps/MatchingServerClient.go
+
+.PHONY: openbook-backend
+openbook-backend:
+	mkdir -p "$(BUILD_DIR)"
+	go build -o "$(BUILD_DIR)/OpenBookBackend" ./src/apps/OpenBookBackend.go
+
+# Clean build artifacts
+.PHONY: clean
+clean:
+	rm -rf "$(BUILD_DIR)"
+	@echo "✅ Cleaned build directory"

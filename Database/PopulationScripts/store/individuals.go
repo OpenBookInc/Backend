@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openbook/population-scripts/models"
+	"github.com/openbook/shared/models"
 )
 
 // UpsertIndividual inserts or updates an individual in the database

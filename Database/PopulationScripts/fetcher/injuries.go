@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openbook/population-scripts/client"
-	"github.com/openbook/population-scripts/models"
+	"github.com/openbook/shared/models"
 )
 
 // NFLInjuriesResponse represents the NFL weekly injuries API response

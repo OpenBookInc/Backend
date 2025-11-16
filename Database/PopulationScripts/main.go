@@ -10,8 +10,8 @@ import (
 	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/population-scripts/config"
 	"github.com/openbook/population-scripts/fetcher"
-	"github.com/openbook/population-scripts/models"
 	"github.com/openbook/population-scripts/store"
+	"github.com/openbook/shared/models"
 )
 
 // fatal prints an error message to stderr and exits with code 1

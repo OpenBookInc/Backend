@@ -6,6 +6,7 @@ require (
 	github.com/go-resty/resty/v2 v2.11.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
+	github.com/openbook/shared v0.0.0
 )
 
 require (
@@ -17,3 +18,5 @@ require (
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )
+
+replace github.com/openbook/shared => ../../shared
