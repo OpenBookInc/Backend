@@ -89,6 +89,7 @@ message PoolDefinitionResponse {
 
     uint64 poolId = 1;
     repeated Lineup lineups = 2; // contains a list of all possible lineups that fall into this pool
+    bool isNew = 3; // indicates whether this is a newly defined pool (true) or already existed (false)
   }
 
   MessageBase messageBase = 1;

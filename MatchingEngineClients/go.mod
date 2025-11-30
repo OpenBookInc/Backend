@@ -1,9 +1,8 @@
 module CommandCenter
 
-go 1.25.1
+go 1.25.4
 
 require (
-	github.com/openbook/shared v0.0.0
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
 )

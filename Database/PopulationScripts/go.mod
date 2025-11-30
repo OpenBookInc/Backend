@@ -1,6 +1,6 @@
 module github.com/openbook/population-scripts
 
-go 1.23.0
+go 1.25.4
 
 require (
 	github.com/go-resty/resty/v2 v2.11.0

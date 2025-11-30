@@ -54,14 +54,43 @@ impl PoolManager {
     }
 
     /// Defines a new pool and returns the pool definition response
+    /// If the pool already exists, returns it with isNew=false
     pub fn define_pool(
         &mut self,
         request: PoolDefinitionRequestBody,
     ) -> Result<PoolDefinitionResponseBody, String> {
-        // Validate pool doesn't already exist
-        if self.pools.contains_key(&request.pool_id) {
-            return Err(format!("Pool {} already exists", request.pool_id));
-        }
+        // Check if pool already exists
+        let is_new = if let Some(existing_pool_info) = self.pools.get(&request.pool_id) {
+            // Pool already exists, generate lineups from existing data
+            let num_legs = existing_pool_info.leg_security_ids.len();
+            let num_lineups = 1 << num_legs;
+            let mut lineups = Vec::with_capacity(num_lineups);
+
+            for lineup_index in 0..num_lineups {
+                let mut legs = Vec::with_capacity(num_legs);
+
+                for leg_idx in 0..num_legs {
+                    let is_over = (lineup_index & (1 << leg_idx)) != 0;
+                    legs.push(PoolDefinitionResponse_Lineup_Leg {
+                        security_id: existing_pool_info.leg_security_ids[leg_idx],
+                        is_over,
+                    });
+                }
+
+                lineups.push(PoolDefinitionResponse_Lineup {
+                    lineup_index: lineup_index as u64,
+                    legs,
+                });
+            }
+
+            return Ok(PoolDefinitionResponseBody {
+                pool_id: request.pool_id,
+                lineups,
+                is_new: false,
+            });
+        } else {
+            true
+        };
 
         // Validate we have at least one leg
         if request.leg_security_ids.is_empty() {
@@ -107,6 +136,7 @@ impl PoolManager {
         Ok(PoolDefinitionResponseBody {
             pool_id: request.pool_id,
             lineups,
+            is_new,
         })
     }
 
@@ -242,10 +272,11 @@ mod tests {
             leg_security_ids: vec![101, 102],
         };
 
-        manager.define_pool(request.clone()).unwrap();
-        let result = manager.define_pool(request);
+        let first_response = manager.define_pool(request.clone()).unwrap();
+        assert!(first_response.is_new);
 
-        assert!(result.is_err());
+        let second_response = manager.define_pool(request).unwrap();
+        assert!(!second_response.is_new);
     }
 
     #[test]
