@@ -192,30 +192,22 @@ func printPersistedData(dataStore *models.DataStore) {
 		fmt.Print(roster)
 	}
 
-	// Print Games (sample - showing first 10)
+	// Print Games (showing all)
 	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Printf("GAMES (showing first 10 of %d)\n", len(dataStore.Games))
+	fmt.Printf("GAMES (showing all %d)\n", len(dataStore.Games))
 	fmt.Println(strings.Repeat("=", 72))
 	gameCount := 0
 	for _, game := range dataStore.Games {
-		if gameCount >= 10 {
-			fmt.Printf("\n... and %d more games\n", len(dataStore.Games)-10)
-			break
-		}
 		fmt.Print(game)
 		gameCount++
 	}
 
-	// Print Individual Statuses (sample - showing first 20)
+	// Print Individual Statuses (showing all)
 	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Printf("INDIVIDUAL STATUSES (showing first 20 of %d)\n", len(dataStore.IndividualStatuses))
+	fmt.Printf("INDIVIDUAL STATUSES (showing all %d)\n", len(dataStore.IndividualStatuses))
 	fmt.Println(strings.Repeat("=", 72))
 	statusCount := 0
 	for _, status := range dataStore.IndividualStatuses {
-		if statusCount >= 20 {
-			fmt.Printf("\n... and %d more statuses\n", len(dataStore.IndividualStatuses)-20)
-			break
-		}
 		fmt.Print(status)
 		statusCount++
 	}
