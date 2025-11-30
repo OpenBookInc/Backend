@@ -54,15 +54,15 @@ $(BUILD_DIR)/%: src/apps/%.go
 	@echo "✅ Built $@"
 
 # Individual app targets for backwards compatibility
-.PHONY: matching-server-client
-matching-server-client:
+.PHONY: matching-engine-tester
+matching-engine-tester:
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_DIR)/MatchingServerClient" ./src/apps/MatchingServerClient.go
+	go build -o "$(BUILD_DIR)/MatchingEngineTester" ./cmd/matching-engine-tester/main.go
 
-.PHONY: openbook-backend
-openbook-backend:
+.PHONY: matching-engine-gateway
+matching-engine-gateway:
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_DIR)/OpenBookBackend" ./src/apps/OpenBookBackend.go
+	go build -o "$(BUILD_DIR)/MatchingEngineGateway" ./cmd/matching-engine-gateway/main.go
 
 # Clean build artifacts
 .PHONY: clean
