@@ -19,10 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchingServerService_OnHeartbeat_FullMethodName             = "/MatchingServicePackage.MatchingServerService/OnHeartbeat"
-	MatchingServerService_OnPoolDefinitionRequest_FullMethodName = "/MatchingServicePackage.MatchingServerService/OnPoolDefinitionRequest"
-	MatchingServerService_OnOrderNew_FullMethodName              = "/MatchingServicePackage.MatchingServerService/OnOrderNew"
-	MatchingServerService_OnOrderCancel_FullMethodName           = "/MatchingServicePackage.MatchingServerService/OnOrderCancel"
+	MatchingServerService_OnHeartbeat_FullMethodName   = "/MatchingServicePackage.MatchingServerService/OnHeartbeat"
+	MatchingServerService_OnOrderNew_FullMethodName    = "/MatchingServicePackage.MatchingServerService/OnOrderNew"
+	MatchingServerService_OnOrderCancel_FullMethodName = "/MatchingServicePackage.MatchingServerService/OnOrderCancel"
 )
 
 // MatchingServerServiceClient is the client API for MatchingServerService service.
@@ -30,7 +29,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MatchingServerServiceClient interface {
 	OnHeartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope], error)
-	OnPoolDefinitionRequest(ctx context.Context, in *PoolDefinitionRequest, opts ...grpc.CallOption) (*PoolDefinitionResponseEnvelope, error)
 	OnOrderNew(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error)
 	OnOrderCancel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope], error)
 }
@@ -55,16 +53,6 @@ func (c *matchingServerServiceClient) OnHeartbeat(ctx context.Context, opts ...g
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MatchingServerService_OnHeartbeatClient = grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope]
-
-func (c *matchingServerServiceClient) OnPoolDefinitionRequest(ctx context.Context, in *PoolDefinitionRequest, opts ...grpc.CallOption) (*PoolDefinitionResponseEnvelope, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PoolDefinitionResponseEnvelope)
-	err := c.cc.Invoke(ctx, MatchingServerService_OnPoolDefinitionRequest_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
 
 func (c *matchingServerServiceClient) OnOrderNew(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -97,7 +85,6 @@ type MatchingServerService_OnOrderCancelClient = grpc.BidiStreamingClient[OrderC
 // for forward compatibility.
 type MatchingServerServiceServer interface {
 	OnHeartbeat(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error
-	OnPoolDefinitionRequest(context.Context, *PoolDefinitionRequest) (*PoolDefinitionResponseEnvelope, error)
 	OnOrderNew(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error
 	OnOrderCancel(grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]) error
 	mustEmbedUnimplementedMatchingServerServiceServer()
@@ -112,9 +99,6 @@ type UnimplementedMatchingServerServiceServer struct{}
 
 func (UnimplementedMatchingServerServiceServer) OnHeartbeat(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error {
 	return status.Error(codes.Unimplemented, "method OnHeartbeat not implemented")
-}
-func (UnimplementedMatchingServerServiceServer) OnPoolDefinitionRequest(context.Context, *PoolDefinitionRequest) (*PoolDefinitionResponseEnvelope, error) {
-	return nil, status.Error(codes.Unimplemented, "method OnPoolDefinitionRequest not implemented")
 }
 func (UnimplementedMatchingServerServiceServer) OnOrderNew(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error {
 	return status.Error(codes.Unimplemented, "method OnOrderNew not implemented")
@@ -150,24 +134,6 @@ func _MatchingServerService_OnHeartbeat_Handler(srv interface{}, stream grpc.Ser
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MatchingServerService_OnHeartbeatServer = grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]
 
-func _MatchingServerService_OnPoolDefinitionRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PoolDefinitionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MatchingServerServiceServer).OnPoolDefinitionRequest(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MatchingServerService_OnPoolDefinitionRequest_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MatchingServerServiceServer).OnPoolDefinitionRequest(ctx, req.(*PoolDefinitionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MatchingServerService_OnOrderNew_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(MatchingServerServiceServer).OnOrderNew(&grpc.GenericServerStream[OrderNew, OrderNewResponseEnvelope]{ServerStream: stream})
 }
@@ -188,12 +154,7 @@ type MatchingServerService_OnOrderCancelServer = grpc.BidiStreamingServer[OrderC
 var MatchingServerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "MatchingServicePackage.MatchingServerService",
 	HandlerType: (*MatchingServerServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "OnPoolDefinitionRequest",
-			Handler:    _MatchingServerService_OnPoolDefinitionRequest_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "OnHeartbeat",

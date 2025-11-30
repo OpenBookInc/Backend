@@ -15,8 +15,8 @@ use matching_server::matching_service_package::matching_server_service_server::{
 // these "use" lines import the corresponding Rust structs from the generated module "service".
 use matching_server::matching_service_package::{MessageType, OrderType};
 use matching_server::matching_service_package::{MessageBase, SequencedMessageBase, ResponseBase, FallibleBase};
-use matching_server::matching_service_package::{Heartbeat, GeneralReject, PoolDefinitionRequest, PoolDefinitionResponse, OrderNew, OrderNewAcknowledgement, OrderCancel, OrderCancelAcknowledgement, OrderElimination, FillEvent};
-use matching_server::matching_service_package::{HeartbeatResponseEnvelope, PoolDefinitionResponseEnvelope, OrderNewResponseEnvelope, OrderCancelResponseEnvelope};
+use matching_server::matching_service_package::{Heartbeat, GeneralReject, OrderNew, OrderNewAcknowledgement, OrderCancel, OrderCancelAcknowledgement, OrderElimination, FillEvent};
+use matching_server::matching_service_package::{HeartbeatResponseEnvelope, OrderNewResponseEnvelope, OrderCancelResponseEnvelope};
 
 /// Trait for messages that have sequence numbers and can be queued.
 trait SequencedMessage: Sized {
@@ -53,25 +53,11 @@ impl SequencedMessage for OrderCancel {
     }
 }
 
-impl SequencedMessage for PoolDefinitionRequest {
-    fn sequence_number(&self) -> Result<u64, Status> {
-        self.sequenced_message_base
-            .as_ref()
-            .ok_or_else(|| Status::invalid_argument("Missing sequenced_message_base"))
-            .map(|base| base.sequence_number)
-    }
-
-    fn into_pending(self) -> PendingMessage {
-        PendingMessage::PoolDefinitionRequest(self)
-    }
-}
-
 /// Represents a pending message waiting to be processed when its sequence number becomes current.
 #[derive(Debug)]
 enum PendingMessage {
     OrderNew(OrderNew),
     OrderCancel(OrderCancel),
-    PoolDefinitionRequest(PoolDefinitionRequest),
 }
 
 // #[derive(Debug)] is a Rust attribute that automatically implements the Debug trait for the struct that follows.
@@ -198,11 +184,6 @@ impl MatcherService {
                 println!("Processing OrderCancel: {:?}", cancel);
                 Ok(())
             }
-            PendingMessage::PoolDefinitionRequest(request) => {
-                // TODO: Implement actual pool definition processing logic
-                println!("Processing PoolDefinitionRequest: {:?}", request);
-                Ok(())
-            }
         }
     }
 }
@@ -229,17 +210,6 @@ impl MatchingServerService for MatcherService {
         _request: Request<tonic::Streaming<Heartbeat>>,
     ) -> Result<Response<Self::OnHeartbeatStream>, Status> {
         unimplemented!("on_heartbeat not yet implemented")
-    }
-
-    async fn on_pool_definition_request(
-        &self,
-        request: Request<PoolDefinitionRequest>,
-    ) -> Result<Response<PoolDefinitionResponseEnvelope>, Status> {
-        let pool_request = request.into_inner();
-        self.handle_single_message(pool_request).await?;
-
-        // TODO: Return actual response based on processing result
-        unimplemented!("Response generation not yet implemented")
     }
 
     async fn on_order_new(

@@ -26,8 +26,6 @@ type MessageType int32
 const (
 	MessageType_HEARTBEAT                    MessageType = 0
 	MessageType_GENERAL_REJECT               MessageType = 1
-	MessageType_POOL_DEFINITION_REQUEST      MessageType = 2
-	MessageType_POOL_DEFINITION_RESPONSE     MessageType = 3
 	MessageType_ORDER_NEW                    MessageType = 4
 	MessageType_ORDER_NEW_ACKNOWLEDGEMENT    MessageType = 5
 	MessageType_ORDER_CANCEL                 MessageType = 6
@@ -40,8 +38,6 @@ var (
 	MessageType_name = map[int32]string{
 		0: "HEARTBEAT",
 		1: "GENERAL_REJECT",
-		2: "POOL_DEFINITION_REQUEST",
-		3: "POOL_DEFINITION_RESPONSE",
 		4: "ORDER_NEW",
 		5: "ORDER_NEW_ACKNOWLEDGEMENT",
 		6: "ORDER_CANCEL",
@@ -51,8 +47,6 @@ var (
 	MessageType_value = map[string]int32{
 		"HEARTBEAT":                    0,
 		"GENERAL_REJECT":               1,
-		"POOL_DEFINITION_REQUEST":      2,
-		"POOL_DEFINITION_RESPONSE":     3,
 		"ORDER_NEW":                    4,
 		"ORDER_NEW_ACKNOWLEDGEMENT":    5,
 		"ORDER_CANCEL":                 6,
@@ -447,142 +441,6 @@ func (x *GeneralReject) GetBody() *GeneralReject_Body {
 	return nil
 }
 
-type PoolDefinitionRequest struct {
-	state                protoimpl.MessageState      `protogen:"open.v1"`
-	MessageBase          *MessageBase                `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase       `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	Body                 *PoolDefinitionRequest_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionRequest) Reset() {
-	*x = PoolDefinitionRequest{}
-	mi := &file_MatchingService_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionRequest) ProtoMessage() {}
-
-func (x *PoolDefinitionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionRequest.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionRequest) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *PoolDefinitionRequest) GetMessageBase() *MessageBase {
-	if x != nil {
-		return x.MessageBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionRequest) GetSequencedMessageBase() *SequencedMessageBase {
-	if x != nil {
-		return x.SequencedMessageBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionRequest) GetBody() *PoolDefinitionRequest_Body {
-	if x != nil {
-		return x.Body
-	}
-	return nil
-}
-
-type PoolDefinitionResponse struct {
-	state                protoimpl.MessageState       `protogen:"open.v1"`
-	MessageBase          *MessageBase                 `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
-	SequencedMessageBase *SequencedMessageBase        `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	ResponseBase         *ResponseBase                `protobuf:"bytes,3,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase         *FallibleBase                `protobuf:"bytes,4,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
-	Body                 *PoolDefinitionResponse_Body `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionResponse) Reset() {
-	*x = PoolDefinitionResponse{}
-	mi := &file_MatchingService_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionResponse) ProtoMessage() {}
-
-func (x *PoolDefinitionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionResponse.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *PoolDefinitionResponse) GetMessageBase() *MessageBase {
-	if x != nil {
-		return x.MessageBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponse) GetSequencedMessageBase() *SequencedMessageBase {
-	if x != nil {
-		return x.SequencedMessageBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponse) GetResponseBase() *ResponseBase {
-	if x != nil {
-		return x.ResponseBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponse) GetFallibleBase() *FallibleBase {
-	if x != nil {
-		return x.FallibleBase
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponse) GetBody() *PoolDefinitionResponse_Body {
-	if x != nil {
-		return x.Body
-	}
-	return nil
-}
-
 type OrderNew struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
@@ -594,7 +452,7 @@ type OrderNew struct {
 
 func (x *OrderNew) Reset() {
 	*x = OrderNew{}
-	mi := &file_MatchingService_proto_msgTypes[8]
+	mi := &file_MatchingService_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -606,7 +464,7 @@ func (x *OrderNew) String() string {
 func (*OrderNew) ProtoMessage() {}
 
 func (x *OrderNew) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[8]
+	mi := &file_MatchingService_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -619,7 +477,7 @@ func (x *OrderNew) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderNew.ProtoReflect.Descriptor instead.
 func (*OrderNew) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{8}
+	return file_MatchingService_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *OrderNew) GetMessageBase() *MessageBase {
@@ -656,7 +514,7 @@ type OrderNewAcknowledgement struct {
 
 func (x *OrderNewAcknowledgement) Reset() {
 	*x = OrderNewAcknowledgement{}
-	mi := &file_MatchingService_proto_msgTypes[9]
+	mi := &file_MatchingService_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +526,7 @@ func (x *OrderNewAcknowledgement) String() string {
 func (*OrderNewAcknowledgement) ProtoMessage() {}
 
 func (x *OrderNewAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[9]
+	mi := &file_MatchingService_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +539,7 @@ func (x *OrderNewAcknowledgement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderNewAcknowledgement.ProtoReflect.Descriptor instead.
 func (*OrderNewAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{9}
+	return file_MatchingService_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *OrderNewAcknowledgement) GetMessageBase() *MessageBase {
@@ -730,7 +588,7 @@ type OrderCancel struct {
 
 func (x *OrderCancel) Reset() {
 	*x = OrderCancel{}
-	mi := &file_MatchingService_proto_msgTypes[10]
+	mi := &file_MatchingService_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -742,7 +600,7 @@ func (x *OrderCancel) String() string {
 func (*OrderCancel) ProtoMessage() {}
 
 func (x *OrderCancel) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[10]
+	mi := &file_MatchingService_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -755,7 +613,7 @@ func (x *OrderCancel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCancel.ProtoReflect.Descriptor instead.
 func (*OrderCancel) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{10}
+	return file_MatchingService_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OrderCancel) GetMessageBase() *MessageBase {
@@ -792,7 +650,7 @@ type OrderCancelAcknowledgement struct {
 
 func (x *OrderCancelAcknowledgement) Reset() {
 	*x = OrderCancelAcknowledgement{}
-	mi := &file_MatchingService_proto_msgTypes[11]
+	mi := &file_MatchingService_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -804,7 +662,7 @@ func (x *OrderCancelAcknowledgement) String() string {
 func (*OrderCancelAcknowledgement) ProtoMessage() {}
 
 func (x *OrderCancelAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[11]
+	mi := &file_MatchingService_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -817,7 +675,7 @@ func (x *OrderCancelAcknowledgement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCancelAcknowledgement.ProtoReflect.Descriptor instead.
 func (*OrderCancelAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{11}
+	return file_MatchingService_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OrderCancelAcknowledgement) GetMessageBase() *MessageBase {
@@ -868,7 +726,7 @@ type OrderElimination struct {
 
 func (x *OrderElimination) Reset() {
 	*x = OrderElimination{}
-	mi := &file_MatchingService_proto_msgTypes[12]
+	mi := &file_MatchingService_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +738,7 @@ func (x *OrderElimination) String() string {
 func (*OrderElimination) ProtoMessage() {}
 
 func (x *OrderElimination) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[12]
+	mi := &file_MatchingService_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +751,7 @@ func (x *OrderElimination) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderElimination.ProtoReflect.Descriptor instead.
 func (*OrderElimination) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{12}
+	return file_MatchingService_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *OrderElimination) GetMessageBase() *MessageBase {
@@ -935,7 +793,7 @@ type FillEvent struct {
 
 func (x *FillEvent) Reset() {
 	*x = FillEvent{}
-	mi := &file_MatchingService_proto_msgTypes[13]
+	mi := &file_MatchingService_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -947,7 +805,7 @@ func (x *FillEvent) String() string {
 func (*FillEvent) ProtoMessage() {}
 
 func (x *FillEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[13]
+	mi := &file_MatchingService_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -960,7 +818,7 @@ func (x *FillEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FillEvent.ProtoReflect.Descriptor instead.
 func (*FillEvent) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{13}
+	return file_MatchingService_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *FillEvent) GetMessageBase() *MessageBase {
@@ -998,7 +856,7 @@ type HeartbeatResponseEnvelope struct {
 
 func (x *HeartbeatResponseEnvelope) Reset() {
 	*x = HeartbeatResponseEnvelope{}
-	mi := &file_MatchingService_proto_msgTypes[14]
+	mi := &file_MatchingService_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1010,7 +868,7 @@ func (x *HeartbeatResponseEnvelope) String() string {
 func (*HeartbeatResponseEnvelope) ProtoMessage() {}
 
 func (x *HeartbeatResponseEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[14]
+	mi := &file_MatchingService_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +881,7 @@ func (x *HeartbeatResponseEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponseEnvelope.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponseEnvelope) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{14}
+	return file_MatchingService_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HeartbeatResponseEnvelope) GetContents() isHeartbeatResponseEnvelope_Contents {
@@ -1067,89 +925,6 @@ func (*HeartbeatResponseEnvelope_GeneralReject) isHeartbeatResponseEnvelope_Cont
 
 func (*HeartbeatResponseEnvelope_Heartbeat) isHeartbeatResponseEnvelope_Contents() {}
 
-// Encapsulate all possible messages that can be sent as a result of PoolDefinitionRequest
-type PoolDefinitionResponseEnvelope struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Contents:
-	//
-	//	*PoolDefinitionResponseEnvelope_GeneralReject
-	//	*PoolDefinitionResponseEnvelope_Response
-	Contents      isPoolDefinitionResponseEnvelope_Contents `protobuf_oneof:"contents"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionResponseEnvelope) Reset() {
-	*x = PoolDefinitionResponseEnvelope{}
-	mi := &file_MatchingService_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionResponseEnvelope) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionResponseEnvelope) ProtoMessage() {}
-
-func (x *PoolDefinitionResponseEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionResponseEnvelope.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponseEnvelope) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *PoolDefinitionResponseEnvelope) GetContents() isPoolDefinitionResponseEnvelope_Contents {
-	if x != nil {
-		return x.Contents
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponseEnvelope) GetGeneralReject() *GeneralReject {
-	if x != nil {
-		if x, ok := x.Contents.(*PoolDefinitionResponseEnvelope_GeneralReject); ok {
-			return x.GeneralReject
-		}
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponseEnvelope) GetResponse() *PoolDefinitionResponse {
-	if x != nil {
-		if x, ok := x.Contents.(*PoolDefinitionResponseEnvelope_Response); ok {
-			return x.Response
-		}
-	}
-	return nil
-}
-
-type isPoolDefinitionResponseEnvelope_Contents interface {
-	isPoolDefinitionResponseEnvelope_Contents()
-}
-
-type PoolDefinitionResponseEnvelope_GeneralReject struct {
-	GeneralReject *GeneralReject `protobuf:"bytes,1,opt,name=generalReject,proto3,oneof"`
-}
-
-type PoolDefinitionResponseEnvelope_Response struct {
-	Response *PoolDefinitionResponse `protobuf:"bytes,2,opt,name=response,proto3,oneof"`
-}
-
-func (*PoolDefinitionResponseEnvelope_GeneralReject) isPoolDefinitionResponseEnvelope_Contents() {}
-
-func (*PoolDefinitionResponseEnvelope_Response) isPoolDefinitionResponseEnvelope_Contents() {}
-
 // Encapsulate all possible messages that can be sent as a result of OrderNew
 type OrderNewResponseEnvelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1166,7 +941,7 @@ type OrderNewResponseEnvelope struct {
 
 func (x *OrderNewResponseEnvelope) Reset() {
 	*x = OrderNewResponseEnvelope{}
-	mi := &file_MatchingService_proto_msgTypes[16]
+	mi := &file_MatchingService_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1178,7 +953,7 @@ func (x *OrderNewResponseEnvelope) String() string {
 func (*OrderNewResponseEnvelope) ProtoMessage() {}
 
 func (x *OrderNewResponseEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[16]
+	mi := &file_MatchingService_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1191,7 +966,7 @@ func (x *OrderNewResponseEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderNewResponseEnvelope.ProtoReflect.Descriptor instead.
 func (*OrderNewResponseEnvelope) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{16}
+	return file_MatchingService_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *OrderNewResponseEnvelope) GetContents() isOrderNewResponseEnvelope_Contents {
@@ -1279,7 +1054,7 @@ type OrderCancelResponseEnvelope struct {
 
 func (x *OrderCancelResponseEnvelope) Reset() {
 	*x = OrderCancelResponseEnvelope{}
-	mi := &file_MatchingService_proto_msgTypes[17]
+	mi := &file_MatchingService_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1066,7 @@ func (x *OrderCancelResponseEnvelope) String() string {
 func (*OrderCancelResponseEnvelope) ProtoMessage() {}
 
 func (x *OrderCancelResponseEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[17]
+	mi := &file_MatchingService_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1079,7 @@ func (x *OrderCancelResponseEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCancelResponseEnvelope.ProtoReflect.Descriptor instead.
 func (*OrderCancelResponseEnvelope) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{17}
+	return file_MatchingService_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *OrderCancelResponseEnvelope) GetContents() isOrderCancelResponseEnvelope_Contents {
@@ -1357,7 +1132,7 @@ type GeneralReject_Body struct {
 
 func (x *GeneralReject_Body) Reset() {
 	*x = GeneralReject_Body{}
-	mi := &file_MatchingService_proto_msgTypes[18]
+	mi := &file_MatchingService_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1369,7 +1144,7 @@ func (x *GeneralReject_Body) String() string {
 func (*GeneralReject_Body) ProtoMessage() {}
 
 func (x *GeneralReject_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[18]
+	mi := &file_MatchingService_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1392,245 +1167,20 @@ func (x *GeneralReject_Body) GetErrorDescription() string {
 	return ""
 }
 
-type PoolDefinitionRequest_Body struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PoolId         uint64                 `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
-	TotalUnits     uint64                 `protobuf:"varint,2,opt,name=totalUnits,proto3" json:"totalUnits,omitempty"`
-	LegSecurityIds []uint64               `protobuf:"varint,3,rep,packed,name=legSecurityIds,proto3" json:"legSecurityIds,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionRequest_Body) Reset() {
-	*x = PoolDefinitionRequest_Body{}
-	mi := &file_MatchingService_proto_msgTypes[19]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionRequest_Body) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionRequest_Body) ProtoMessage() {}
-
-func (x *PoolDefinitionRequest_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[19]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionRequest_Body.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionRequest_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
-}
-
-func (x *PoolDefinitionRequest_Body) GetPoolId() uint64 {
-	if x != nil {
-		return x.PoolId
-	}
-	return 0
-}
-
-func (x *PoolDefinitionRequest_Body) GetTotalUnits() uint64 {
-	if x != nil {
-		return x.TotalUnits
-	}
-	return 0
-}
-
-func (x *PoolDefinitionRequest_Body) GetLegSecurityIds() []uint64 {
-	if x != nil {
-		return x.LegSecurityIds
-	}
-	return nil
-}
-
-type PoolDefinitionResponse_Body struct {
-	state         protoimpl.MessageState                `protogen:"open.v1"`
-	PoolId        uint64                                `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
-	Lineups       []*PoolDefinitionResponse_Body_Lineup `protobuf:"bytes,2,rep,name=lineups,proto3" json:"lineups,omitempty"` // contains a list of all possible lineups that fall into this pool
-	IsNew         bool                                  `protobuf:"varint,3,opt,name=isNew,proto3" json:"isNew,omitempty"`    // indicates whether this is a newly defined pool (true) or already existed (false)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionResponse_Body) Reset() {
-	*x = PoolDefinitionResponse_Body{}
-	mi := &file_MatchingService_proto_msgTypes[20]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionResponse_Body) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionResponse_Body) ProtoMessage() {}
-
-func (x *PoolDefinitionResponse_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[20]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionResponse_Body.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
-}
-
-func (x *PoolDefinitionResponse_Body) GetPoolId() uint64 {
-	if x != nil {
-		return x.PoolId
-	}
-	return 0
-}
-
-func (x *PoolDefinitionResponse_Body) GetLineups() []*PoolDefinitionResponse_Body_Lineup {
-	if x != nil {
-		return x.Lineups
-	}
-	return nil
-}
-
-func (x *PoolDefinitionResponse_Body) GetIsNew() bool {
-	if x != nil {
-		return x.IsNew
-	}
-	return false
-}
-
-type PoolDefinitionResponse_Body_Lineup struct {
-	state         protoimpl.MessageState                    `protogen:"open.v1"`
-	LineupIndex   uint64                                    `protobuf:"varint,1,opt,name=lineupIndex,proto3" json:"lineupIndex,omitempty"`
-	Legs          []*PoolDefinitionResponse_Body_Lineup_Leg `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup) Reset() {
-	*x = PoolDefinitionResponse_Body_Lineup{}
-	mi := &file_MatchingService_proto_msgTypes[21]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionResponse_Body_Lineup) ProtoMessage() {}
-
-func (x *PoolDefinitionResponse_Body_Lineup) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[21]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionResponse_Body_Lineup.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse_Body_Lineup) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0}
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup) GetLineupIndex() uint64 {
-	if x != nil {
-		return x.LineupIndex
-	}
-	return 0
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup) GetLegs() []*PoolDefinitionResponse_Body_Lineup_Leg {
-	if x != nil {
-		return x.Legs
-	}
-	return nil
-}
-
-type PoolDefinitionResponse_Body_Lineup_Leg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SecurityId    uint64                 `protobuf:"varint,1,opt,name=securityId,proto3" json:"securityId,omitempty"`
-	IsOver        bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup_Leg) Reset() {
-	*x = PoolDefinitionResponse_Body_Lineup_Leg{}
-	mi := &file_MatchingService_proto_msgTypes[22]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup_Leg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PoolDefinitionResponse_Body_Lineup_Leg) ProtoMessage() {}
-
-func (x *PoolDefinitionResponse_Body_Lineup_Leg) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[22]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PoolDefinitionResponse_Body_Lineup_Leg.ProtoReflect.Descriptor instead.
-func (*PoolDefinitionResponse_Body_Lineup_Leg) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0, 0}
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup_Leg) GetSecurityId() uint64 {
-	if x != nil {
-		return x.SecurityId
-	}
-	return 0
-}
-
-func (x *PoolDefinitionResponse_Body_Lineup_Leg) GetIsOver() bool {
-	if x != nil {
-		return x.IsOver
-	}
-	return false
-}
-
 type OrderNew_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PoolId        uint64                 `protobuf:"varint,1,opt,name=poolId,proto3" json:"poolId,omitempty"`
-	LineupIndex   uint64                 `protobuf:"varint,2,opt,name=lineupIndex,proto3" json:"lineupIndex,omitempty"`
-	OrderType     OrderType              `protobuf:"varint,3,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
-	Portion       uint64                 `protobuf:"varint,4,opt,name=portion,proto3" json:"portion,omitempty"`
-	Quantity      uint64                 `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId   *uint64                `protobuf:"varint,6,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+	Legs          []*OrderNew_Body_Leg   `protobuf:"bytes,1,rep,name=legs,proto3" json:"legs,omitempty"`
+	OrderType     OrderType              `protobuf:"varint,2,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
+	Portion       uint64                 `protobuf:"varint,3,opt,name=portion,proto3" json:"portion,omitempty"`
+	Quantity      uint64                 `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	SelfMatchId   *uint64                `protobuf:"varint,5,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OrderNew_Body) Reset() {
 	*x = OrderNew_Body{}
-	mi := &file_MatchingService_proto_msgTypes[23]
+	mi := &file_MatchingService_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1642,7 +1192,7 @@ func (x *OrderNew_Body) String() string {
 func (*OrderNew_Body) ProtoMessage() {}
 
 func (x *OrderNew_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[23]
+	mi := &file_MatchingService_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1655,21 +1205,14 @@ func (x *OrderNew_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderNew_Body.ProtoReflect.Descriptor instead.
 func (*OrderNew_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{8, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
 }
 
-func (x *OrderNew_Body) GetPoolId() uint64 {
+func (x *OrderNew_Body) GetLegs() []*OrderNew_Body_Leg {
 	if x != nil {
-		return x.PoolId
+		return x.Legs
 	}
-	return 0
-}
-
-func (x *OrderNew_Body) GetLineupIndex() uint64 {
-	if x != nil {
-		return x.LineupIndex
-	}
-	return 0
+	return nil
 }
 
 func (x *OrderNew_Body) GetOrderType() OrderType {
@@ -1700,6 +1243,58 @@ func (x *OrderNew_Body) GetSelfMatchId() uint64 {
 	return 0
 }
 
+type OrderNew_Body_Leg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	LegSecurityId uint64                 `protobuf:"varint,1,opt,name=legSecurityId,proto3" json:"legSecurityId,omitempty"`
+	IsOver        bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderNew_Body_Leg) Reset() {
+	*x = OrderNew_Body_Leg{}
+	mi := &file_MatchingService_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderNew_Body_Leg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderNew_Body_Leg) ProtoMessage() {}
+
+func (x *OrderNew_Body_Leg) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderNew_Body_Leg.ProtoReflect.Descriptor instead.
+func (*OrderNew_Body_Leg) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0, 0}
+}
+
+func (x *OrderNew_Body_Leg) GetLegSecurityId() uint64 {
+	if x != nil {
+		return x.LegSecurityId
+	}
+	return 0
+}
+
+func (x *OrderNew_Body_Leg) GetIsOver() bool {
+	if x != nil {
+		return x.IsOver
+	}
+	return false
+}
+
 type OrderNewAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
@@ -1709,7 +1304,7 @@ type OrderNewAcknowledgement_Body struct {
 
 func (x *OrderNewAcknowledgement_Body) Reset() {
 	*x = OrderNewAcknowledgement_Body{}
-	mi := &file_MatchingService_proto_msgTypes[24]
+	mi := &file_MatchingService_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1721,7 +1316,7 @@ func (x *OrderNewAcknowledgement_Body) String() string {
 func (*OrderNewAcknowledgement_Body) ProtoMessage() {}
 
 func (x *OrderNewAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[24]
+	mi := &file_MatchingService_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1734,7 +1329,7 @@ func (x *OrderNewAcknowledgement_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderNewAcknowledgement_Body.ProtoReflect.Descriptor instead.
 func (*OrderNewAcknowledgement_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{9, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
 }
 
 func (x *OrderNewAcknowledgement_Body) GetOrderId() uint64 {
@@ -1753,7 +1348,7 @@ type OrderCancel_Body struct {
 
 func (x *OrderCancel_Body) Reset() {
 	*x = OrderCancel_Body{}
-	mi := &file_MatchingService_proto_msgTypes[25]
+	mi := &file_MatchingService_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1765,7 +1360,7 @@ func (x *OrderCancel_Body) String() string {
 func (*OrderCancel_Body) ProtoMessage() {}
 
 func (x *OrderCancel_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[25]
+	mi := &file_MatchingService_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1778,7 +1373,7 @@ func (x *OrderCancel_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCancel_Body.ProtoReflect.Descriptor instead.
 func (*OrderCancel_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{10, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{8, 0}
 }
 
 func (x *OrderCancel_Body) GetOrderId() uint64 {
@@ -1797,7 +1392,7 @@ type OrderCancelAcknowledgement_Body struct {
 
 func (x *OrderCancelAcknowledgement_Body) Reset() {
 	*x = OrderCancelAcknowledgement_Body{}
-	mi := &file_MatchingService_proto_msgTypes[26]
+	mi := &file_MatchingService_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1809,7 +1404,7 @@ func (x *OrderCancelAcknowledgement_Body) String() string {
 func (*OrderCancelAcknowledgement_Body) ProtoMessage() {}
 
 func (x *OrderCancelAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[26]
+	mi := &file_MatchingService_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1822,7 +1417,7 @@ func (x *OrderCancelAcknowledgement_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderCancelAcknowledgement_Body.ProtoReflect.Descriptor instead.
 func (*OrderCancelAcknowledgement_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{11, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{9, 0}
 }
 
 func (x *OrderCancelAcknowledgement_Body) GetOrderId() uint64 {
@@ -1841,7 +1436,7 @@ type OrderElimination_Body struct {
 
 func (x *OrderElimination_Body) Reset() {
 	*x = OrderElimination_Body{}
-	mi := &file_MatchingService_proto_msgTypes[27]
+	mi := &file_MatchingService_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1853,7 +1448,7 @@ func (x *OrderElimination_Body) String() string {
 func (*OrderElimination_Body) ProtoMessage() {}
 
 func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[27]
+	mi := &file_MatchingService_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1866,7 +1461,7 @@ func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderElimination_Body.ProtoReflect.Descriptor instead.
 func (*OrderElimination_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{12, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{10, 0}
 }
 
 func (x *OrderElimination_Body) GetEliminationDescription() string {
@@ -1888,7 +1483,7 @@ type FillEvent_Body struct {
 
 func (x *FillEvent_Body) Reset() {
 	*x = FillEvent_Body{}
-	mi := &file_MatchingService_proto_msgTypes[28]
+	mi := &file_MatchingService_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1900,7 +1495,7 @@ func (x *FillEvent_Body) String() string {
 func (*FillEvent_Body) ProtoMessage() {}
 
 func (x *FillEvent_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[28]
+	mi := &file_MatchingService_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1913,7 +1508,7 @@ func (x *FillEvent_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FillEvent_Body.ProtoReflect.Descriptor instead.
 func (*FillEvent_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{13, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{11, 0}
 }
 
 func (x *FillEvent_Body) GetTransactionId() uint64 {
@@ -1956,7 +1551,7 @@ type FillEvent_Body_Fill struct {
 
 func (x *FillEvent_Body_Fill) Reset() {
 	*x = FillEvent_Body_Fill{}
-	mi := &file_MatchingService_proto_msgTypes[29]
+	mi := &file_MatchingService_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1968,7 +1563,7 @@ func (x *FillEvent_Body_Fill) String() string {
 func (*FillEvent_Body_Fill) ProtoMessage() {}
 
 func (x *FillEvent_Body_Fill) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[29]
+	mi := &file_MatchingService_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1981,7 +1576,7 @@ func (x *FillEvent_Body_Fill) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FillEvent_Body_Fill.ProtoReflect.Descriptor instead.
 func (*FillEvent_Body_Fill) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{13, 0, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{11, 0, 0}
 }
 
 func (x *FillEvent_Body_Fill) GetFillId() uint64 {
@@ -2036,46 +1631,20 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12>\n" +
 	"\x04body\x18\x04 \x01(\v2*.MatchingServicePackage.GeneralReject.BodyR\x04body\x1a2\n" +
 	"\x04Body\x12*\n" +
-	"\x10errorDescription\x18\x01 \x01(\tR\x10errorDescription\"\xf0\x02\n" +
-	"\x15PoolDefinitionRequest\x12E\n" +
-	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12F\n" +
-	"\x04body\x18\x03 \x01(\v22.MatchingServicePackage.PoolDefinitionRequest.BodyR\x04body\x1af\n" +
-	"\x04Body\x12\x16\n" +
-	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12\x1e\n" +
-	"\n" +
-	"totalUnits\x18\x02 \x01(\x04R\n" +
-	"totalUnits\x12&\n" +
-	"\x0elegSecurityIds\x18\x03 \x03(\x04R\x0elegSecurityIds\"\xeb\x05\n" +
-	"\x16PoolDefinitionResponse\x12E\n" +
-	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
-	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12H\n" +
-	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12G\n" +
-	"\x04body\x18\x05 \x01(\v23.MatchingServicePackage.PoolDefinitionResponse.BodyR\x04body\x1a\xca\x02\n" +
-	"\x04Body\x12\x16\n" +
-	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12T\n" +
-	"\alineups\x18\x02 \x03(\v2:.MatchingServicePackage.PoolDefinitionResponse.Body.LineupR\alineups\x12\x14\n" +
-	"\x05isNew\x18\x03 \x01(\bR\x05isNew\x1a\xbd\x01\n" +
-	"\x06Lineup\x12 \n" +
-	"\vlineupIndex\x18\x01 \x01(\x04R\vlineupIndex\x12R\n" +
-	"\x04legs\x18\x02 \x03(\v2>.MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.LegR\x04legs\x1a=\n" +
-	"\x03Leg\x12\x1e\n" +
-	"\n" +
-	"securityId\x18\x01 \x01(\x04R\n" +
-	"securityId\x12\x16\n" +
-	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"\xdf\x03\n" +
+	"\x10errorDescription\x18\x01 \x01(\tR\x10errorDescription\"\xa9\x04\n" +
 	"\bOrderNew\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x129\n" +
-	"\x04body\x18\x03 \x01(\v2%.MatchingServicePackage.OrderNew.BodyR\x04body\x1a\xee\x01\n" +
-	"\x04Body\x12\x16\n" +
-	"\x06poolId\x18\x01 \x01(\x04R\x06poolId\x12 \n" +
-	"\vlineupIndex\x18\x02 \x01(\x04R\vlineupIndex\x12?\n" +
-	"\torderType\x18\x03 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x18\n" +
-	"\aportion\x18\x04 \x01(\x04R\aportion\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12%\n" +
-	"\vselfMatchId\x18\x06 \x01(\x04H\x00R\vselfMatchId\x88\x01\x01B\x0e\n" +
+	"\x04body\x18\x03 \x01(\v2%.MatchingServicePackage.OrderNew.BodyR\x04body\x1a\xb8\x02\n" +
+	"\x04Body\x12=\n" +
+	"\x04legs\x18\x01 \x03(\v2).MatchingServicePackage.OrderNew.Body.LegR\x04legs\x12?\n" +
+	"\torderType\x18\x02 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x18\n" +
+	"\aportion\x18\x03 \x01(\x04R\aportion\x12\x1a\n" +
+	"\bquantity\x18\x04 \x01(\x04R\bquantity\x12%\n" +
+	"\vselfMatchId\x18\x05 \x01(\x04H\x00R\vselfMatchId\x88\x01\x01\x1aC\n" +
+	"\x03Leg\x12$\n" +
+	"\rlegSecurityId\x18\x01 \x01(\x04R\rlegSecurityId\x12\x16\n" +
+	"\x06isOver\x18\x02 \x01(\bR\x06isOverB\x0e\n" +
 	"\f_selfMatchId\"\xc2\x03\n" +
 	"\x17OrderNewAcknowledgement\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
@@ -2124,11 +1693,6 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12A\n" +
 	"\theartbeat\x18\x02 \x01(\v2!.MatchingServicePackage.HeartbeatH\x00R\theartbeatB\n" +
 	"\n" +
-	"\bcontents\"\xc9\x01\n" +
-	"\x1ePoolDefinitionResponseEnvelope\x12M\n" +
-	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12L\n" +
-	"\bresponse\x18\x02 \x01(\v2..MatchingServicePackage.PoolDefinitionResponseH\x00R\bresponseB\n" +
-	"\n" +
 	"\bcontents\"\xd9\x02\n" +
 	"\x18OrderNewResponseEnvelope\x12M\n" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12[\n" +
@@ -2141,12 +1705,10 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12^\n" +
 	"\x0facknowledgement\x18\x02 \x01(\v22.MatchingServicePackage.OrderCancelAcknowledgementH\x00R\x0facknowledgementB\n" +
 	"\n" +
-	"\bcontents*\xdd\x01\n" +
+	"\bcontents*\xa2\x01\n" +
 	"\vMessageType\x12\r\n" +
 	"\tHEARTBEAT\x10\x00\x12\x12\n" +
-	"\x0eGENERAL_REJECT\x10\x01\x12\x1b\n" +
-	"\x17POOL_DEFINITION_REQUEST\x10\x02\x12\x1c\n" +
-	"\x18POOL_DEFINITION_RESPONSE\x10\x03\x12\r\n" +
+	"\x0eGENERAL_REJECT\x10\x01\x12\r\n" +
 	"\tORDER_NEW\x10\x04\x12\x1d\n" +
 	"\x19ORDER_NEW_ACKNOWLEDGEMENT\x10\x05\x12\x10\n" +
 	"\fORDER_CANCEL\x10\x06\x12 \n" +
@@ -2156,10 +1718,9 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\tOrderType\x12\t\n" +
 	"\x05LIMIT\x10\x00\x12\n" +
 	"\n" +
-	"\x06MARKET\x10\x012\xd8\x03\n" +
+	"\x06MARKET\x10\x012\xd5\x02\n" +
 	"\x15MatchingServerService\x12g\n" +
-	"\vOnHeartbeat\x12!.MatchingServicePackage.Heartbeat\x1a1.MatchingServicePackage.HeartbeatResponseEnvelope(\x010\x01\x12\x80\x01\n" +
-	"\x17OnPoolDefinitionRequest\x12-.MatchingServicePackage.PoolDefinitionRequest\x1a6.MatchingServicePackage.PoolDefinitionResponseEnvelope\x12d\n" +
+	"\vOnHeartbeat\x12!.MatchingServicePackage.Heartbeat\x1a1.MatchingServicePackage.HeartbeatResponseEnvelope(\x010\x01\x12d\n" +
 	"\n" +
 	"OnOrderNew\x12 .MatchingServicePackage.OrderNew\x1a0.MatchingServicePackage.OrderNewResponseEnvelope(\x010\x01\x12m\n" +
 	"\rOnOrderCancel\x12#.MatchingServicePackage.OrderCancel\x1a3.MatchingServicePackage.OrderCancelResponseEnvelope(\x010\x01B\x15Z\x13CommandCenter/protob\x06proto3"
@@ -2177,40 +1738,34 @@ func file_MatchingService_proto_rawDescGZIP() []byte {
 }
 
 var file_MatchingService_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_MatchingService_proto_goTypes = []any{
-	(MessageType)(0),                               // 0: MatchingServicePackage.MessageType
-	(OrderType)(0),                                 // 1: MatchingServicePackage.OrderType
-	(*MessageBase)(nil),                            // 2: MatchingServicePackage.MessageBase
-	(*SequencedMessageBase)(nil),                   // 3: MatchingServicePackage.SequencedMessageBase
-	(*ResponseBase)(nil),                           // 4: MatchingServicePackage.ResponseBase
-	(*FallibleBase)(nil),                           // 5: MatchingServicePackage.FallibleBase
-	(*Heartbeat)(nil),                              // 6: MatchingServicePackage.Heartbeat
-	(*GeneralReject)(nil),                          // 7: MatchingServicePackage.GeneralReject
-	(*PoolDefinitionRequest)(nil),                  // 8: MatchingServicePackage.PoolDefinitionRequest
-	(*PoolDefinitionResponse)(nil),                 // 9: MatchingServicePackage.PoolDefinitionResponse
-	(*OrderNew)(nil),                               // 10: MatchingServicePackage.OrderNew
-	(*OrderNewAcknowledgement)(nil),                // 11: MatchingServicePackage.OrderNewAcknowledgement
-	(*OrderCancel)(nil),                            // 12: MatchingServicePackage.OrderCancel
-	(*OrderCancelAcknowledgement)(nil),             // 13: MatchingServicePackage.OrderCancelAcknowledgement
-	(*OrderElimination)(nil),                       // 14: MatchingServicePackage.OrderElimination
-	(*FillEvent)(nil),                              // 15: MatchingServicePackage.FillEvent
-	(*HeartbeatResponseEnvelope)(nil),              // 16: MatchingServicePackage.HeartbeatResponseEnvelope
-	(*PoolDefinitionResponseEnvelope)(nil),         // 17: MatchingServicePackage.PoolDefinitionResponseEnvelope
-	(*OrderNewResponseEnvelope)(nil),               // 18: MatchingServicePackage.OrderNewResponseEnvelope
-	(*OrderCancelResponseEnvelope)(nil),            // 19: MatchingServicePackage.OrderCancelResponseEnvelope
-	(*GeneralReject_Body)(nil),                     // 20: MatchingServicePackage.GeneralReject.Body
-	(*PoolDefinitionRequest_Body)(nil),             // 21: MatchingServicePackage.PoolDefinitionRequest.Body
-	(*PoolDefinitionResponse_Body)(nil),            // 22: MatchingServicePackage.PoolDefinitionResponse.Body
-	(*PoolDefinitionResponse_Body_Lineup)(nil),     // 23: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup
-	(*PoolDefinitionResponse_Body_Lineup_Leg)(nil), // 24: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.Leg
-	(*OrderNew_Body)(nil),                          // 25: MatchingServicePackage.OrderNew.Body
-	(*OrderNewAcknowledgement_Body)(nil),           // 26: MatchingServicePackage.OrderNewAcknowledgement.Body
-	(*OrderCancel_Body)(nil),                       // 27: MatchingServicePackage.OrderCancel.Body
-	(*OrderCancelAcknowledgement_Body)(nil),        // 28: MatchingServicePackage.OrderCancelAcknowledgement.Body
-	(*OrderElimination_Body)(nil),                  // 29: MatchingServicePackage.OrderElimination.Body
-	(*FillEvent_Body)(nil),                         // 30: MatchingServicePackage.FillEvent.Body
-	(*FillEvent_Body_Fill)(nil),                    // 31: MatchingServicePackage.FillEvent.Body.Fill
+	(MessageType)(0),                        // 0: MatchingServicePackage.MessageType
+	(OrderType)(0),                          // 1: MatchingServicePackage.OrderType
+	(*MessageBase)(nil),                     // 2: MatchingServicePackage.MessageBase
+	(*SequencedMessageBase)(nil),            // 3: MatchingServicePackage.SequencedMessageBase
+	(*ResponseBase)(nil),                    // 4: MatchingServicePackage.ResponseBase
+	(*FallibleBase)(nil),                    // 5: MatchingServicePackage.FallibleBase
+	(*Heartbeat)(nil),                       // 6: MatchingServicePackage.Heartbeat
+	(*GeneralReject)(nil),                   // 7: MatchingServicePackage.GeneralReject
+	(*OrderNew)(nil),                        // 8: MatchingServicePackage.OrderNew
+	(*OrderNewAcknowledgement)(nil),         // 9: MatchingServicePackage.OrderNewAcknowledgement
+	(*OrderCancel)(nil),                     // 10: MatchingServicePackage.OrderCancel
+	(*OrderCancelAcknowledgement)(nil),      // 11: MatchingServicePackage.OrderCancelAcknowledgement
+	(*OrderElimination)(nil),                // 12: MatchingServicePackage.OrderElimination
+	(*FillEvent)(nil),                       // 13: MatchingServicePackage.FillEvent
+	(*HeartbeatResponseEnvelope)(nil),       // 14: MatchingServicePackage.HeartbeatResponseEnvelope
+	(*OrderNewResponseEnvelope)(nil),        // 15: MatchingServicePackage.OrderNewResponseEnvelope
+	(*OrderCancelResponseEnvelope)(nil),     // 16: MatchingServicePackage.OrderCancelResponseEnvelope
+	(*GeneralReject_Body)(nil),              // 17: MatchingServicePackage.GeneralReject.Body
+	(*OrderNew_Body)(nil),                   // 18: MatchingServicePackage.OrderNew.Body
+	(*OrderNew_Body_Leg)(nil),               // 19: MatchingServicePackage.OrderNew.Body.Leg
+	(*OrderNewAcknowledgement_Body)(nil),    // 20: MatchingServicePackage.OrderNewAcknowledgement.Body
+	(*OrderCancel_Body)(nil),                // 21: MatchingServicePackage.OrderCancel.Body
+	(*OrderCancelAcknowledgement_Body)(nil), // 22: MatchingServicePackage.OrderCancelAcknowledgement.Body
+	(*OrderElimination_Body)(nil),           // 23: MatchingServicePackage.OrderElimination.Body
+	(*FillEvent_Body)(nil),                  // 24: MatchingServicePackage.FillEvent.Body
+	(*FillEvent_Body_Fill)(nil),             // 25: MatchingServicePackage.FillEvent.Body.Fill
 }
 var file_MatchingService_proto_depIdxs = []int32{
 	0,  // 0: MatchingServicePackage.MessageBase.messageType:type_name -> MatchingServicePackage.MessageType
@@ -2218,64 +1773,51 @@ var file_MatchingService_proto_depIdxs = []int32{
 	2,  // 2: MatchingServicePackage.GeneralReject.messageBase:type_name -> MatchingServicePackage.MessageBase
 	3,  // 3: MatchingServicePackage.GeneralReject.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
 	4,  // 4: MatchingServicePackage.GeneralReject.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	20, // 5: MatchingServicePackage.GeneralReject.body:type_name -> MatchingServicePackage.GeneralReject.Body
-	2,  // 6: MatchingServicePackage.PoolDefinitionRequest.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 7: MatchingServicePackage.PoolDefinitionRequest.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	21, // 8: MatchingServicePackage.PoolDefinitionRequest.body:type_name -> MatchingServicePackage.PoolDefinitionRequest.Body
-	2,  // 9: MatchingServicePackage.PoolDefinitionResponse.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 10: MatchingServicePackage.PoolDefinitionResponse.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 11: MatchingServicePackage.PoolDefinitionResponse.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 12: MatchingServicePackage.PoolDefinitionResponse.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	22, // 13: MatchingServicePackage.PoolDefinitionResponse.body:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body
-	2,  // 14: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 15: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	25, // 16: MatchingServicePackage.OrderNew.body:type_name -> MatchingServicePackage.OrderNew.Body
-	2,  // 17: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 18: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 19: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 20: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	26, // 21: MatchingServicePackage.OrderNewAcknowledgement.body:type_name -> MatchingServicePackage.OrderNewAcknowledgement.Body
-	2,  // 22: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 23: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	27, // 24: MatchingServicePackage.OrderCancel.body:type_name -> MatchingServicePackage.OrderCancel.Body
-	2,  // 25: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 26: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 27: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 28: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	28, // 29: MatchingServicePackage.OrderCancelAcknowledgement.body:type_name -> MatchingServicePackage.OrderCancelAcknowledgement.Body
-	2,  // 30: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 31: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	29, // 32: MatchingServicePackage.OrderElimination.body:type_name -> MatchingServicePackage.OrderElimination.Body
-	2,  // 33: MatchingServicePackage.FillEvent.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 34: MatchingServicePackage.FillEvent.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	30, // 35: MatchingServicePackage.FillEvent.body:type_name -> MatchingServicePackage.FillEvent.Body
-	7,  // 36: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	6,  // 37: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
-	7,  // 38: MatchingServicePackage.PoolDefinitionResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	9,  // 39: MatchingServicePackage.PoolDefinitionResponseEnvelope.response:type_name -> MatchingServicePackage.PoolDefinitionResponse
-	7,  // 40: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	11, // 41: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
-	14, // 42: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
-	15, // 43: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.FillEvent
-	7,  // 44: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	13, // 45: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
-	23, // 46: MatchingServicePackage.PoolDefinitionResponse.Body.lineups:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body.Lineup
-	24, // 47: MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.legs:type_name -> MatchingServicePackage.PoolDefinitionResponse.Body.Lineup.Leg
-	1,  // 48: MatchingServicePackage.OrderNew.Body.orderType:type_name -> MatchingServicePackage.OrderType
-	31, // 49: MatchingServicePackage.FillEvent.Body.fills:type_name -> MatchingServicePackage.FillEvent.Body.Fill
-	6,  // 50: MatchingServicePackage.MatchingServerService.OnHeartbeat:input_type -> MatchingServicePackage.Heartbeat
-	8,  // 51: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:input_type -> MatchingServicePackage.PoolDefinitionRequest
-	10, // 52: MatchingServicePackage.MatchingServerService.OnOrderNew:input_type -> MatchingServicePackage.OrderNew
-	12, // 53: MatchingServicePackage.MatchingServerService.OnOrderCancel:input_type -> MatchingServicePackage.OrderCancel
-	16, // 54: MatchingServicePackage.MatchingServerService.OnHeartbeat:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
-	17, // 55: MatchingServicePackage.MatchingServerService.OnPoolDefinitionRequest:output_type -> MatchingServicePackage.PoolDefinitionResponseEnvelope
-	18, // 56: MatchingServicePackage.MatchingServerService.OnOrderNew:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
-	19, // 57: MatchingServicePackage.MatchingServerService.OnOrderCancel:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
-	54, // [54:58] is the sub-list for method output_type
-	50, // [50:54] is the sub-list for method input_type
-	50, // [50:50] is the sub-list for extension type_name
-	50, // [50:50] is the sub-list for extension extendee
-	0,  // [0:50] is the sub-list for field type_name
+	17, // 5: MatchingServicePackage.GeneralReject.body:type_name -> MatchingServicePackage.GeneralReject.Body
+	2,  // 6: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 7: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	18, // 8: MatchingServicePackage.OrderNew.body:type_name -> MatchingServicePackage.OrderNew.Body
+	2,  // 9: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 10: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	4,  // 11: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	5,  // 12: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	20, // 13: MatchingServicePackage.OrderNewAcknowledgement.body:type_name -> MatchingServicePackage.OrderNewAcknowledgement.Body
+	2,  // 14: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 15: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	21, // 16: MatchingServicePackage.OrderCancel.body:type_name -> MatchingServicePackage.OrderCancel.Body
+	2,  // 17: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 18: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	4,  // 19: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	5,  // 20: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	22, // 21: MatchingServicePackage.OrderCancelAcknowledgement.body:type_name -> MatchingServicePackage.OrderCancelAcknowledgement.Body
+	2,  // 22: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 23: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	23, // 24: MatchingServicePackage.OrderElimination.body:type_name -> MatchingServicePackage.OrderElimination.Body
+	2,  // 25: MatchingServicePackage.FillEvent.messageBase:type_name -> MatchingServicePackage.MessageBase
+	3,  // 26: MatchingServicePackage.FillEvent.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	24, // 27: MatchingServicePackage.FillEvent.body:type_name -> MatchingServicePackage.FillEvent.Body
+	7,  // 28: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	6,  // 29: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
+	7,  // 30: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	9,  // 31: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
+	12, // 32: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
+	13, // 33: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.FillEvent
+	7,  // 34: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	11, // 35: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
+	19, // 36: MatchingServicePackage.OrderNew.Body.legs:type_name -> MatchingServicePackage.OrderNew.Body.Leg
+	1,  // 37: MatchingServicePackage.OrderNew.Body.orderType:type_name -> MatchingServicePackage.OrderType
+	25, // 38: MatchingServicePackage.FillEvent.Body.fills:type_name -> MatchingServicePackage.FillEvent.Body.Fill
+	6,  // 39: MatchingServicePackage.MatchingServerService.OnHeartbeat:input_type -> MatchingServicePackage.Heartbeat
+	8,  // 40: MatchingServicePackage.MatchingServerService.OnOrderNew:input_type -> MatchingServicePackage.OrderNew
+	10, // 41: MatchingServicePackage.MatchingServerService.OnOrderCancel:input_type -> MatchingServicePackage.OrderCancel
+	14, // 42: MatchingServicePackage.MatchingServerService.OnHeartbeat:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
+	15, // 43: MatchingServicePackage.MatchingServerService.OnOrderNew:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
+	16, // 44: MatchingServicePackage.MatchingServerService.OnOrderCancel:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
+	42, // [42:45] is the sub-list for method output_type
+	39, // [39:42] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_MatchingService_proto_init() }
@@ -2283,32 +1825,28 @@ func file_MatchingService_proto_init() {
 	if File_MatchingService_proto != nil {
 		return
 	}
-	file_MatchingService_proto_msgTypes[14].OneofWrappers = []any{
+	file_MatchingService_proto_msgTypes[12].OneofWrappers = []any{
 		(*HeartbeatResponseEnvelope_GeneralReject)(nil),
 		(*HeartbeatResponseEnvelope_Heartbeat)(nil),
 	}
-	file_MatchingService_proto_msgTypes[15].OneofWrappers = []any{
-		(*PoolDefinitionResponseEnvelope_GeneralReject)(nil),
-		(*PoolDefinitionResponseEnvelope_Response)(nil),
-	}
-	file_MatchingService_proto_msgTypes[16].OneofWrappers = []any{
+	file_MatchingService_proto_msgTypes[13].OneofWrappers = []any{
 		(*OrderNewResponseEnvelope_GeneralReject)(nil),
 		(*OrderNewResponseEnvelope_Acknowledgement)(nil),
 		(*OrderNewResponseEnvelope_Elimination)(nil),
 		(*OrderNewResponseEnvelope_Fill)(nil),
 	}
-	file_MatchingService_proto_msgTypes[17].OneofWrappers = []any{
+	file_MatchingService_proto_msgTypes[14].OneofWrappers = []any{
 		(*OrderCancelResponseEnvelope_GeneralReject)(nil),
 		(*OrderCancelResponseEnvelope_Acknowledgement)(nil),
 	}
-	file_MatchingService_proto_msgTypes[23].OneofWrappers = []any{}
+	file_MatchingService_proto_msgTypes[16].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_MatchingService_proto_rawDesc), len(file_MatchingService_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   30,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

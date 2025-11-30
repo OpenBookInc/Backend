@@ -6,7 +6,6 @@ option go_package = "CommandCenter/proto";
 
 service MatchingServerService {
   rpc OnHeartbeat(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
-  rpc OnPoolDefinitionRequest(PoolDefinitionRequest) returns (PoolDefinitionResponseEnvelope);
   rpc OnOrderNew(stream OrderNew) returns (stream OrderNewResponseEnvelope);
   rpc OnOrderCancel(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
 }
@@ -14,8 +13,6 @@ service MatchingServerService {
 enum MessageType {
   HEARTBEAT = 0;
   GENERAL_REJECT = 1;
-  POOL_DEFINITION_REQUEST = 2;
-  POOL_DEFINITION_RESPONSE = 3;
   ORDER_NEW = 4;
   ORDER_NEW_ACKNOWLEDGEMENT = 5;
   ORDER_CANCEL = 6;
@@ -63,50 +60,18 @@ message GeneralReject {
   Body body = 4;
 }
 
-message PoolDefinitionRequest {
-  message Body {
-    uint64 poolId = 1;
-    uint64 totalUnits = 2;
-    repeated uint64 legSecurityIds = 3;
-  }
-  
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  Body body = 3;
-}
-
-message PoolDefinitionResponse {
-  message Body {
-    message Lineup {
-      message Leg {
-        uint64 securityId = 1;
-        bool isOver = 2;
-      }
-
-      uint64 lineupIndex = 1;
-      repeated Leg legs = 2;
-    }
-
-    uint64 poolId = 1;
-    repeated Lineup lineups = 2; // contains a list of all possible lineups that fall into this pool
-    bool isNew = 3; // indicates whether this is a newly defined pool (true) or already existed (false)
-  }
-
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  ResponseBase responseBase = 3;
-  FallibleBase fallibleBase = 4;
-  Body body = 5;
-}
-
 message OrderNew {
   message Body {
-    uint64 poolId = 1;
-    uint64 lineupIndex = 2;
-    OrderType orderType = 3;
-    uint64 portion = 4;
-    uint64 quantity = 5;
-    optional uint64 selfMatchId = 6; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+    message Leg {
+      uint64 legSecurityId = 1;
+      bool isOver = 2;
+    }
+
+    repeated Leg legs = 1;
+    OrderType orderType = 2;
+    uint64 portion = 3;
+    uint64 quantity = 4;
+    optional uint64 selfMatchId = 5; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
   }
 
   MessageBase messageBase = 1;
@@ -186,14 +151,6 @@ message HeartbeatResponseEnvelope {
   oneof contents {
     GeneralReject generalReject = 1;
     Heartbeat heartbeat = 2;
-  }
-}
-
-// Encapsulate all possible messages that can be sent as a result of PoolDefinitionRequest
-message PoolDefinitionResponseEnvelope {
-  oneof contents {
-    GeneralReject generalReject = 1;
-    PoolDefinitionResponse response = 2;
   }
 }
 
