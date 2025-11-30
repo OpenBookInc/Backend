@@ -67,11 +67,12 @@ message OrderNew {
       bool isOver = 2;
     }
 
-    repeated Leg legs = 1;
-    OrderType orderType = 2;
-    uint64 portion = 3;
-    uint64 quantity = 4;
-    optional uint64 selfMatchId = 5; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+    uint64 clientOrderId = 1;
+    repeated Leg legs = 2;
+    OrderType orderType = 3;
+    uint64 portion = 4;
+    uint64 quantity = 5;
+    optional uint64 selfMatchId = 6; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
   }
 
   MessageBase messageBase = 1;
@@ -81,7 +82,8 @@ message OrderNew {
 
 message OrderNewAcknowledgement {
   message Body {
-    uint64 orderId = 1;
+    uint64 clientOrderId = 1;
+    uint64 orderId = 2;
   }
 
   MessageBase messageBase = 1;

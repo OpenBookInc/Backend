@@ -1169,11 +1169,12 @@ func (x *GeneralReject_Body) GetErrorDescription() string {
 
 type OrderNew_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Legs          []*OrderNew_Body_Leg   `protobuf:"bytes,1,rep,name=legs,proto3" json:"legs,omitempty"`
-	OrderType     OrderType              `protobuf:"varint,2,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
-	Portion       uint64                 `protobuf:"varint,3,opt,name=portion,proto3" json:"portion,omitempty"`
-	Quantity      uint64                 `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId   *uint64                `protobuf:"varint,5,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=clientOrderId,proto3" json:"clientOrderId,omitempty"`
+	Legs          []*OrderNew_Body_Leg   `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
+	OrderType     OrderType              `protobuf:"varint,3,opt,name=orderType,proto3,enum=MatchingServicePackage.OrderType" json:"orderType,omitempty"`
+	Portion       uint64                 `protobuf:"varint,4,opt,name=portion,proto3" json:"portion,omitempty"`
+	Quantity      uint64                 `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	SelfMatchId   *uint64                `protobuf:"varint,6,opt,name=selfMatchId,proto3,oneof" json:"selfMatchId,omitempty"` // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1206,6 +1207,13 @@ func (x *OrderNew_Body) ProtoReflect() protoreflect.Message {
 // Deprecated: Use OrderNew_Body.ProtoReflect.Descriptor instead.
 func (*OrderNew_Body) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
+}
+
+func (x *OrderNew_Body) GetClientOrderId() uint64 {
+	if x != nil {
+		return x.ClientOrderId
+	}
+	return 0
 }
 
 func (x *OrderNew_Body) GetLegs() []*OrderNew_Body_Leg {
@@ -1297,7 +1305,8 @@ func (x *OrderNew_Body_Leg) GetIsOver() bool {
 
 type OrderNewAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=clientOrderId,proto3" json:"clientOrderId,omitempty"`
+	OrderId       uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1330,6 +1339,13 @@ func (x *OrderNewAcknowledgement_Body) ProtoReflect() protoreflect.Message {
 // Deprecated: Use OrderNewAcknowledgement_Body.ProtoReflect.Descriptor instead.
 func (*OrderNewAcknowledgement_Body) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
+}
+
+func (x *OrderNewAcknowledgement_Body) GetClientOrderId() uint64 {
+	if x != nil {
+		return x.ClientOrderId
+	}
+	return 0
 }
 
 func (x *OrderNewAcknowledgement_Body) GetOrderId() uint64 {
@@ -1631,29 +1647,31 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12>\n" +
 	"\x04body\x18\x04 \x01(\v2*.MatchingServicePackage.GeneralReject.BodyR\x04body\x1a2\n" +
 	"\x04Body\x12*\n" +
-	"\x10errorDescription\x18\x01 \x01(\tR\x10errorDescription\"\xa9\x04\n" +
+	"\x10errorDescription\x18\x01 \x01(\tR\x10errorDescription\"\xcf\x04\n" +
 	"\bOrderNew\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x129\n" +
-	"\x04body\x18\x03 \x01(\v2%.MatchingServicePackage.OrderNew.BodyR\x04body\x1a\xb8\x02\n" +
-	"\x04Body\x12=\n" +
-	"\x04legs\x18\x01 \x03(\v2).MatchingServicePackage.OrderNew.Body.LegR\x04legs\x12?\n" +
-	"\torderType\x18\x02 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x18\n" +
-	"\aportion\x18\x03 \x01(\x04R\aportion\x12\x1a\n" +
-	"\bquantity\x18\x04 \x01(\x04R\bquantity\x12%\n" +
-	"\vselfMatchId\x18\x05 \x01(\x04H\x00R\vselfMatchId\x88\x01\x01\x1aC\n" +
+	"\x04body\x18\x03 \x01(\v2%.MatchingServicePackage.OrderNew.BodyR\x04body\x1a\xde\x02\n" +
+	"\x04Body\x12$\n" +
+	"\rclientOrderId\x18\x01 \x01(\x04R\rclientOrderId\x12=\n" +
+	"\x04legs\x18\x02 \x03(\v2).MatchingServicePackage.OrderNew.Body.LegR\x04legs\x12?\n" +
+	"\torderType\x18\x03 \x01(\x0e2!.MatchingServicePackage.OrderTypeR\torderType\x12\x18\n" +
+	"\aportion\x18\x04 \x01(\x04R\aportion\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12%\n" +
+	"\vselfMatchId\x18\x06 \x01(\x04H\x00R\vselfMatchId\x88\x01\x01\x1aC\n" +
 	"\x03Leg\x12$\n" +
 	"\rlegSecurityId\x18\x01 \x01(\x04R\rlegSecurityId\x12\x16\n" +
 	"\x06isOver\x18\x02 \x01(\bR\x06isOverB\x0e\n" +
-	"\f_selfMatchId\"\xc2\x03\n" +
+	"\f_selfMatchId\"\xe8\x03\n" +
 	"\x17OrderNewAcknowledgement\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
 	"\fresponseBase\x18\x03 \x01(\v2$.MatchingServicePackage.ResponseBaseR\fresponseBase\x12H\n" +
 	"\ffallibleBase\x18\x04 \x01(\v2$.MatchingServicePackage.FallibleBaseR\ffallibleBase\x12H\n" +
-	"\x04body\x18\x05 \x01(\v24.MatchingServicePackage.OrderNewAcknowledgement.BodyR\x04body\x1a \n" +
-	"\x04Body\x12\x18\n" +
-	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\x96\x02\n" +
+	"\x04body\x18\x05 \x01(\v24.MatchingServicePackage.OrderNewAcknowledgement.BodyR\x04body\x1aF\n" +
+	"\x04Body\x12$\n" +
+	"\rclientOrderId\x18\x01 \x01(\x04R\rclientOrderId\x12\x18\n" +
+	"\aorderId\x18\x02 \x01(\x04R\aorderId\"\x96\x02\n" +
 	"\vOrderCancel\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12<\n" +

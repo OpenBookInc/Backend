@@ -127,6 +127,7 @@ impl PoolManager {
 
         // Create acknowledgement
         let ack = OrderNewAcknowledgementBody {
+            client_order_id: order.client_order_id,
             order_id
         };
 
@@ -210,6 +211,7 @@ mod tests {
 
         let (ack, fills) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 1001,
                 legs: create_legs(&[(101, false), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250,
@@ -219,6 +221,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(manager.num_pools(), 1);
+        assert_eq!(ack.client_order_id, 1001);
         assert!(ack.order_id > 0);
         assert_eq!(fills.len(), 0);
     }
@@ -230,6 +233,7 @@ mod tests {
         // Create order with legs [101, 102]
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 2001,
                 legs: create_legs(&[(101, false), (102, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250,
@@ -243,6 +247,7 @@ mod tests {
         // Create order with legs [102, 101] - should use same pool
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 2002,
                 legs: create_legs(&[(102, false), (101, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250,
@@ -262,6 +267,7 @@ mod tests {
         // Lineup 0: both under (101=false, 102=false)
         let (_ack0, fills0) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 3001,
                 legs: create_legs(&[(101, false), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -274,6 +280,7 @@ mod tests {
         // Lineup 1: 101=over, 102=under
         let (_ack1, fills1) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 3002,
                 legs: create_legs(&[(101, true), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -286,6 +293,7 @@ mod tests {
         // Lineup 2: 101=under, 102=over
         let (_ack2, fills2) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 3003,
                 legs: create_legs(&[(101, false), (102, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -298,6 +306,7 @@ mod tests {
         // Lineup 3: both over (101=true, 102=true) - should trigger fill
         let (_ack3, fills3) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 3004,
                 legs: create_legs(&[(101, true), (102, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -334,6 +343,7 @@ mod tests {
         // Submit passive entries with enough quantity for 2 fills
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 4001,
                 legs: create_legs(&[(101, false), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -344,6 +354,7 @@ mod tests {
 
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 4002,
                 legs: create_legs(&[(101, true), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -354,6 +365,7 @@ mod tests {
 
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 4003,
                 legs: create_legs(&[(101, true), (102, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -364,6 +376,7 @@ mod tests {
 
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 4004,
                 legs: create_legs(&[(101, false), (102, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -375,6 +388,7 @@ mod tests {
         // Aggressor with enough for 2 fills
         let (_ack, fills) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 4005,
                 legs: create_legs(&[(101, true), (102, true)]),
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
@@ -397,6 +411,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         let result = manager.create_entry(OrderNewBody {
+            client_order_id: 5001,
             legs: vec![],
             order_type: OrderType::Limit as i32,
             portion: 250,
@@ -414,6 +429,7 @@ mod tests {
         // Submit passive entry for lineup 0 (under)
         manager
             .create_entry(OrderNewBody {
+                client_order_id: 6001,
                 legs: create_legs(&[(101, false)]),
                 order_type: OrderType::Limit as i32,
                 portion: 600_000,
@@ -425,6 +441,7 @@ mod tests {
         // Market order for lineup 1 (over) should calculate portion = 400k
         let (_ack, fills) = manager
             .create_entry(OrderNewBody {
+                client_order_id: 6002,
                 legs: create_legs(&[(101, true)]),
                 order_type: OrderType::Market as i32,
                 portion: 0, // Ignored for market orders
