@@ -21,6 +21,95 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type VersionMajor int32
+
+const (
+	VersionMajor_IGNORE_0            VersionMajor = 0
+	VersionMajor_VERSION_MAJOR_VALUE VersionMajor = 1
+)
+
+// Enum value maps for VersionMajor.
+var (
+	VersionMajor_name = map[int32]string{
+		0: "IGNORE_0",
+		1: "VERSION_MAJOR_VALUE",
+	}
+	VersionMajor_value = map[string]int32{
+		"IGNORE_0":            0,
+		"VERSION_MAJOR_VALUE": 1,
+	}
+)
+
+func (x VersionMajor) Enum() *VersionMajor {
+	p := new(VersionMajor)
+	*p = x
+	return p
+}
+
+func (x VersionMajor) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (VersionMajor) Descriptor() protoreflect.EnumDescriptor {
+	return file_MatchingService_proto_enumTypes[0].Descriptor()
+}
+
+func (VersionMajor) Type() protoreflect.EnumType {
+	return &file_MatchingService_proto_enumTypes[0]
+}
+
+func (x VersionMajor) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use VersionMajor.Descriptor instead.
+func (VersionMajor) EnumDescriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{0}
+}
+
+type VersionMinor int32
+
+const (
+	VersionMinor_VERSION_MINOR_VALUE VersionMinor = 0
+)
+
+// Enum value maps for VersionMinor.
+var (
+	VersionMinor_name = map[int32]string{
+		0: "VERSION_MINOR_VALUE",
+	}
+	VersionMinor_value = map[string]int32{
+		"VERSION_MINOR_VALUE": 0,
+	}
+)
+
+func (x VersionMinor) Enum() *VersionMinor {
+	p := new(VersionMinor)
+	*p = x
+	return p
+}
+
+func (x VersionMinor) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (VersionMinor) Descriptor() protoreflect.EnumDescriptor {
+	return file_MatchingService_proto_enumTypes[1].Descriptor()
+}
+
+func (VersionMinor) Type() protoreflect.EnumType {
+	return &file_MatchingService_proto_enumTypes[1]
+}
+
+func (x VersionMinor) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use VersionMinor.Descriptor instead.
+func (VersionMinor) EnumDescriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{1}
+}
+
 type MessageType int32
 
 const (
@@ -66,11 +155,11 @@ func (x MessageType) String() string {
 }
 
 func (MessageType) Descriptor() protoreflect.EnumDescriptor {
-	return file_MatchingService_proto_enumTypes[0].Descriptor()
+	return file_MatchingService_proto_enumTypes[2].Descriptor()
 }
 
 func (MessageType) Type() protoreflect.EnumType {
-	return &file_MatchingService_proto_enumTypes[0]
+	return &file_MatchingService_proto_enumTypes[2]
 }
 
 func (x MessageType) Number() protoreflect.EnumNumber {
@@ -79,7 +168,7 @@ func (x MessageType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MessageType.Descriptor instead.
 func (MessageType) EnumDescriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{2}
 }
 
 type OrderType int32
@@ -112,11 +201,11 @@ func (x OrderType) String() string {
 }
 
 func (OrderType) Descriptor() protoreflect.EnumDescriptor {
-	return file_MatchingService_proto_enumTypes[1].Descriptor()
+	return file_MatchingService_proto_enumTypes[3].Descriptor()
 }
 
 func (OrderType) Type() protoreflect.EnumType {
-	return &file_MatchingService_proto_enumTypes[1]
+	return &file_MatchingService_proto_enumTypes[3]
 }
 
 func (x OrderType) Number() protoreflect.EnumNumber {
@@ -125,7 +214,7 @@ func (x OrderType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OrderType.Descriptor instead.
 func (OrderType) EnumDescriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{1}
+	return file_MatchingService_proto_rawDescGZIP(), []int{3}
 }
 
 type MessageBase struct {
@@ -1723,7 +1812,12 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12^\n" +
 	"\x0facknowledgement\x18\x02 \x01(\v22.MatchingServicePackage.OrderCancelAcknowledgementH\x00R\x0facknowledgementB\n" +
 	"\n" +
-	"\bcontents*\xa2\x01\n" +
+	"\bcontents*5\n" +
+	"\fVersionMajor\x12\f\n" +
+	"\bIGNORE_0\x10\x00\x12\x17\n" +
+	"\x13VERSION_MAJOR_VALUE\x10\x01*'\n" +
+	"\fVersionMinor\x12\x17\n" +
+	"\x13VERSION_MINOR_VALUE\x10\x00*\xa2\x01\n" +
 	"\vMessageType\x12\r\n" +
 	"\tHEARTBEAT\x10\x00\x12\x12\n" +
 	"\x0eGENERAL_REJECT\x10\x01\x12\r\n" +
@@ -1736,12 +1830,11 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\tOrderType\x12\t\n" +
 	"\x05LIMIT\x10\x00\x12\n" +
 	"\n" +
-	"\x06MARKET\x10\x012\xd5\x02\n" +
-	"\x15MatchingServerService\x12g\n" +
-	"\vOnHeartbeat\x12!.MatchingServicePackage.Heartbeat\x1a1.MatchingServicePackage.HeartbeatResponseEnvelope(\x010\x01\x12d\n" +
-	"\n" +
-	"OnOrderNew\x12 .MatchingServicePackage.OrderNew\x1a0.MatchingServicePackage.OrderNewResponseEnvelope(\x010\x01\x12m\n" +
-	"\rOnOrderCancel\x12#.MatchingServicePackage.OrderCancel\x1a3.MatchingServicePackage.OrderCancelResponseEnvelope(\x010\x01B\x15Z\x13CommandCenter/protob\x06proto3"
+	"\x06MARKET\x10\x012\x8b\x03\n" +
+	"\x15MatchingServerService\x12y\n" +
+	"\x1dCreateHeartbeatResponseStream\x12!.MatchingServicePackage.Heartbeat\x1a1.MatchingServicePackage.HeartbeatResponseEnvelope(\x010\x01\x12v\n" +
+	"\x1cCreateOrderNewResponseStream\x12 .MatchingServicePackage.OrderNew\x1a0.MatchingServicePackage.OrderNewResponseEnvelope(\x010\x01\x12\x7f\n" +
+	"\x1fCreateOrderCancelResponseStream\x12#.MatchingServicePackage.OrderCancel\x1a3.MatchingServicePackage.OrderCancelResponseEnvelope(\x010\x01B\x15Z\x13CommandCenter/protob\x06proto3"
 
 var (
 	file_MatchingService_proto_rawDescOnce sync.Once
@@ -1755,82 +1848,84 @@ func file_MatchingService_proto_rawDescGZIP() []byte {
 	return file_MatchingService_proto_rawDescData
 }
 
-var file_MatchingService_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_MatchingService_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_MatchingService_proto_goTypes = []any{
-	(MessageType)(0),                        // 0: MatchingServicePackage.MessageType
-	(OrderType)(0),                          // 1: MatchingServicePackage.OrderType
-	(*MessageBase)(nil),                     // 2: MatchingServicePackage.MessageBase
-	(*SequencedMessageBase)(nil),            // 3: MatchingServicePackage.SequencedMessageBase
-	(*ResponseBase)(nil),                    // 4: MatchingServicePackage.ResponseBase
-	(*FallibleBase)(nil),                    // 5: MatchingServicePackage.FallibleBase
-	(*Heartbeat)(nil),                       // 6: MatchingServicePackage.Heartbeat
-	(*GeneralReject)(nil),                   // 7: MatchingServicePackage.GeneralReject
-	(*OrderNew)(nil),                        // 8: MatchingServicePackage.OrderNew
-	(*OrderNewAcknowledgement)(nil),         // 9: MatchingServicePackage.OrderNewAcknowledgement
-	(*OrderCancel)(nil),                     // 10: MatchingServicePackage.OrderCancel
-	(*OrderCancelAcknowledgement)(nil),      // 11: MatchingServicePackage.OrderCancelAcknowledgement
-	(*OrderElimination)(nil),                // 12: MatchingServicePackage.OrderElimination
-	(*FillEvent)(nil),                       // 13: MatchingServicePackage.FillEvent
-	(*HeartbeatResponseEnvelope)(nil),       // 14: MatchingServicePackage.HeartbeatResponseEnvelope
-	(*OrderNewResponseEnvelope)(nil),        // 15: MatchingServicePackage.OrderNewResponseEnvelope
-	(*OrderCancelResponseEnvelope)(nil),     // 16: MatchingServicePackage.OrderCancelResponseEnvelope
-	(*GeneralReject_Body)(nil),              // 17: MatchingServicePackage.GeneralReject.Body
-	(*OrderNew_Body)(nil),                   // 18: MatchingServicePackage.OrderNew.Body
-	(*OrderNew_Body_Leg)(nil),               // 19: MatchingServicePackage.OrderNew.Body.Leg
-	(*OrderNewAcknowledgement_Body)(nil),    // 20: MatchingServicePackage.OrderNewAcknowledgement.Body
-	(*OrderCancel_Body)(nil),                // 21: MatchingServicePackage.OrderCancel.Body
-	(*OrderCancelAcknowledgement_Body)(nil), // 22: MatchingServicePackage.OrderCancelAcknowledgement.Body
-	(*OrderElimination_Body)(nil),           // 23: MatchingServicePackage.OrderElimination.Body
-	(*FillEvent_Body)(nil),                  // 24: MatchingServicePackage.FillEvent.Body
-	(*FillEvent_Body_Fill)(nil),             // 25: MatchingServicePackage.FillEvent.Body.Fill
+	(VersionMajor)(0),                       // 0: MatchingServicePackage.VersionMajor
+	(VersionMinor)(0),                       // 1: MatchingServicePackage.VersionMinor
+	(MessageType)(0),                        // 2: MatchingServicePackage.MessageType
+	(OrderType)(0),                          // 3: MatchingServicePackage.OrderType
+	(*MessageBase)(nil),                     // 4: MatchingServicePackage.MessageBase
+	(*SequencedMessageBase)(nil),            // 5: MatchingServicePackage.SequencedMessageBase
+	(*ResponseBase)(nil),                    // 6: MatchingServicePackage.ResponseBase
+	(*FallibleBase)(nil),                    // 7: MatchingServicePackage.FallibleBase
+	(*Heartbeat)(nil),                       // 8: MatchingServicePackage.Heartbeat
+	(*GeneralReject)(nil),                   // 9: MatchingServicePackage.GeneralReject
+	(*OrderNew)(nil),                        // 10: MatchingServicePackage.OrderNew
+	(*OrderNewAcknowledgement)(nil),         // 11: MatchingServicePackage.OrderNewAcknowledgement
+	(*OrderCancel)(nil),                     // 12: MatchingServicePackage.OrderCancel
+	(*OrderCancelAcknowledgement)(nil),      // 13: MatchingServicePackage.OrderCancelAcknowledgement
+	(*OrderElimination)(nil),                // 14: MatchingServicePackage.OrderElimination
+	(*FillEvent)(nil),                       // 15: MatchingServicePackage.FillEvent
+	(*HeartbeatResponseEnvelope)(nil),       // 16: MatchingServicePackage.HeartbeatResponseEnvelope
+	(*OrderNewResponseEnvelope)(nil),        // 17: MatchingServicePackage.OrderNewResponseEnvelope
+	(*OrderCancelResponseEnvelope)(nil),     // 18: MatchingServicePackage.OrderCancelResponseEnvelope
+	(*GeneralReject_Body)(nil),              // 19: MatchingServicePackage.GeneralReject.Body
+	(*OrderNew_Body)(nil),                   // 20: MatchingServicePackage.OrderNew.Body
+	(*OrderNew_Body_Leg)(nil),               // 21: MatchingServicePackage.OrderNew.Body.Leg
+	(*OrderNewAcknowledgement_Body)(nil),    // 22: MatchingServicePackage.OrderNewAcknowledgement.Body
+	(*OrderCancel_Body)(nil),                // 23: MatchingServicePackage.OrderCancel.Body
+	(*OrderCancelAcknowledgement_Body)(nil), // 24: MatchingServicePackage.OrderCancelAcknowledgement.Body
+	(*OrderElimination_Body)(nil),           // 25: MatchingServicePackage.OrderElimination.Body
+	(*FillEvent_Body)(nil),                  // 26: MatchingServicePackage.FillEvent.Body
+	(*FillEvent_Body_Fill)(nil),             // 27: MatchingServicePackage.FillEvent.Body.Fill
 }
 var file_MatchingService_proto_depIdxs = []int32{
-	0,  // 0: MatchingServicePackage.MessageBase.messageType:type_name -> MatchingServicePackage.MessageType
-	2,  // 1: MatchingServicePackage.Heartbeat.messageBase:type_name -> MatchingServicePackage.MessageBase
-	2,  // 2: MatchingServicePackage.GeneralReject.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 3: MatchingServicePackage.GeneralReject.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 4: MatchingServicePackage.GeneralReject.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	17, // 5: MatchingServicePackage.GeneralReject.body:type_name -> MatchingServicePackage.GeneralReject.Body
-	2,  // 6: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 7: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	18, // 8: MatchingServicePackage.OrderNew.body:type_name -> MatchingServicePackage.OrderNew.Body
-	2,  // 9: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 10: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 11: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 12: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	20, // 13: MatchingServicePackage.OrderNewAcknowledgement.body:type_name -> MatchingServicePackage.OrderNewAcknowledgement.Body
-	2,  // 14: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 15: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	21, // 16: MatchingServicePackage.OrderCancel.body:type_name -> MatchingServicePackage.OrderCancel.Body
-	2,  // 17: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 18: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	4,  // 19: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
-	5,  // 20: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
-	22, // 21: MatchingServicePackage.OrderCancelAcknowledgement.body:type_name -> MatchingServicePackage.OrderCancelAcknowledgement.Body
-	2,  // 22: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 23: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	23, // 24: MatchingServicePackage.OrderElimination.body:type_name -> MatchingServicePackage.OrderElimination.Body
-	2,  // 25: MatchingServicePackage.FillEvent.messageBase:type_name -> MatchingServicePackage.MessageBase
-	3,  // 26: MatchingServicePackage.FillEvent.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
-	24, // 27: MatchingServicePackage.FillEvent.body:type_name -> MatchingServicePackage.FillEvent.Body
-	7,  // 28: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	6,  // 29: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
-	7,  // 30: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	9,  // 31: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
-	12, // 32: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
-	13, // 33: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.FillEvent
-	7,  // 34: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
-	11, // 35: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
-	19, // 36: MatchingServicePackage.OrderNew.Body.legs:type_name -> MatchingServicePackage.OrderNew.Body.Leg
-	1,  // 37: MatchingServicePackage.OrderNew.Body.orderType:type_name -> MatchingServicePackage.OrderType
-	25, // 38: MatchingServicePackage.FillEvent.Body.fills:type_name -> MatchingServicePackage.FillEvent.Body.Fill
-	6,  // 39: MatchingServicePackage.MatchingServerService.OnHeartbeat:input_type -> MatchingServicePackage.Heartbeat
-	8,  // 40: MatchingServicePackage.MatchingServerService.OnOrderNew:input_type -> MatchingServicePackage.OrderNew
-	10, // 41: MatchingServicePackage.MatchingServerService.OnOrderCancel:input_type -> MatchingServicePackage.OrderCancel
-	14, // 42: MatchingServicePackage.MatchingServerService.OnHeartbeat:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
-	15, // 43: MatchingServicePackage.MatchingServerService.OnOrderNew:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
-	16, // 44: MatchingServicePackage.MatchingServerService.OnOrderCancel:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
+	2,  // 0: MatchingServicePackage.MessageBase.messageType:type_name -> MatchingServicePackage.MessageType
+	4,  // 1: MatchingServicePackage.Heartbeat.messageBase:type_name -> MatchingServicePackage.MessageBase
+	4,  // 2: MatchingServicePackage.GeneralReject.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 3: MatchingServicePackage.GeneralReject.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	6,  // 4: MatchingServicePackage.GeneralReject.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	19, // 5: MatchingServicePackage.GeneralReject.body:type_name -> MatchingServicePackage.GeneralReject.Body
+	4,  // 6: MatchingServicePackage.OrderNew.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 7: MatchingServicePackage.OrderNew.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	20, // 8: MatchingServicePackage.OrderNew.body:type_name -> MatchingServicePackage.OrderNew.Body
+	4,  // 9: MatchingServicePackage.OrderNewAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 10: MatchingServicePackage.OrderNewAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	6,  // 11: MatchingServicePackage.OrderNewAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	7,  // 12: MatchingServicePackage.OrderNewAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	22, // 13: MatchingServicePackage.OrderNewAcknowledgement.body:type_name -> MatchingServicePackage.OrderNewAcknowledgement.Body
+	4,  // 14: MatchingServicePackage.OrderCancel.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 15: MatchingServicePackage.OrderCancel.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	23, // 16: MatchingServicePackage.OrderCancel.body:type_name -> MatchingServicePackage.OrderCancel.Body
+	4,  // 17: MatchingServicePackage.OrderCancelAcknowledgement.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 18: MatchingServicePackage.OrderCancelAcknowledgement.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	6,  // 19: MatchingServicePackage.OrderCancelAcknowledgement.responseBase:type_name -> MatchingServicePackage.ResponseBase
+	7,  // 20: MatchingServicePackage.OrderCancelAcknowledgement.fallibleBase:type_name -> MatchingServicePackage.FallibleBase
+	24, // 21: MatchingServicePackage.OrderCancelAcknowledgement.body:type_name -> MatchingServicePackage.OrderCancelAcknowledgement.Body
+	4,  // 22: MatchingServicePackage.OrderElimination.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 23: MatchingServicePackage.OrderElimination.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	25, // 24: MatchingServicePackage.OrderElimination.body:type_name -> MatchingServicePackage.OrderElimination.Body
+	4,  // 25: MatchingServicePackage.FillEvent.messageBase:type_name -> MatchingServicePackage.MessageBase
+	5,  // 26: MatchingServicePackage.FillEvent.sequencedMessageBase:type_name -> MatchingServicePackage.SequencedMessageBase
+	26, // 27: MatchingServicePackage.FillEvent.body:type_name -> MatchingServicePackage.FillEvent.Body
+	9,  // 28: MatchingServicePackage.HeartbeatResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	8,  // 29: MatchingServicePackage.HeartbeatResponseEnvelope.heartbeat:type_name -> MatchingServicePackage.Heartbeat
+	9,  // 30: MatchingServicePackage.OrderNewResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	11, // 31: MatchingServicePackage.OrderNewResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderNewAcknowledgement
+	14, // 32: MatchingServicePackage.OrderNewResponseEnvelope.elimination:type_name -> MatchingServicePackage.OrderElimination
+	15, // 33: MatchingServicePackage.OrderNewResponseEnvelope.fill:type_name -> MatchingServicePackage.FillEvent
+	9,  // 34: MatchingServicePackage.OrderCancelResponseEnvelope.generalReject:type_name -> MatchingServicePackage.GeneralReject
+	13, // 35: MatchingServicePackage.OrderCancelResponseEnvelope.acknowledgement:type_name -> MatchingServicePackage.OrderCancelAcknowledgement
+	21, // 36: MatchingServicePackage.OrderNew.Body.legs:type_name -> MatchingServicePackage.OrderNew.Body.Leg
+	3,  // 37: MatchingServicePackage.OrderNew.Body.orderType:type_name -> MatchingServicePackage.OrderType
+	27, // 38: MatchingServicePackage.FillEvent.Body.fills:type_name -> MatchingServicePackage.FillEvent.Body.Fill
+	8,  // 39: MatchingServicePackage.MatchingServerService.CreateHeartbeatResponseStream:input_type -> MatchingServicePackage.Heartbeat
+	10, // 40: MatchingServicePackage.MatchingServerService.CreateOrderNewResponseStream:input_type -> MatchingServicePackage.OrderNew
+	12, // 41: MatchingServicePackage.MatchingServerService.CreateOrderCancelResponseStream:input_type -> MatchingServicePackage.OrderCancel
+	16, // 42: MatchingServicePackage.MatchingServerService.CreateHeartbeatResponseStream:output_type -> MatchingServicePackage.HeartbeatResponseEnvelope
+	17, // 43: MatchingServicePackage.MatchingServerService.CreateOrderNewResponseStream:output_type -> MatchingServicePackage.OrderNewResponseEnvelope
+	18, // 44: MatchingServicePackage.MatchingServerService.CreateOrderCancelResponseStream:output_type -> MatchingServicePackage.OrderCancelResponseEnvelope
 	42, // [42:45] is the sub-list for method output_type
 	39, // [39:42] is the sub-list for method input_type
 	39, // [39:39] is the sub-list for extension type_name
@@ -1863,7 +1958,7 @@ func file_MatchingService_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_MatchingService_proto_rawDesc), len(file_MatchingService_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      4,
 			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,

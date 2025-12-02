@@ -16,6 +16,8 @@ use crate::matching_service_package::{
     order_new::Body as OrderNewBody,
     order_new::body::Leg as OrderNewLeg,
     order_new_acknowledgement::Body as OrderNewAcknowledgementBody,
+    order_cancel::Body as OrderCancelBody,
+    order_cancel_acknowledgement::Body as OrderCancelAcknowledgementBody,
     fill_event::Body as FillEventBody,
     fill_event::body::Fill as FillEventBody_Fill,
     OrderType
@@ -184,6 +186,43 @@ impl PoolManager {
     /// Gets the pool key for a specific order ID (for testing/debugging)
     pub fn get_pool_key_for_order(&self, order_id: u64) -> Option<&Vec<u64>> {
         self.order_to_pool.get(&order_id)
+    }
+
+    /// Cancels an existing order
+    ///
+    /// # Arguments
+    /// * `cancel` - The order cancel request containing the order_id
+    ///
+    /// # Returns
+    /// * `Ok(OrderCancelAcknowledgementBody)` - Successful cancellation
+    /// * `Err(String)` - Error message if cancellation failed
+    pub fn cancel_entry(
+        &mut self,
+        cancel: OrderCancelBody,
+    ) -> Result<OrderCancelAcknowledgementBody, String> {
+        let order_id = cancel.order_id;
+
+        // Find which pool this order belongs to
+        let pool_key = self
+            .order_to_pool
+            .get(&order_id)
+            .ok_or_else(|| format!("Order ID {} not found", order_id))?
+            .clone();
+
+        // Get the pool
+        let pool_info = self
+            .pools
+            .get_mut(&pool_key)
+            .ok_or_else(|| format!("Pool not found for order ID {}", order_id))?;
+
+        // Cancel the entry in the pool and return any error result if one occurs
+        pool_info.pool.cancel_entry(order_id)?;
+
+        // Remove from order tracking
+        self.order_to_pool.remove(&order_id);
+
+        // Return acknowledgement
+        Ok(OrderCancelAcknowledgementBody { order_id })
     }
 }
 
@@ -460,5 +499,209 @@ mod tests {
             .find(|f| f.is_aggressor)
             .unwrap();
         assert_eq!(market_fill.matched_portion, 400_000);
+    }
+
+    #[test]
+    fn test_cancel_entry_success() {
+        let mut manager = PoolManager::new();
+
+        // Create an order
+        let (ack, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 7001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        let order_id = ack.order_id;
+
+        // Verify order is tracked
+        assert!(manager.get_pool_key_for_order(order_id).is_some());
+
+        // Cancel the order
+        let cancel_ack = manager
+            .cancel_entry(OrderCancelBody { order_id })
+            .unwrap();
+
+        assert_eq!(cancel_ack.order_id, order_id);
+
+        // Verify order is no longer tracked
+        assert!(manager.get_pool_key_for_order(order_id).is_none());
+
+        // Verify entry is removed from pool
+        let pool = manager.get_pool(&[101, 102]).unwrap();
+        let state = pool.get_state();
+        for book in &state.books {
+            assert!(!book.entries.iter().any(|e| e.id == order_id));
+        }
+    }
+
+    #[test]
+    fn test_cancel_entry_not_found() {
+        let mut manager = PoolManager::new();
+
+        // Try to cancel a non-existent order
+        let result = manager.cancel_entry(OrderCancelBody { order_id: 9999 });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_cancel_prevents_fill() {
+        let mut manager = PoolManager::new();
+
+        // Create orders for 3 out of 4 lineups
+        let (ack0, _) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 8001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        let (ack1, _) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 8002,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        let (ack2, _) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 8003,
+                legs: create_legs(&[(101, false), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // Cancel one of the orders
+        manager
+            .cancel_entry(OrderCancelBody {
+                order_id: ack1.order_id,
+            })
+            .unwrap();
+
+        // Now create the 4th order - should NOT trigger a fill
+        let (_ack3, fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 8004,
+                legs: create_legs(&[(101, true), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // No fills because lineup 1 has no entries (it was cancelled)
+        assert_eq!(fills.len(), 0);
+
+        // Verify the other orders are still in the pool
+        let pool = manager.get_pool(&[101, 102]).unwrap();
+        let state = pool.get_state();
+        assert!(state.books[0].entries.iter().any(|e| e.id == ack0.order_id));
+        assert!(!state.books[1].entries.iter().any(|e| e.id == ack1.order_id)); // Cancelled
+        assert!(state.books[2].entries.iter().any(|e| e.id == ack2.order_id));
+    }
+
+    #[test]
+    fn test_cancel_after_partial_fill() {
+        let mut manager = PoolManager::new();
+
+        // Create orders with quantity for 2 fills
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 500_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9002,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9003,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        let (ack2, _) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9004,
+                legs: create_legs(&[(101, false), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 500_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // First order triggers one fill
+        let (_ack3, fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9005,
+                legs: create_legs(&[(101, true), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        assert_eq!(fills.len(), 1); // One fill occurred
+
+        // Cancel an order that still has quantity remaining
+        manager
+            .cancel_entry(OrderCancelBody {
+                order_id: ack2.order_id,
+            })
+            .unwrap();
+
+        // Try to trigger another fill - should fail because we cancelled an entry
+        let (_ack4, fills2) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 9006,
+                legs: create_legs(&[(101, true), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // No fill because lineup 2 is now empty (cancelled)
+        assert_eq!(fills2.len(), 0);
     }
 }

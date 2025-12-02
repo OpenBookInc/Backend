@@ -5,9 +5,18 @@ package MatchingServicePackage;
 option go_package = "CommandCenter/proto";
 
 service MatchingServerService {
-  rpc OnHeartbeat(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
-  rpc OnOrderNew(stream OrderNew) returns (stream OrderNewResponseEnvelope);
-  rpc OnOrderCancel(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
+  rpc CreateHeartbeatResponseStream(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
+  rpc CreateOrderNewResponseStream(stream OrderNew) returns (stream OrderNewResponseEnvelope);
+  rpc CreateOrderCancelResponseStream(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
+}
+
+enum VersionMajor {
+  IGNORE_0 = 0;
+  VERSION_MAJOR_VALUE = 1;
+}
+
+enum VersionMinor {
+  VERSION_MINOR_VALUE = 0;
 }
 
 enum MessageType {

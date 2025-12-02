@@ -19,18 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchingServerService_OnHeartbeat_FullMethodName   = "/MatchingServicePackage.MatchingServerService/OnHeartbeat"
-	MatchingServerService_OnOrderNew_FullMethodName    = "/MatchingServicePackage.MatchingServerService/OnOrderNew"
-	MatchingServerService_OnOrderCancel_FullMethodName = "/MatchingServicePackage.MatchingServerService/OnOrderCancel"
+	MatchingServerService_CreateHeartbeatResponseStream_FullMethodName   = "/MatchingServicePackage.MatchingServerService/CreateHeartbeatResponseStream"
+	MatchingServerService_CreateOrderNewResponseStream_FullMethodName    = "/MatchingServicePackage.MatchingServerService/CreateOrderNewResponseStream"
+	MatchingServerService_CreateOrderCancelResponseStream_FullMethodName = "/MatchingServicePackage.MatchingServerService/CreateOrderCancelResponseStream"
 )
 
 // MatchingServerServiceClient is the client API for MatchingServerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MatchingServerServiceClient interface {
-	OnHeartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope], error)
-	OnOrderNew(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error)
-	OnOrderCancel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope], error)
+	CreateHeartbeatResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope], error)
+	CreateOrderNewResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error)
+	CreateOrderCancelResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope], error)
 }
 
 type matchingServerServiceClient struct {
@@ -41,9 +41,9 @@ func NewMatchingServerServiceClient(cc grpc.ClientConnInterface) MatchingServerS
 	return &matchingServerServiceClient{cc}
 }
 
-func (c *matchingServerServiceClient) OnHeartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope], error) {
+func (c *matchingServerServiceClient) CreateHeartbeatResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[0], MatchingServerService_OnHeartbeat_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[0], MatchingServerService_CreateHeartbeatResponseStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +52,11 @@ func (c *matchingServerServiceClient) OnHeartbeat(ctx context.Context, opts ...g
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnHeartbeatClient = grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope]
+type MatchingServerService_CreateHeartbeatResponseStreamClient = grpc.BidiStreamingClient[Heartbeat, HeartbeatResponseEnvelope]
 
-func (c *matchingServerServiceClient) OnOrderNew(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error) {
+func (c *matchingServerServiceClient) CreateOrderNewResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[1], MatchingServerService_OnOrderNew_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[1], MatchingServerService_CreateOrderNewResponseStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,11 +65,11 @@ func (c *matchingServerServiceClient) OnOrderNew(ctx context.Context, opts ...gr
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnOrderNewClient = grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope]
+type MatchingServerService_CreateOrderNewResponseStreamClient = grpc.BidiStreamingClient[OrderNew, OrderNewResponseEnvelope]
 
-func (c *matchingServerServiceClient) OnOrderCancel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope], error) {
+func (c *matchingServerServiceClient) CreateOrderCancelResponseStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[2], MatchingServerService_OnOrderCancel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MatchingServerService_ServiceDesc.Streams[2], MatchingServerService_CreateOrderCancelResponseStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,15 +78,15 @@ func (c *matchingServerServiceClient) OnOrderCancel(ctx context.Context, opts ..
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnOrderCancelClient = grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope]
+type MatchingServerService_CreateOrderCancelResponseStreamClient = grpc.BidiStreamingClient[OrderCancel, OrderCancelResponseEnvelope]
 
 // MatchingServerServiceServer is the server API for MatchingServerService service.
 // All implementations must embed UnimplementedMatchingServerServiceServer
 // for forward compatibility.
 type MatchingServerServiceServer interface {
-	OnHeartbeat(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error
-	OnOrderNew(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error
-	OnOrderCancel(grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]) error
+	CreateHeartbeatResponseStream(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error
+	CreateOrderNewResponseStream(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error
+	CreateOrderCancelResponseStream(grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]) error
 	mustEmbedUnimplementedMatchingServerServiceServer()
 }
 
@@ -97,14 +97,14 @@ type MatchingServerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMatchingServerServiceServer struct{}
 
-func (UnimplementedMatchingServerServiceServer) OnHeartbeat(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error {
-	return status.Error(codes.Unimplemented, "method OnHeartbeat not implemented")
+func (UnimplementedMatchingServerServiceServer) CreateHeartbeatResponseStream(grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]) error {
+	return status.Error(codes.Unimplemented, "method CreateHeartbeatResponseStream not implemented")
 }
-func (UnimplementedMatchingServerServiceServer) OnOrderNew(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error {
-	return status.Error(codes.Unimplemented, "method OnOrderNew not implemented")
+func (UnimplementedMatchingServerServiceServer) CreateOrderNewResponseStream(grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]) error {
+	return status.Error(codes.Unimplemented, "method CreateOrderNewResponseStream not implemented")
 }
-func (UnimplementedMatchingServerServiceServer) OnOrderCancel(grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]) error {
-	return status.Error(codes.Unimplemented, "method OnOrderCancel not implemented")
+func (UnimplementedMatchingServerServiceServer) CreateOrderCancelResponseStream(grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]) error {
+	return status.Error(codes.Unimplemented, "method CreateOrderCancelResponseStream not implemented")
 }
 func (UnimplementedMatchingServerServiceServer) mustEmbedUnimplementedMatchingServerServiceServer() {}
 func (UnimplementedMatchingServerServiceServer) testEmbeddedByValue()                               {}
@@ -127,26 +127,26 @@ func RegisterMatchingServerServiceServer(s grpc.ServiceRegistrar, srv MatchingSe
 	s.RegisterService(&MatchingServerService_ServiceDesc, srv)
 }
 
-func _MatchingServerService_OnHeartbeat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MatchingServerServiceServer).OnHeartbeat(&grpc.GenericServerStream[Heartbeat, HeartbeatResponseEnvelope]{ServerStream: stream})
+func _MatchingServerService_CreateHeartbeatResponseStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MatchingServerServiceServer).CreateHeartbeatResponseStream(&grpc.GenericServerStream[Heartbeat, HeartbeatResponseEnvelope]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnHeartbeatServer = grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]
+type MatchingServerService_CreateHeartbeatResponseStreamServer = grpc.BidiStreamingServer[Heartbeat, HeartbeatResponseEnvelope]
 
-func _MatchingServerService_OnOrderNew_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MatchingServerServiceServer).OnOrderNew(&grpc.GenericServerStream[OrderNew, OrderNewResponseEnvelope]{ServerStream: stream})
+func _MatchingServerService_CreateOrderNewResponseStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MatchingServerServiceServer).CreateOrderNewResponseStream(&grpc.GenericServerStream[OrderNew, OrderNewResponseEnvelope]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnOrderNewServer = grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]
+type MatchingServerService_CreateOrderNewResponseStreamServer = grpc.BidiStreamingServer[OrderNew, OrderNewResponseEnvelope]
 
-func _MatchingServerService_OnOrderCancel_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MatchingServerServiceServer).OnOrderCancel(&grpc.GenericServerStream[OrderCancel, OrderCancelResponseEnvelope]{ServerStream: stream})
+func _MatchingServerService_CreateOrderCancelResponseStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MatchingServerServiceServer).CreateOrderCancelResponseStream(&grpc.GenericServerStream[OrderCancel, OrderCancelResponseEnvelope]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type MatchingServerService_OnOrderCancelServer = grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]
+type MatchingServerService_CreateOrderCancelResponseStreamServer = grpc.BidiStreamingServer[OrderCancel, OrderCancelResponseEnvelope]
 
 // MatchingServerService_ServiceDesc is the grpc.ServiceDesc for MatchingServerService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -157,20 +157,20 @@ var MatchingServerService_ServiceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "OnHeartbeat",
-			Handler:       _MatchingServerService_OnHeartbeat_Handler,
+			StreamName:    "CreateHeartbeatResponseStream",
+			Handler:       _MatchingServerService_CreateHeartbeatResponseStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "OnOrderNew",
-			Handler:       _MatchingServerService_OnOrderNew_Handler,
+			StreamName:    "CreateOrderNewResponseStream",
+			Handler:       _MatchingServerService_CreateOrderNewResponseStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "OnOrderCancel",
-			Handler:       _MatchingServerService_OnOrderCancel_Handler,
+			StreamName:    "CreateOrderCancelResponseStream",
+			Handler:       _MatchingServerService_CreateOrderCancelResponseStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

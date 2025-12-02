@@ -402,18 +402,42 @@ impl EntryPool {
         })
     }
     
+    /// Cancels an entry by removing it from the pool
+    ///
+    /// # Arguments
+    /// * `entry_id` - The ID of the entry to cancel
+    ///
+    /// # Returns
+    /// * `Ok(())` - Entry was successfully cancelled
+    /// * `Err(String)` - Error message if entry was not found
+    pub fn cancel_entry(&mut self, entry_id: u64) -> Result<(), String> {
+        // Search through all books to find and remove the entry
+        for book in &mut self.state.books {
+            let initial_len = book.entries.len();
+            book.entries.retain(|entry| entry.id != entry_id);
+
+            // If we removed an entry, return success
+            if book.entries.len() < initial_len {
+                return Ok(());
+            }
+        }
+
+        // Entry not found in any book
+        Err(format!("Entry with ID {} not found", entry_id))
+    }
+
     /// Attempts to create fills from the current book state
     /// Continues attempting fills until no valid fill can be made
     fn attempt_fills(&mut self) -> Vec<FillEvent> {
         let mut fill_events = Vec::new();
-        
+
         loop {
             match self.try_create_fill() {
                 Some(fill_event) => fill_events.push(fill_event),
                 None => break,
             }
         }
-        
+
         fill_events
     }
     
@@ -1090,7 +1114,7 @@ mod tests {
     #[test]
     fn test_completed_entry_ids_multiple_fills() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
-        
+
         // Submit entries with quantity=2 each
         pool.submit_entry(0, EntryParameters {
             entry_id: 100,
@@ -1123,15 +1147,168 @@ mod tests {
             portion: 250,
             quantity: 2,
         }).unwrap();
-        
+
         // Should have 2 fill events
         assert_eq!(submit.fill_events.len(), 2);
-        
+
         // All entries should be completed
         assert_eq!(submit.completed_entry_ids.len(), 4);
         assert!(submit.completed_entry_ids.contains(&100));
         assert!(submit.completed_entry_ids.contains(&102));
         assert!(submit.completed_entry_ids.contains(&103));
         assert!(submit.completed_entry_ids.contains(&104));
+    }
+
+    #[test]
+    fn test_cancel_entry_success() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit an entry
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Verify entry is in the book
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[0].entries[0].id, 100);
+
+        // Cancel the entry
+        let result = pool.cancel_entry(100);
+        assert!(result.is_ok());
+
+        // Verify entry is removed from the book
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+    }
+
+    #[test]
+    fn test_cancel_entry_not_found() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Try to cancel an entry that doesn't exist
+        let result = pool.cancel_entry(999);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Entry with ID 999 not found");
+    }
+
+    #[test]
+    fn test_cancelled_entry_does_not_fill() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries to all 4 lineups
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // At this point, we should have had a fill, so all books are empty
+        let state = pool.get_state();
+        for book in &state.books {
+            assert_eq!(book.entries.len(), 0);
+        }
+
+        // Submit entries again, but this time cancel one before completing
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 200,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 201,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 202,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Cancel entry 202
+        pool.cancel_entry(202).unwrap();
+
+        // Now submit the final entry - should NOT trigger a fill because entry 202 is cancelled
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 203,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Should have NO fill events because lineup 2 has no entries
+        assert_eq!(submit.fill_events.len(), 0);
+
+        // Verify entries are still on the book (except the cancelled one)
+        let state = pool.get_state();
+        assert!(state.books[0].entries.iter().any(|e| e.id == 200));
+        assert!(state.books[1].entries.iter().any(|e| e.id == 201));
+        assert!(!state.books[2].entries.iter().any(|e| e.id == 202)); // Cancelled
+        assert!(state.books[3].entries.iter().any(|e| e.id == 203));
+    }
+
+    #[test]
+    fn test_cancel_entry_with_multiple_in_same_book() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit multiple entries to the same lineup
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 300,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+        }).unwrap();
+
+        // Verify all 3 entries are in the book
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 3);
+
+        // Cancel the middle entry (by portion, not by position)
+        pool.cancel_entry(101).unwrap();
+
+        // Verify only 2 entries remain
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 2);
+        assert!(state.books[0].entries.iter().any(|e| e.id == 100));
+        assert!(!state.books[0].entries.iter().any(|e| e.id == 101)); // Cancelled
+        assert!(state.books[0].entries.iter().any(|e| e.id == 102));
     }
 }
