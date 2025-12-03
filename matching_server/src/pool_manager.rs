@@ -158,6 +158,7 @@ impl PoolManager {
                     is_aggressor: filled_entry.entry.lineup_index
                         == fill_event.aggressor_lineup_index,
                     matched_portion: filled_entry.matched_portion,
+                    is_complete: filled_entry.is_complete,
                 });
             }
 

@@ -206,6 +206,8 @@ pub struct FilledEntry {
     pub original_portion: u64,
     /// matched portion after aggressor adjustment (may differ from original for aggressor)
     pub matched_portion: u64,
+    /// True only if this is the final fill for this entry (entry will be removed from book)
+    pub is_complete: bool,
 }
 
 /// Represents a successful fill event across all lineups
@@ -367,7 +369,7 @@ impl EntryPool {
         self.state.books[lineup_index].add_entry(entry);
         
         // Attempt fills
-        let fill_events = self.attempt_fills();
+        let mut fill_events = self.attempt_fills();
         
         // Collect completed entry IDs
         let mut completed_entry_ids = Vec::new();
@@ -390,7 +392,27 @@ impl EntryPool {
                 }
             }
         }
-        
+
+        // Update is_complete flag for entries in their final fill event
+        for entry_id in &completed_entry_ids {
+            // Find the last fill event index where this entry appears
+            let mut last_fill_event_idx = None;
+            for (fill_idx, fill_event) in fill_events.iter().enumerate() {
+                if fill_event.filled_entries.iter().any(|fe| fe.entry.id == *entry_id) {
+                    last_fill_event_idx = Some(fill_idx);
+                }
+            }
+
+            // Mark is_complete = true for this entry in its last fill event
+            if let Some(fill_idx) = last_fill_event_idx {
+                for filled_entry in &mut fill_events[fill_idx].filled_entries {
+                    if filled_entry.entry.id == *entry_id {
+                        filled_entry.is_complete = true;
+                    }
+                }
+            }
+        }
+
         // Remove market entries from all books
         for book in &mut self.state.books {
             book.remove_market_entries();
@@ -528,6 +550,7 @@ impl EntryPool {
                 entry: entry.clone(),
                 original_portion: entry.portion,
                 matched_portion: adjusted_portions[idx],
+                is_complete: false, // Will be set properly in submit_entry after all fills
             });
         }
         
@@ -1310,5 +1333,271 @@ mod tests {
         assert!(state.books[0].entries.iter().any(|e| e.id == 100));
         assert!(!state.books[0].entries.iter().any(|e| e.id == 101)); // Cancelled
         assert!(state.books[0].entries.iter().any(|e| e.id == 102));
+    }
+
+    #[test]
+    fn test_is_complete_single_fill() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries with quantity=1 each - will all be completed after one fill
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Should have 1 fill event
+        assert_eq!(submit.fill_events.len(), 1);
+
+        // All entries should be completed, so is_complete should be true for all
+        let fill_event = &submit.fill_events[0];
+        for filled_entry in &fill_event.filled_entries {
+            assert!(filled_entry.is_complete,
+                "Entry {} should have is_complete=true", filled_entry.entry.id);
+        }
+
+        // Verify all entries are in completed_entry_ids
+        assert_eq!(submit.completed_entry_ids.len(), 4);
+    }
+
+    #[test]
+    fn test_is_complete_partial_fill() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries with quantity=2 each, except one with quantity=1
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1, // This one will be completed
+        }).unwrap();
+
+        // Should have 1 fill event
+        assert_eq!(submit.fill_events.len(), 1);
+
+        // Only entry 103 should have is_complete=true
+        let fill_event = &submit.fill_events[0];
+        for filled_entry in &fill_event.filled_entries {
+            if filled_entry.entry.id == 103 {
+                assert!(filled_entry.is_complete,
+                    "Entry 103 should have is_complete=true");
+            } else {
+                assert!(!filled_entry.is_complete,
+                    "Entry {} should have is_complete=false", filled_entry.entry.id);
+            }
+        }
+
+        // Only entry 103 should be in completed_entry_ids
+        assert_eq!(submit.completed_entry_ids.len(), 1);
+        assert!(submit.completed_entry_ids.contains(&103));
+    }
+
+    #[test]
+    fn test_is_complete_multiple_fills_aggressor() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit passive entries with quantity=2 each
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        // Add TWO entries to lineup 2 to enable 2 fill events
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Aggressor with quantity=2 will trigger 2 fill events
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 104,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+
+        // Should have 2 fill events
+        assert_eq!(submit.fill_events.len(), 2);
+
+        // Fill event 0: entries 100, 101, 102, 104
+        // Only entry 102 is completed after this fill
+        let fill_event_0 = &submit.fill_events[0];
+        for filled_entry in &fill_event_0.filled_entries {
+            match filled_entry.entry.id {
+                102 => {
+                    assert!(filled_entry.is_complete,
+                        "Entry 102 should have is_complete=true (completed in first fill)");
+                }
+                100 | 101 | 104 => {
+                    assert!(!filled_entry.is_complete,
+                        "Entry {} should have is_complete=false in first fill event",
+                        filled_entry.entry.id);
+                }
+                _ => panic!("Unexpected entry in fill event 0"),
+            }
+        }
+
+        // Fill event 1: entries 100, 101, 103, 104
+        // All entries are completed after this fill
+        let fill_event_1 = &submit.fill_events[1];
+        for filled_entry in &fill_event_1.filled_entries {
+            assert!(filled_entry.is_complete,
+                "Entry {} should have is_complete=true in second (final) fill event",
+                filled_entry.entry.id);
+        }
+
+        // All 5 entries should be completed
+        assert_eq!(submit.completed_entry_ids.len(), 5);
+        assert!(submit.completed_entry_ids.contains(&100));
+        assert!(submit.completed_entry_ids.contains(&101));
+        assert!(submit.completed_entry_ids.contains(&102));
+        assert!(submit.completed_entry_ids.contains(&103));
+        assert!(submit.completed_entry_ids.contains(&104));
+    }
+
+    #[test]
+    fn test_is_complete_resting_order_multiple_fills() {
+        // This test specifically addresses the requirement:
+        // "if a resting (non-aggressor) order gets filled multiple times as the result of one OrderNew,
+        // but only the final fill event should have "isComplete" as true for that order"
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit TWO entries to lineup 0 with quantity=1 each (to create 2 fill events)
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+        }).unwrap();
+
+        // Submit resting entries to lineups 1 and 2 with quantity=2 each
+        // These will participate in BOTH fill events
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+
+        // Aggressor with quantity=2 will trigger 2 fill events
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 104,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 2,
+        }).unwrap();
+
+        // Should have 2 fill events
+        assert_eq!(submit.fill_events.len(), 2);
+
+        // Fill event 0: entries 100, 102, 103, 104
+        let fill_event_0 = &submit.fill_events[0];
+        for filled_entry in &fill_event_0.filled_entries {
+            match filled_entry.entry.id {
+                100 => {
+                    // Entry 100 is completed after first fill
+                    assert!(filled_entry.is_complete,
+                        "Entry 100 should have is_complete=true (completed in first fill)");
+                }
+                102 | 103 => {
+                    // Resting orders 102 and 103 are NOT completed after first fill
+                    assert!(!filled_entry.is_complete,
+                        "Resting entry {} should have is_complete=false in first fill event",
+                        filled_entry.entry.id);
+                }
+                104 => {
+                    // Aggressor 104 is NOT completed after first fill
+                    assert!(!filled_entry.is_complete,
+                        "Aggressor entry 104 should have is_complete=false in first fill event");
+                }
+                _ => panic!("Unexpected entry in fill event 0"),
+            }
+        }
+
+        // Fill event 1: entries 101, 102, 103, 104
+        let fill_event_1 = &submit.fill_events[1];
+        for filled_entry in &fill_event_1.filled_entries {
+            match filled_entry.entry.id {
+                101 | 102 | 103 | 104 => {
+                    // All entries are completed after second fill
+                    assert!(filled_entry.is_complete,
+                        "Entry {} should have is_complete=true in second (final) fill event",
+                        filled_entry.entry.id);
+                }
+                _ => panic!("Unexpected entry in fill event 1"),
+            }
+        }
+
+        // Verify completed_entry_ids - all 5 entries should be completed
+        assert_eq!(submit.completed_entry_ids.len(), 5);
+        assert!(submit.completed_entry_ids.contains(&100));
+        assert!(submit.completed_entry_ids.contains(&101));
+        assert!(submit.completed_entry_ids.contains(&102)); // Resting order filled twice
+        assert!(submit.completed_entry_ids.contains(&103)); // Resting order filled twice
+        assert!(submit.completed_entry_ids.contains(&104)); // Aggressor filled twice
     }
 }

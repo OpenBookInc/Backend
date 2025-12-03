@@ -144,6 +144,7 @@ message FillEvent {
       uint64 orderId = 2;
       bool isAggressor = 3;
       uint64 matchedPortion = 4;
+      bool isComplete = 5; // only marked true for the final fill notification of an order
     }
 
     uint64 transactionId = 1;

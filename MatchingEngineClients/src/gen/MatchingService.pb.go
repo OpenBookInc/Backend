@@ -1650,6 +1650,7 @@ type FillEvent_Body_Fill struct {
 	OrderId        uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
 	IsAggressor    bool                   `protobuf:"varint,3,opt,name=isAggressor,proto3" json:"isAggressor,omitempty"`
 	MatchedPortion uint64                 `protobuf:"varint,4,opt,name=matchedPortion,proto3" json:"matchedPortion,omitempty"`
+	IsComplete     bool                   `protobuf:"varint,5,opt,name=isComplete,proto3" json:"isComplete,omitempty"` // only marked true for the final fill notification of an order
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1710,6 +1711,13 @@ func (x *FillEvent_Body_Fill) GetMatchedPortion() uint64 {
 		return x.MatchedPortion
 	}
 	return 0
+}
+
+func (x *FillEvent_Body_Fill) GetIsComplete() bool {
+	if x != nil {
+		return x.IsComplete
+	}
+	return false
 }
 
 var File_MatchingService_proto protoreflect.FileDescriptor
@@ -1781,21 +1789,24 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\aorderId\x18\x03 \x01(\x04R\aorderId\x12A\n" +
 	"\x04body\x18\x04 \x01(\v2-.MatchingServicePackage.OrderElimination.BodyR\x04body\x1a>\n" +
 	"\x04Body\x126\n" +
-	"\x16eliminationDescription\x18\x01 \x01(\tR\x16eliminationDescription\"\xb3\x04\n" +
+	"\x16eliminationDescription\x18\x01 \x01(\tR\x16eliminationDescription\"\xd3\x04\n" +
 	"\tFillEvent\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12:\n" +
-	"\x04body\x18\x03 \x01(\v2&.MatchingServicePackage.FillEvent.BodyR\x04body\x1a\xc0\x02\n" +
+	"\x04body\x18\x03 \x01(\v2&.MatchingServicePackage.FillEvent.BodyR\x04body\x1a\xe0\x02\n" +
 	"\x04Body\x12$\n" +
 	"\rtransactionId\x18\x01 \x01(\x04R\rtransactionId\x12 \n" +
 	"\vfillEventId\x18\x02 \x01(\x04R\vfillEventId\x12(\n" +
 	"\x0fmatchedQuantity\x18\x03 \x01(\x04R\x0fmatchedQuantity\x12A\n" +
-	"\x05fills\x18\x04 \x03(\v2+.MatchingServicePackage.FillEvent.Body.FillR\x05fills\x1a\x82\x01\n" +
+	"\x05fills\x18\x04 \x03(\v2+.MatchingServicePackage.FillEvent.Body.FillR\x05fills\x1a\xa2\x01\n" +
 	"\x04Fill\x12\x16\n" +
 	"\x06fillId\x18\x01 \x01(\x04R\x06fillId\x12\x18\n" +
 	"\aorderId\x18\x02 \x01(\x04R\aorderId\x12 \n" +
 	"\visAggressor\x18\x03 \x01(\bR\visAggressor\x12&\n" +
-	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\"\xb9\x01\n" +
+	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\x12\x1e\n" +
+	"\n" +
+	"isComplete\x18\x05 \x01(\bR\n" +
+	"isComplete\"\xb9\x01\n" +
 	"\x19HeartbeatResponseEnvelope\x12M\n" +
 	"\rgeneralReject\x18\x01 \x01(\v2%.MatchingServicePackage.GeneralRejectH\x00R\rgeneralReject\x12A\n" +
 	"\theartbeat\x18\x02 \x01(\v2!.MatchingServicePackage.HeartbeatH\x00R\theartbeatB\n" +
