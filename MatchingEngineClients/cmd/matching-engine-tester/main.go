@@ -51,6 +51,10 @@ type WebClient struct {
 
 	// Global sequence number shared across all message types
 	globalSequenceNumber   uint64
+
+	// Pool state tracking
+	poolTracker            *PoolTracker
+	pendingOrders          map[uint64]*pb.OrderNew // map[clientOrderId]OrderNew
 }
 
 func NewWebClient(serverAddr string) (*WebClient, error) {
@@ -74,6 +78,8 @@ func NewWebClient(serverAddr string) (*WebClient, error) {
 		orderNewStreamActive:    false,
 		orderCancelSendChan:     make(chan *pb.OrderCancel, 10),
 		orderCancelStreamActive: false,
+		poolTracker:             NewPoolTracker(),
+		pendingOrders:           make(map[uint64]*pb.OrderNew),
 	}
 
 	// Initialize persistent streams
@@ -200,6 +206,10 @@ func (wc *WebClient) initOrderNewStream() error {
 			respJSON, _ := marshaler.Marshal(resp)
 			wc.mu.Lock()
 			wc.orderNewResponses = append(wc.orderNewResponses, string(respJSON))
+
+			// Process the response for pool tracking
+			wc.processOrderNewResponse(resp)
+
 			wc.mu.Unlock()
 		}
 	}()
@@ -256,11 +266,89 @@ func (wc *WebClient) initOrderCancelStream() error {
 			respJSON, _ := marshaler.Marshal(resp)
 			wc.mu.Lock()
 			wc.orderCancelResponses = append(wc.orderCancelResponses, string(respJSON))
+
+			// Process the response for pool tracking
+			wc.processOrderCancelResponse(resp)
+
 			wc.mu.Unlock()
 		}
 	}()
 
 	return nil
+}
+
+// processOrderNewResponse processes order new responses and updates pool state
+// NOTE: This method assumes wc.mu is already locked by the caller
+func (wc *WebClient) processOrderNewResponse(resp *pb.OrderNewResponseEnvelope) {
+	switch contents := resp.Contents.(type) {
+	case *pb.OrderNewResponseEnvelope_Acknowledgement:
+		// Handle acknowledgement
+		ack := contents.Acknowledgement
+		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
+			clientOrderID := ack.Body.ClientOrderId
+			orderID := ack.Body.OrderId
+			sequenceNumber := ack.SequencedMessageBase.SequenceNumber
+
+			// Find the pending order
+			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
+				// Convert legs to our internal format
+				legs := make([]Leg, len(pendingOrder.Body.Legs))
+				for i, leg := range pendingOrder.Body.Legs {
+					legs[i] = Leg{
+						LegSecurityID: leg.LegSecurityId,
+						IsOver:        leg.IsOver,
+					}
+				}
+
+				// Add to pool tracker
+				wc.poolTracker.AddOrder(
+					orderID,
+					clientOrderID,
+					legs,
+					pendingOrder.Body.Portion,
+					pendingOrder.Body.Quantity,
+					sequenceNumber,
+				)
+
+				// Remove from pending orders
+				delete(wc.pendingOrders, clientOrderID)
+			}
+		}
+
+	case *pb.OrderNewResponseEnvelope_Fill:
+		// Handle fill event
+		fill := contents.Fill
+		if fill.Body != nil {
+			for _, fillEntry := range fill.Body.Fills {
+				wc.poolTracker.UpdateFromFill(
+					fillEntry.OrderId,
+					fill.Body.MatchedQuantity,
+					fillEntry.IsComplete,
+				)
+			}
+		}
+
+	case *pb.OrderNewResponseEnvelope_Elimination:
+		// Handle elimination (order removed by server)
+		elim := contents.Elimination
+		if elim != nil {
+			wc.poolTracker.RemoveOrder(elim.OrderId)
+		}
+	}
+}
+
+// processOrderCancelResponse processes order cancel responses and updates pool state
+// NOTE: This method assumes wc.mu is already locked by the caller
+func (wc *WebClient) processOrderCancelResponse(resp *pb.OrderCancelResponseEnvelope) {
+	switch contents := resp.Contents.(type) {
+	case *pb.OrderCancelResponseEnvelope_Acknowledgement:
+		// Handle cancel acknowledgement
+		ack := contents.Acknowledgement
+		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
+			orderID := ack.Body.OrderId
+			wc.poolTracker.RemoveOrder(orderID)
+		}
+	}
 }
 
 func (wc *WebClient) Close() {
@@ -445,6 +533,8 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 		reqJSON, _ := marshaler.Marshal(order)
 		wc.mu.Lock()
 		wc.orderNewRequests = append(wc.orderNewRequests, string(reqJSON))
+		// Track pending order for later matching with acknowledgement
+		wc.pendingOrders[clientOrderId] = order
 		wc.mu.Unlock()
 
 		// Send to the channel (non-blocking with timeout)
@@ -598,6 +688,19 @@ func (wc *WebClient) handleSequenceNumber(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": currentSeq})
 }
 
+// Entry Pools handler - displays all pool states
+func (wc *WebClient) handleEntryPools(w http.ResponseWriter, r *http.Request) {
+	renderEntryPoolsPage(w)
+}
+
+// Get entry pools data as JSON
+func (wc *WebClient) handleEntryPoolsData(w http.ResponseWriter, r *http.Request) {
+	pools := wc.poolTracker.GetAllPoolsDisplay()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pools)
+}
+
 func splitAndTrim(s, sep string) []string {
 	var result []string
 	for _, item := range splitString(s, sep) {
@@ -637,6 +740,212 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
+func renderEntryPoolsPage(w http.ResponseWriter) {
+	tmpl := `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Matching Service Client - Entry Pools</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .header { background: #333; color: white; padding: 10px 20px; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .nav { background: #444; padding: 10px 20px; }
+        .nav a { margin-right: 15px; padding: 5px 15px; text-decoration: none; background: #007bff; color: white; border-radius: 3px; display: inline-block; }
+        .nav a:hover { background: #0056b3; }
+        .container { padding: 20px; }
+        .pool-card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pool-header { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #333; }
+        .pool-info { font-size: 14px; color: #666; margin-bottom: 15px; }
+        .lineups-container { display: flex; gap: 15px; overflow-x: auto; }
+        .lineup-column { flex: 0 0 200px; background: #f8f9fa; border-radius: 4px; padding: 10px; }
+        .lineup-header { font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        .lineup-subheader { font-size: 11px; color: #666; margin-bottom: 10px; }
+        .orders-stack { position: relative; height: 300px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
+        .order-bar { position: absolute; left: 0; right: 0; cursor: pointer; transition: opacity 0.2s; }
+        .order-bar:hover { opacity: 0.8; }
+        .tooltip { position: absolute; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 1000; display: none; }
+        .empty-lineup { height: 300px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Matching Service Client</h1>
+    </div>
+    <div class="nav">
+        <a href="/entrypools">Entry Pools</a>
+        <a href="/heartbeat">Heartbeat</a>
+        <a href="/ordernew">Order New</a>
+        <a href="/ordercancel">Order Cancel</a>
+    </div>
+    <div class="container" id="poolsContainer">
+        <p>Loading pools...</p>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+            '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#AAB7B8',
+            '#52BE80', '#F1948A', '#85929E', '#F39C12', '#8E44AD',
+            '#3498DB', '#E74C3C', '#1ABC9C', '#2ECC71', '#E67E22'
+        ];
+
+        let colorIndex = 0;
+        const orderColors = new Map();
+
+        function getOrderColor(orderId) {
+            if (!orderColors.has(orderId)) {
+                orderColors.set(orderId, colors[colorIndex % colors.length]);
+                colorIndex++;
+            }
+            return orderColors.get(orderId);
+        }
+
+        function formatNumber(n) {
+            return n.toLocaleString();
+        }
+
+        function renderPools(pools) {
+            const container = document.getElementById('poolsContainer');
+
+            if (!pools || pools.length === 0) {
+                container.innerHTML = '<p style="color: #999;">No pools yet. Submit orders to create entry pools.</p>';
+                return;
+            }
+
+            let html = '';
+            for (const pool of pools) {
+                html += '<div class="pool-card">';
+                html += '<div class="pool-header">Pool [' + pool.LegSecurityIDs.join(', ') + ']</div>';
+                html += '<div class="pool-info">' + pool.NumLegs + ' legs, ' + formatNumber(pool.TotalUnits) + ' total units</div>';
+                html += '<div class="lineups-container">';
+
+                for (const lineup of pool.Lineups) {
+                    html += '<div class="lineup-column">';
+                    html += '<div class="lineup-header">Lineup ' + lineup.LineupIndex + '</div>';
+
+                    // Show over/under combination
+                    let ouStr = lineup.OverUnders.map(ou =>
+                        ou.LegSecurityID + '=' + (ou.IsOver ? 'O' : 'U')
+                    ).join(', ');
+                    html += '<div class="lineup-subheader">[' + ouStr + ']</div>';
+
+                    if (!lineup.Orders || lineup.Orders.length === 0) {
+                        html += '<div class="empty-lineup">No orders</div>';
+                    } else {
+                        html += '<div class="orders-stack" id="lineup-' + pool.PoolKey + '-' + lineup.LineupIndex + '">';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+
+            // Render order bars
+            for (const pool of pools) {
+                for (const lineup of pool.Lineups) {
+                    if (lineup.Orders && lineup.Orders.length > 0) {
+                        renderLineupOrders(pool.PoolKey, lineup.LineupIndex, lineup.Orders);
+                    }
+                }
+            }
+        }
+
+        function renderLineupOrders(poolKey, lineupIndex, orders) {
+            const container = document.getElementById('lineup-' + poolKey + '-' + lineupIndex);
+            if (!container) return;
+
+            const height = 300;
+            const totalQuantity = orders.reduce((sum, o) => sum + o.RemainingQuantity, 0);
+
+            let currentBottom = 0;
+
+            // Orders are already sorted by portion (high to low), then FIFO
+            // Render from bottom to top (highest portion at top)
+            for (let i = orders.length - 1; i >= 0; i--) {
+                const order = orders[i];
+                const barHeight = totalQuantity > 0 ? (order.RemainingQuantity / totalQuantity) * height : 0;
+
+                const div = document.createElement('div');
+                div.className = 'order-bar';
+                div.style.bottom = currentBottom + 'px';
+                div.style.height = Math.max(barHeight, 2) + 'px';
+                div.style.backgroundColor = getOrderColor(order.OrderID);
+
+                div.addEventListener('mouseenter', function(e) {
+                    showTooltip(e, order);
+                });
+                div.addEventListener('mousemove', function(e) {
+                    updateTooltipPosition(e);
+                });
+                div.addEventListener('mouseleave', function() {
+                    hideTooltip();
+                });
+
+                container.appendChild(div);
+                currentBottom += barHeight;
+            }
+        }
+
+        function showTooltip(e, order) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML =
+                'Order ID: ' + order.OrderID + '<br>' +
+                'Client Order ID: ' + order.ClientOrderID + '<br>' +
+                'Portion: ' + formatNumber(order.Portion) + '<br>' +
+                'Remaining Qty: ' + formatNumber(order.RemainingQuantity) + '<br>' +
+                'Original Qty: ' + formatNumber(order.OriginalQuantity);
+            tooltip.style.display = 'block';
+            updateTooltipPosition(e);
+        }
+
+        function updateTooltipPosition(e) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.left = (e.pageX + 10) + 'px';
+            tooltip.style.top = (e.pageY + 10) + 'px';
+        }
+
+        function hideTooltip() {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.display = 'none';
+        }
+
+        async function fetchPools() {
+            try {
+                const response = await fetch('/entrypools-data');
+                const pools = await response.json();
+                renderPools(pools);
+            } catch (err) {
+                console.error('Error fetching pools:', err);
+            }
+        }
+
+        // Initial fetch
+        fetchPools();
+
+        // Auto-refresh every 500ms
+        setInterval(fetchPools, 500);
+    </script>
+</body>
+</html>
+`
+
+	t, err := template.New("entrypools").Parse(tmpl)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	t.Execute(w, nil)
+}
+
 func renderPage(w http.ResponseWriter, pageType string, responses []string) {
 	tmpl := `
 <!DOCTYPE html>
@@ -673,6 +982,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
         <h1>Matching Service Client</h1>
     </div>
     <div class="nav">
+        <a href="/entrypools">Entry Pools</a>
         <a href="/heartbeat">Heartbeat</a>
         <a href="/ordernew">Order New</a>
         <a href="/ordercancel">Order Cancel</a>
@@ -920,8 +1230,10 @@ func main() {
 	defer client.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/heartbeat", http.StatusSeeOther)
+		http.Redirect(w, r, "/entrypools", http.StatusSeeOther)
 	})
+	http.HandleFunc("/entrypools", client.handleEntryPools)
+	http.HandleFunc("/entrypools-data", client.handleEntryPoolsData)
 	http.HandleFunc("/heartbeat", client.handleHeartbeat)
 	http.HandleFunc("/heartbeat-requests", client.handleHeartbeatRequests)
 	http.HandleFunc("/heartbeat-responses", client.handleHeartbeatResponses)
