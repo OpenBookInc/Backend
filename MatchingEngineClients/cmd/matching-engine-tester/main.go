@@ -719,7 +719,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                 </div>
                 <div class="form-group">
                     <label>Quantity:</label>
-                    <input type="number" name="quantity" value="250000" required>
+                    <input type="number" name="quantity" value="5" required>
                 </div>
                 <div class="form-group">
                     <label>Self Match ID (optional):</label>
