@@ -258,8 +258,6 @@ pub struct SubmitInfo {
     pub cancelled_entry_ids: Vec<u64>,
     /// Any fill events that occurred as a result of this submission
     pub fill_events: Vec<FillEvent>,
-    /// All entries that are no longer resting on the book as a result of this submitted entry (includes the sunbmitted entry if applicable)
-    pub completed_entry_ids: Vec<u64>,
 }
 
 /// Result of submitting an entry - either success with SubmitInfo or error message
@@ -450,7 +448,6 @@ impl EntryPool {
         Ok(SubmitInfo {
             cancelled_entry_ids,
             fill_events,
-            completed_entry_ids,
         })
     }
     
@@ -1124,147 +1121,6 @@ mod tests {
     }
     
     #[test]
-    fn test_completed_entry_ids_single_fill() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
-        
-        // Submit entries with quantity=1 each
-        pool.submit_entry(0, EntryParameters {
-            entry_id: 100,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(1, EntryParameters {
-            entry_id: 101,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(2, EntryParameters {
-            entry_id: 102,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        let submit = pool.submit_entry(3, EntryParameters {
-            entry_id: 103,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        
-        // All 4 entries should be in completed_entry_ids
-        assert_eq!(submit.completed_entry_ids.len(), 4);
-        assert!(submit.completed_entry_ids.contains(&100));
-        assert!(submit.completed_entry_ids.contains(&101));
-        assert!(submit.completed_entry_ids.contains(&102));
-        assert!(submit.completed_entry_ids.contains(&103));
-    }
-    
-    #[test]
-    fn test_completed_entry_ids_partial_fill() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
-        
-        // Submit entries with quantity=2 each
-        pool.submit_entry(0, EntryParameters {
-            entry_id: 100,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 2,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(1, EntryParameters {
-            entry_id: 101,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 2,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(2, EntryParameters {
-            entry_id: 102,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 2,
-            self_match_id: None,
-        }).unwrap();
-        // This one has quantity=1, so it will be completed
-        let submit = pool.submit_entry(3, EntryParameters {
-            entry_id: 103,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        
-        // Only entry 103 should be completed (others still have quantity=1 remaining)
-        assert_eq!(submit.completed_entry_ids.len(), 1);
-        assert!(submit.completed_entry_ids.contains(&103));
-        
-        // Verify others are still on the book with quantity=1
-        let state = pool.get_state();
-        assert!(state.books[0].entries.iter().any(|e| e.id == 100 && e.quantity == 1));
-        assert!(state.books[1].entries.iter().any(|e| e.id == 101 && e.quantity == 1));
-        assert!(state.books[2].entries.iter().any(|e| e.id == 102 && e.quantity == 1));
-    }
-    
-    #[test]
-    fn test_completed_entry_ids_multiple_fills() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
-
-        // Submit entries with quantity=2 each
-        pool.submit_entry(0, EntryParameters {
-            entry_id: 100,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 2,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(1, EntryParameters {
-            entry_id: 101,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 3,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(2, EntryParameters {
-            entry_id: 102,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        pool.submit_entry(2, EntryParameters {
-            entry_id: 103,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None,
-        }).unwrap();
-        // This entry with quantity=2 will trigger 2 fills
-        let submit = pool.submit_entry(3, EntryParameters {
-            entry_id: 104,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 2,
-            self_match_id: None,
-        }).unwrap();
-
-        // Should have 2 fill events
-        assert_eq!(submit.fill_events.len(), 2);
-
-        // All entries should be completed
-        assert_eq!(submit.completed_entry_ids.len(), 4);
-        assert!(submit.completed_entry_ids.contains(&100));
-        assert!(submit.completed_entry_ids.contains(&102));
-        assert!(submit.completed_entry_ids.contains(&103));
-        assert!(submit.completed_entry_ids.contains(&104));
-    }
-
-    #[test]
     fn test_cancel_entry_success() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
 
@@ -1472,9 +1328,6 @@ mod tests {
             assert!(filled_entry.is_complete,
                 "Entry {} should have is_complete=true", filled_entry.entry.id);
         }
-
-        // Verify all entries are in completed_entry_ids
-        assert_eq!(submit.completed_entry_ids.len(), 4);
     }
 
     #[test]
@@ -1525,10 +1378,6 @@ mod tests {
                     "Entry {} should have is_complete=false", filled_entry.entry.id);
             }
         }
-
-        // Only entry 103 should be in completed_entry_ids
-        assert_eq!(submit.completed_entry_ids.len(), 1);
-        assert!(submit.completed_entry_ids.contains(&103));
     }
 
     #[test]
@@ -1604,14 +1453,6 @@ mod tests {
                 "Entry {} should have is_complete=true in second (final) fill event",
                 filled_entry.entry.id);
         }
-
-        // All 5 entries should be completed
-        assert_eq!(submit.completed_entry_ids.len(), 5);
-        assert!(submit.completed_entry_ids.contains(&100));
-        assert!(submit.completed_entry_ids.contains(&101));
-        assert!(submit.completed_entry_ids.contains(&102));
-        assert!(submit.completed_entry_ids.contains(&103));
-        assert!(submit.completed_entry_ids.contains(&104));
     }
 
     #[test]
@@ -1703,14 +1544,6 @@ mod tests {
                 _ => panic!("Unexpected entry in fill event 1"),
             }
         }
-
-        // Verify completed_entry_ids - all 5 entries should be completed
-        assert_eq!(submit.completed_entry_ids.len(), 5);
-        assert!(submit.completed_entry_ids.contains(&100));
-        assert!(submit.completed_entry_ids.contains(&101));
-        assert!(submit.completed_entry_ids.contains(&102)); // Resting order filled twice
-        assert!(submit.completed_entry_ids.contains(&103)); // Resting order filled twice
-        assert!(submit.completed_entry_ids.contains(&104)); // Aggressor filled twice
     }
 
     #[test]
@@ -1768,9 +1601,6 @@ mod tests {
         assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled earlier
         assert_eq!(state.books[2].entries.len(), 0); // 102 cancelled earlier
         assert_eq!(state.books[3].entries.len(), 0); // 103 cancelled
-
-        // Cancelled entries should NOT be in completed_entry_ids
-        assert_eq!(submit.completed_entry_ids.len(), 0);
     }
 
     #[test]
@@ -1949,11 +1779,6 @@ mod tests {
 
         // Should trigger a fill event with entries 200, 101, 102, 103
         assert_eq!(submit.fill_events.len(), 1);
-        assert_eq!(submit.completed_entry_ids.len(), 4);
-        assert!(submit.completed_entry_ids.contains(&200));
-        assert!(submit.completed_entry_ids.contains(&101));
-        assert!(submit.completed_entry_ids.contains(&102));
-        assert!(submit.completed_entry_ids.contains(&103));
     }
 
     #[test]
