@@ -64,7 +64,7 @@ impl PoolManager {
     pub fn create_entry(
         &mut self,
         order: OrderNewBody,
-    ) -> Result<(Vec<OrderEliminationBody>, OrderNewAcknowledgementBody, Vec<FillEventBody>), String> {
+    ) -> Result<(Vec<OrderEliminationBody>, OrderNewAcknowledgementBody, Vec<FillEventBody>, Vec<OrderEliminationBody>), String> {
         // Validate we have at least one leg
         if order.legs.is_empty() {
             return Err("Order must have at least one leg".to_string());
@@ -134,6 +134,16 @@ impl PoolManager {
             })
             .collect();
 
+        // Create elimination bodies for cancelled market entries
+        let market_entry_elimination_bodies: Vec<OrderEliminationBody> = submit_result
+            .cancelled_market_entry_ids
+            .iter()
+            .map(|&cancelled_id| OrderEliminationBody {
+                order_id: cancelled_id,
+                elimination_description: "Market order removed (not fully filled)".to_string(),
+            })
+            .collect();
+
         // Create acknowledgement
         let ack = OrderNewAcknowledgementBody {
             client_order_id: order.client_order_id,
@@ -177,7 +187,7 @@ impl PoolManager {
             });
         }
 
-        Ok((elimination_bodies, ack, fill_event_bodies))
+        Ok((elimination_bodies, ack, fill_event_bodies, market_entry_elimination_bodies))
     }
 
     /// Returns the number of pools currently managed
@@ -257,7 +267,7 @@ mod tests {
         // Pool should be created automatically when first order arrives
         assert_eq!(manager.num_pools(), 0);
 
-        let (_eliminations, ack, fills) = manager
+        let (_eliminations, ack, fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 1001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -313,7 +323,7 @@ mod tests {
 
         // Submit entries to all 4 lineups (using 250k portions to work with 1M total)
         // Lineup 0: both under (101=false, 102=false)
-        let (_eliminations, _ack0, fills0) = manager
+        let (_eliminations, _ack0, fills0, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -326,7 +336,7 @@ mod tests {
         assert_eq!(fills0.len(), 0);
 
         // Lineup 1: 101=over, 102=under
-        let (_eliminations, _ack1, fills1) = manager
+        let (_eliminations, _ack1, fills1, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3002,
                 legs: create_legs(&[(101, true), (102, false)]),
@@ -339,7 +349,7 @@ mod tests {
         assert_eq!(fills1.len(), 0);
 
         // Lineup 2: 101=under, 102=over
-        let (_eliminations, _ack2, fills2) = manager
+        let (_eliminations, _ack2, fills2, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3003,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -352,7 +362,7 @@ mod tests {
         assert_eq!(fills2.len(), 0);
 
         // Lineup 3: both over (101=true, 102=true) - should trigger fill
-        let (_eliminations, _ack3, fills3) = manager
+        let (_eliminations, _ack3, fills3, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3004,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -434,7 +444,7 @@ mod tests {
             .unwrap();
 
         // Aggressor with enough for 2 fills
-        let (_eliminations, _ack, fills) = manager
+        let (_eliminations, _ack, fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 4005,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -487,7 +497,7 @@ mod tests {
             .unwrap();
 
         // Market order for lineup 1 (over) should calculate portion = 400k
-        let (_eliminations, _ack, fills) = manager
+        let (_eliminations, _ack, fills, market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 6002,
                 legs: create_legs(&[(101, true)]),
@@ -508,6 +518,47 @@ mod tests {
             .find(|f| f.is_aggressor)
             .unwrap();
         assert_eq!(market_fill.matched_portion, 400_000);
+
+        // Market order was fully filled, so no market entry eliminations
+        assert_eq!(market_eliminations.len(), 0);
+    }
+
+    #[test]
+    fn test_market_order_partial_fill() {
+        let mut manager = PoolManager::new();
+
+        // Submit passive entries with quantity=1 each
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 6101,
+                legs: create_legs(&[(101, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 600_000,
+                quantity: 600_000,
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // Market order with quantity=3 should only match once (limited by passive quantity)
+        let (_eliminations, ack, fills, market_eliminations) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 6102,
+                legs: create_legs(&[(101, true)]),
+                order_type: OrderType::Market as i32,
+                portion: 0, // Ignored for market orders
+                quantity: 1_800_000, // 3x the matched quantity
+                self_match_id: None,
+            })
+            .unwrap();
+
+        // Should have 1 fill event
+        assert_eq!(fills.len(), 1);
+        assert_eq!(fills[0].matched_quantity, 600_000);
+
+        // Market order had remaining quantity, so it should be in market_eliminations
+        assert_eq!(market_eliminations.len(), 1);
+        assert_eq!(market_eliminations[0].order_id, ack.order_id);
+        assert_eq!(market_eliminations[0].elimination_description, "Market order removed (not fully filled)");
     }
 
     #[test]
@@ -515,7 +566,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         // Create an order
-        let (_eliminations, ack, _fills) = manager
+        let (_eliminations, ack, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 7001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -565,7 +616,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         // Create orders for 3 out of 4 lineups
-        let (_eliminations, ack0, _) = manager
+        let (_eliminations, ack0, _, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -576,7 +627,7 @@ mod tests {
             })
             .unwrap();
 
-        let (_eliminations, ack1, _) = manager
+        let (_eliminations, ack1, _, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8002,
                 legs: create_legs(&[(101, true), (102, false)]),
@@ -587,7 +638,7 @@ mod tests {
             })
             .unwrap();
 
-        let (_eliminations, ack2, _) = manager
+        let (_eliminations, ack2, _, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8003,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -606,7 +657,7 @@ mod tests {
             .unwrap();
 
         // Now create the 4th order - should NOT trigger a fill
-        let (_eliminations, _ack3, fills) = manager
+        let (_eliminations, _ack3, fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8004,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -666,7 +717,7 @@ mod tests {
             })
             .unwrap();
 
-        let (_eliminations, ack2, _) = manager
+        let (_eliminations, ack2, _, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9004,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -678,7 +729,7 @@ mod tests {
             .unwrap();
 
         // First order triggers one fill
-        let (_eliminations, _ack3, fills) = manager
+        let (_eliminations, _ack3, fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9005,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -699,7 +750,7 @@ mod tests {
             .unwrap();
 
         // Try to trigger another fill - should fail because we cancelled an entry
-        let (_eliminations, _ack4, fills2) = manager
+        let (_eliminations, _ack4, fills2, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9006,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -742,7 +793,7 @@ mod tests {
             .unwrap();
 
         // Submit entry with different self_match_id - should have 0 eliminations
-        let (eliminations, _ack, _fills) = manager
+        let (eliminations, _ack, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 1003,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -761,7 +812,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         // Submit entry with self_match_id=42
-        let (_eliminations, ack1, _fills) = manager
+        let (_eliminations, ack1, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 2001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -773,7 +824,7 @@ mod tests {
             .unwrap();
 
         // Submit entry to different lineup with same self_match_id - should eliminate the first
-        let (eliminations, _ack2, _fills) = manager
+        let (eliminations, _ack2, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 2002,
                 legs: create_legs(&[(101, true), (102, false)]),
@@ -798,7 +849,7 @@ mod tests {
         // self_match_id=77, which will eliminate both entries in lineup 0.
 
         // Submit two entries to lineup 0 (same lineup) with self_match_id=77
-        let (_eliminations, ack1, _fills) = manager
+        let (_eliminations, ack1, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -809,7 +860,7 @@ mod tests {
             })
             .unwrap();
 
-        let (_eliminations, ack2, _fills) = manager
+        let (_eliminations, ack2, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3002,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -823,7 +874,7 @@ mod tests {
         // Both ack1 and ack2 should be in lineup 0 (same lineup allows same self_match_id)
         // Now submit entry to lineup 1 (different lineup) with same self_match_id
         // This should eliminate both ack1 and ack2
-        let (eliminations, _ack3, _fills) = manager
+        let (eliminations, _ack3, _fills, _market_eliminations) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3003,
                 legs: create_legs(&[(101, true), (102, false)]),

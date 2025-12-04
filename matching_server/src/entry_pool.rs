@@ -121,8 +121,17 @@ impl BookState {
     }
     
     /// Removes all market entries (i.e., entries that should not rest)
-    pub fn remove_market_entries(&mut self) {
+    /// Returns the IDs of entries that were removed
+    pub fn remove_market_entries(&mut self) -> Vec<u64> {
+        let removed_ids: Vec<u64> = self.entries
+            .iter()
+            .filter(|entry| entry.entry_type == EntryType::Market)
+            .map(|entry| entry.id)
+            .collect();
+
         self.entries.retain(|entry| entry.entry_type != EntryType::Market);
+
+        removed_ids
     }
 
     /// Finds and returns a mutable reference to an entry by ID
@@ -258,6 +267,8 @@ pub struct SubmitInfo {
     pub cancelled_entry_ids: Vec<u64>,
     /// Any fill events that occurred as a result of this submission
     pub fill_events: Vec<FillEvent>,
+    /// Market entries that were removed from the book because they weren't fully filled. In practice, there will only be zero or one of these.
+    pub cancelled_market_entry_ids: Vec<u64>,
 }
 
 /// Result of submitting an entry - either success with SubmitInfo or error message
@@ -441,13 +452,15 @@ impl EntryPool {
         }
 
         // Remove market entries from all books
+        let mut cancelled_market_entry_ids = Vec::new();
         for book in &mut self.state.books {
-            book.remove_market_entries();
+            cancelled_market_entry_ids.extend(book.remove_market_entries());
         }
 
         Ok(SubmitInfo {
             cancelled_entry_ids,
             fill_events,
+            cancelled_market_entry_ids,
         })
     }
     
@@ -646,7 +659,10 @@ mod tests {
         assert_eq!(submit1.fill_events.len(), 0);
         assert_eq!(submit2.fill_events.len(), 0);
         assert_eq!(submit3.fill_events.len(), 1);
-        
+
+        // No market entries, so cancelled_market_entry_ids should be empty
+        assert_eq!(submit3.cancelled_market_entry_ids.len(), 0);
+
         // All entries should be consumed in the fill event
         let state = pool.get_state();
         for book in &state.books {
@@ -750,7 +766,10 @@ mod tests {
         let fill_event = &submit.fill_events[0];
         assert_eq!(fill_event.filled_entries[fill_event.aggressor_lineup_index].matched_portion, 300);
         assert_eq!(fill_event.matched_quantity, 1);
-        
+
+        // Market entry was fully filled, so it should not be in cancelled_market_entry_ids
+        assert_eq!(submit.cancelled_market_entry_ids.len(), 0);
+
         // All consumed
         let state = pool.get_state();
         for book in &state.books {
@@ -960,11 +979,16 @@ mod tests {
         // Should have 1 fill event
         assert_eq!(submit.fill_events.len(), 1);
         assert_eq!(submit.fill_events[0].matched_quantity, 1);
-        
+
+        // Market entry had quantity=3 but only matched once, so it still had remaining quantity
+        // and should be in cancelled_market_entry_ids
+        assert_eq!(submit.cancelled_market_entry_ids.len(), 1);
+        assert_eq!(submit.cancelled_market_entry_ids[0], 3);
+
         // Market entry should not be resting on the book (even though it had quantity=3, only 1 matched)
         let state = pool.get_state();
         assert!(!state.books[3].entries.iter().any(|e| e.id == 3));
-        
+
         // All other entries should also be consumed
         for book in &state.books {
             assert_eq!(book.entries.len(), 0);

@@ -262,7 +262,7 @@ impl MatcherService {
                 };
 
                 match result {
-                    Ok((elimination_bodies, ack_body, fill_event_bodies)) => {
+                    Ok((elimination_bodies, ack_body, fill_event_bodies, market_entry_elimination_bodies)) => {
                         // Send OrderElimination messages first (prior to acknowledgement)
                         for elimination_body in elimination_bodies {
                             let elimination_response = OrderNewResponseEnvelope {
@@ -328,6 +328,27 @@ impl MatcherService {
 
                             tx.send(Ok(fill_response)).await.map_err(|_| {
                                 Status::internal("Failed to send FillEvent")
+                            })?;
+                        }
+
+                        // Send market entry OrderElimination messages (after fill events)
+                        for elimination_body in market_entry_elimination_bodies {
+                            let elimination_response = OrderNewResponseEnvelope {
+                                contents: Some(
+                                    matching_server::matching_service_package::order_new_response_envelope::Contents::Elimination(
+                                        OrderElimination {
+                                            message_base: Some(Self::create_message_base(MessageType::OrderElimination)),
+                                            sequenced_message_base: Some(SequencedMessageBase {
+                                                sequence_number: self.get_next_response_sequence(),
+                                            }),
+                                            body: Some(elimination_body),
+                                        }
+                                    )
+                                ),
+                            };
+
+                            tx.send(Ok(elimination_response)).await.map_err(|_| {
+                                Status::internal("Failed to send market entry OrderElimination")
                             })?;
                         }
                     }
