@@ -14,7 +14,6 @@ use crate::pool_utils::{create_pool_key, calculate_lineup_index, Leg};
 // Import protobuf generated types
 use crate::matching_service_package::{
     order_new::Body as OrderNewBody,
-    order_new::body::Leg as OrderNewLeg,
     order_new_acknowledgement::Body as OrderNewAcknowledgementBody,
     order_cancel::Body as OrderCancelBody,
     order_cancel_acknowledgement::Body as OrderCancelAcknowledgementBody,
@@ -45,7 +44,6 @@ pub struct PoolManager {
 /// Information about a pool
 struct PoolInfo {
     pool: EntryPool,
-    leg_security_ids: Vec<u64>, // Sorted
 }
 
 impl PoolManager {
@@ -91,10 +89,7 @@ impl PoolManager {
             let pool = EntryPool::new(TOTAL_UNITS, num_legs);
             self.pools.insert(
                 pool_key.clone(),
-                PoolInfo {
-                    pool,
-                    leg_security_ids: pool_key.clone(),
-                },
+                PoolInfo { pool },
             );
         }
 
@@ -242,6 +237,7 @@ impl PoolManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::matching_service_package::order_new::body::Leg as OrderNewLeg;
 
     // Helper function to create legs for testing
     fn create_legs(leg_data: &[(u64, bool)]) -> Vec<OrderNewLeg> {

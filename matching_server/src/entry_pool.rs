@@ -879,14 +879,14 @@ mod tests {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
         
         // Submit valid entries to only 2 lineups, with quantities that don't allow matching
-        let submitZeroQuantity = pool.submit_entry(0, EntryParameters {
+        let submit_zero_quantity = pool.submit_entry(0, EntryParameters {
             entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 0, // No quantity available, submission should fail
             self_match_id: None,
         });
-        assert!(submitZeroQuantity.is_err());
+        assert!(submit_zero_quantity.is_err());
 
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
@@ -904,14 +904,14 @@ mod tests {
         }).unwrap();
 
         // Market entry should calculate portion = 500
-        let submitNoMatch = pool.submit_entry(3, EntryParameters {
+        let submit_no_match = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Market,
             portion: 0,
             quantity: 1,
             self_match_id: None,
         });
-        assert!(submitNoMatch.is_err());
+        assert!(submit_no_match.is_err());
         
         // Market entry should not be resting on the book, only successful submits should be resting
         let state = pool.get_state();
