@@ -1161,7 +1161,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                 const requests = await reqResponse.json();
 
                 if (requests && requests.length > 0) {
-                    requestList.innerHTML = requests.map(r =>
+                    requestList.innerHTML = requests.slice().reverse().map(r =>
                         '<div class="message-box"><pre>' + r + '</pre></div>'
                     ).join('');
                 } else {
@@ -1173,7 +1173,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                 const responses = await respResponse.json();
 
                 if (responses && responses.length > 0) {
-                    responseList.innerHTML = responses.map(r =>
+                    responseList.innerHTML = responses.slice().reverse().map(r =>
                         '<div class="message-box"><pre>' + r + '</pre></div>'
                     ).join('');
                 } else {
