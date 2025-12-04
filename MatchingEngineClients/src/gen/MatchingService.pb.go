@@ -120,6 +120,7 @@ const (
 	MessageType_ORDER_CANCEL                 MessageType = 6
 	MessageType_ORDER_CANCEL_ACKNOWLEDGEMENT MessageType = 7
 	MessageType_ORDER_FILL                   MessageType = 8
+	MessageType_ORDER_ELIMINATION            MessageType = 9
 )
 
 // Enum value maps for MessageType.
@@ -132,6 +133,7 @@ var (
 		6: "ORDER_CANCEL",
 		7: "ORDER_CANCEL_ACKNOWLEDGEMENT",
 		8: "ORDER_FILL",
+		9: "ORDER_ELIMINATION",
 	}
 	MessageType_value = map[string]int32{
 		"HEARTBEAT":                    0,
@@ -141,6 +143,7 @@ var (
 		"ORDER_CANCEL":                 6,
 		"ORDER_CANCEL_ACKNOWLEDGEMENT": 7,
 		"ORDER_FILL":                   8,
+		"ORDER_ELIMINATION":            9,
 	}
 )
 
@@ -807,8 +810,7 @@ type OrderElimination struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	MessageBase          *MessageBase           `protobuf:"bytes,1,opt,name=messageBase,proto3" json:"messageBase,omitempty"`
 	SequencedMessageBase *SequencedMessageBase  `protobuf:"bytes,2,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
-	OrderId              uint64                 `protobuf:"varint,3,opt,name=orderId,proto3" json:"orderId,omitempty"`
-	Body                 *OrderElimination_Body `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	Body                 *OrderElimination_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -855,13 +857,6 @@ func (x *OrderElimination) GetSequencedMessageBase() *SequencedMessageBase {
 		return x.SequencedMessageBase
 	}
 	return nil
-}
-
-func (x *OrderElimination) GetOrderId() uint64 {
-	if x != nil {
-		return x.OrderId
-	}
-	return 0
 }
 
 func (x *OrderElimination) GetBody() *OrderElimination_Body {
@@ -1534,7 +1529,8 @@ func (x *OrderCancelAcknowledgement_Body) GetOrderId() uint64 {
 
 type OrderElimination_Body struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
-	EliminationDescription string                 `protobuf:"bytes,1,opt,name=eliminationDescription,proto3" json:"eliminationDescription,omitempty"`
+	OrderId                uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	EliminationDescription string                 `protobuf:"bytes,2,opt,name=eliminationDescription,proto3" json:"eliminationDescription,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -1567,6 +1563,13 @@ func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
 // Deprecated: Use OrderElimination_Body.ProtoReflect.Descriptor instead.
 func (*OrderElimination_Body) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{10, 0}
+}
+
+func (x *OrderElimination_Body) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
 }
 
 func (x *OrderElimination_Body) GetEliminationDescription() string {
@@ -1785,11 +1788,11 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\xd8\x02\n" +
 	"\x10OrderElimination\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
-	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12\x18\n" +
-	"\aorderId\x18\x03 \x01(\x04R\aorderId\x12A\n" +
-	"\x04body\x18\x04 \x01(\v2-.MatchingServicePackage.OrderElimination.BodyR\x04body\x1a>\n" +
-	"\x04Body\x126\n" +
-	"\x16eliminationDescription\x18\x01 \x01(\tR\x16eliminationDescription\"\xd3\x04\n" +
+	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12A\n" +
+	"\x04body\x18\x03 \x01(\v2-.MatchingServicePackage.OrderElimination.BodyR\x04body\x1aX\n" +
+	"\x04Body\x12\x18\n" +
+	"\aorderId\x18\x01 \x01(\x04R\aorderId\x126\n" +
+	"\x16eliminationDescription\x18\x02 \x01(\tR\x16eliminationDescription\"\xd3\x04\n" +
 	"\tFillEvent\x12E\n" +
 	"\vmessageBase\x18\x01 \x01(\v2#.MatchingServicePackage.MessageBaseR\vmessageBase\x12`\n" +
 	"\x14sequencedMessageBase\x18\x02 \x01(\v2,.MatchingServicePackage.SequencedMessageBaseR\x14sequencedMessageBase\x12:\n" +
@@ -1828,7 +1831,7 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\bIGNORE_0\x10\x00\x12\x17\n" +
 	"\x13VERSION_MAJOR_VALUE\x10\x01*'\n" +
 	"\fVersionMinor\x12\x17\n" +
-	"\x13VERSION_MINOR_VALUE\x10\x00*\xa2\x01\n" +
+	"\x13VERSION_MINOR_VALUE\x10\x00*\xb9\x01\n" +
 	"\vMessageType\x12\r\n" +
 	"\tHEARTBEAT\x10\x00\x12\x12\n" +
 	"\x0eGENERAL_REJECT\x10\x01\x12\r\n" +
@@ -1837,7 +1840,8 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\fORDER_CANCEL\x10\x06\x12 \n" +
 	"\x1cORDER_CANCEL_ACKNOWLEDGEMENT\x10\a\x12\x0e\n" +
 	"\n" +
-	"ORDER_FILL\x10\b*\"\n" +
+	"ORDER_FILL\x10\b\x12\x15\n" +
+	"\x11ORDER_ELIMINATION\x10\t*\"\n" +
 	"\tOrderType\x12\t\n" +
 	"\x05LIMIT\x10\x00\x12\n" +
 	"\n" +

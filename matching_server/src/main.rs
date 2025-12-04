@@ -21,7 +21,7 @@ use matching_server::matching_service_package::{
     HeartbeatResponseEnvelope, OrderNewResponseEnvelope, OrderCancelResponseEnvelope,
     MessageBase, SequencedMessageBase, ResponseBase, FallibleBase,
     MessageType, VersionMajor, VersionMinor,
-    OrderNewAcknowledgement, OrderCancelAcknowledgement, FillEvent,
+    OrderNewAcknowledgement, OrderCancelAcknowledgement, OrderElimination, FillEvent,
 };
 
 use matching_server::pool_manager::PoolManager;
@@ -262,7 +262,28 @@ impl MatcherService {
                 };
 
                 match result {
-                    Ok((ack_body, fill_event_bodies)) => {
+                    Ok((elimination_bodies, ack_body, fill_event_bodies)) => {
+                        // Send OrderElimination messages first (prior to acknowledgement)
+                        for elimination_body in elimination_bodies {
+                            let elimination_response = OrderNewResponseEnvelope {
+                                contents: Some(
+                                    matching_server::matching_service_package::order_new_response_envelope::Contents::Elimination(
+                                        OrderElimination {
+                                            message_base: Some(Self::create_message_base(MessageType::OrderElimination)),
+                                            sequenced_message_base: Some(SequencedMessageBase {
+                                                sequence_number: self.get_next_response_sequence(),
+                                            }),
+                                            body: Some(elimination_body),
+                                        }
+                                    )
+                                ),
+                            };
+
+                            tx.send(Ok(elimination_response)).await.map_err(|_| {
+                                Status::internal("Failed to send OrderElimination")
+                            })?;
+                        }
+
                         // Send OrderNewAcknowledgement (success)
                         let ack_response = OrderNewResponseEnvelope {
                             contents: Some(

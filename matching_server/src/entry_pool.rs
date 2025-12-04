@@ -38,6 +38,10 @@ pub struct EntryParameters {
     pub portion: u64,
     /// Number of times this entry can match (how many portions to provide)
     pub quantity: u64,
+    /// Optional self-match prevention ID. If Some(id), entries in other lineups with the same
+    /// self_match_id will be cancelled when this entry is submitted. Entries in the same lineup
+    /// with the same self_match_id are allowed to coexist.
+    pub self_match_id: Option<u64>,
 }
 
 /// Represents a single entry in a lineup's book
@@ -55,6 +59,8 @@ pub struct Entry {
     pub quantity: u64,
     /// Timestamp/sequence for FIFO ordering among same-portion entries
     pub sequence: u64,
+    /// Optional self-match prevention ID
+    pub self_match_id: Option<u64>,
 }
 
 impl Entry {
@@ -248,6 +254,8 @@ impl fmt::Display for FillEvent {
 /// Information returned when an entry is successfully submitted
 #[derive(Debug, Clone)]
 pub struct SubmitInfo {
+    /// Entry IDs that were cancelled due to self_match_id conflicts
+    pub cancelled_entry_ids: Vec<u64>,
     /// Any fill events that occurred as a result of this submission
     pub fill_events: Vec<FillEvent>,
     /// All entries that are no longer resting on the book as a result of this submitted entry (includes the sunbmitted entry if applicable)
@@ -362,9 +370,30 @@ impl EntryPool {
             portion,
             quantity: params.quantity,
             sequence: self.next_sequence,
+            self_match_id: params.self_match_id,
         };
         self.next_sequence += 1;
-        
+
+        // Handle self-match prevention: cancel entries in OTHER lineups with same self_match_id
+        // It is important that all error cases are checked prior to cancelling orders so that the order book is unchanged in the event of an error.
+        let mut cancelled_entry_ids = Vec::new();
+        if let Some(self_match_id) = params.self_match_id {
+            for (other_lineup_idx, book) in self.state.books.iter_mut().enumerate() {
+                // Only cancel entries in different lineups
+                if other_lineup_idx != lineup_index {
+                    let entries_to_cancel: Vec<u64> = book.entries.iter()
+                        .filter(|e| e.self_match_id == Some(self_match_id))
+                        .map(|e| e.id)
+                        .collect();
+
+                    for entry_id in entries_to_cancel {
+                        book.entries.retain(|e| e.id != entry_id);
+                        cancelled_entry_ids.push(entry_id);
+                    }
+                }
+            }
+        }
+
         // Add to book
         self.state.books[lineup_index].add_entry(entry);
         
@@ -417,8 +446,9 @@ impl EntryPool {
         for book in &mut self.state.books {
             book.remove_market_entries();
         }
-        
+
         Ok(SubmitInfo {
+            cancelled_entry_ids,
             fill_events,
             completed_entry_ids,
         })
@@ -583,31 +613,35 @@ mod tests {
     #[test]
     fn test_basic_limit_entry() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
-        
+
         // Submit entries to all 4 lineups (quantity=1 means willing to provide portion once)
         let submit0 = pool.submit_entry(0, EntryParameters {
             entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         let submit1 = pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         let submit2 = pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         let submit3 = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Last submission should trigger a fill event
@@ -633,26 +667,30 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Aggressor with portion that would overfill
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Should have 1 fill event
@@ -684,26 +722,30 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Market entry should calculate portion = 300
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Market,
             portion: 0, // ignored for market entries
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Should have 1 fill event
@@ -729,20 +771,23 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Market entry should be rejected - missing lineups
         let result = pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Market,
             portion: 0,
             quantity: 1,
+            self_match_id: None,
         });
         assert!(result.is_err());
     }
@@ -757,32 +802,37 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Aggressor with quantity=2 (can match 2 times)
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 4,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
 
         // Should have 2 fill events
@@ -805,18 +855,21 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(0, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 500,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // Largest
         pool.submit_entry(0, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 400,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Best entry should be 500
@@ -834,6 +887,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 0, // No quantity available, submission should fail
+            self_match_id: None,
         });
         assert!(submitZeroQuantity.is_err());
 
@@ -842,20 +896,23 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Market entry should calculate portion = 500
         let submitNoMatch = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Market,
             portion: 0,
             quantity: 1,
+            self_match_id: None,
         });
         assert!(submitNoMatch.is_err());
         
@@ -877,26 +934,30 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 1,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
-        
+
         // Market entry with quantity=3 should only match once (limited by passive entries)
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Market,
             portion: 0,
             quantity: 3,
+            self_match_id: None,
         }).unwrap();
         
         // Should have 1 fill event
@@ -923,26 +984,30 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 999,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 0
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 999,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 1
         pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 999,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 2
-        
+
         // Submit market entry to lineup 0 (will be aggressor with sequence: 3)
         let submit = pool.submit_entry(0, EntryParameters {
             entry_id: 0,
             entry_type: EntryType::Market,
             portion: 0, // ignored
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Should have 1 fill event
@@ -994,26 +1059,30 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 400,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 0
         pool.submit_entry(2, EntryParameters {
             entry_id: 2,
             entry_type: EntryType::Limit,
             portion: 400,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 1
         pool.submit_entry(3, EntryParameters {
             entry_id: 3,
             entry_type: EntryType::Limit,
             portion: 400,
             quantity: 1,
+            self_match_id: None,
         }).unwrap(); // sequence: 2
-        
+
         // Submit limit entry with portion=300 to lineup 0 (will be aggressor)
         let submit = pool.submit_entry(0, EntryParameters {
             entry_id: 0,
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Should have 1 fill event
@@ -1064,24 +1133,28 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // All 4 entries should be in completed_entry_ids
@@ -1102,18 +1175,21 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         // This one has quantity=1, so it will be completed
         let submit = pool.submit_entry(3, EntryParameters {
@@ -1121,6 +1197,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         
         // Only entry 103 should be completed (others still have quantity=1 remaining)
@@ -1144,24 +1221,28 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 3,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         // This entry with quantity=2 will trigger 2 fills
         let submit = pool.submit_entry(3, EntryParameters {
@@ -1169,6 +1250,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
 
         // Should have 2 fill events
@@ -1192,6 +1274,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Verify entry is in the book
@@ -1228,24 +1311,28 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // At this point, we should have had a fill, so all books are empty
@@ -1260,18 +1347,21 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 201,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 202,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Cancel entry 202
@@ -1283,6 +1373,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Should have NO fill events because lineup 2 has no entries
@@ -1306,18 +1397,21 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 300,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(0, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(0, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Verify all 3 entries are in the book
@@ -1345,24 +1439,28 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Should have 1 fill event
@@ -1389,24 +1487,28 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1, // This one will be completed
+            self_match_id: None,
         }).unwrap();
 
         // Should have 1 fill event
@@ -1439,12 +1541,14 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         // Add TWO entries to lineup 2 to enable 2 fill events
         pool.submit_entry(2, EntryParameters {
@@ -1452,12 +1556,14 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Aggressor with quantity=2 will trigger 2 fill events
@@ -1466,6 +1572,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
 
         // Should have 2 fill events
@@ -1520,12 +1627,14 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(0, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
+            self_match_id: None,
         }).unwrap();
 
         // Submit resting entries to lineups 1 and 2 with quantity=2 each
@@ -1535,12 +1644,14 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
 
         // Aggressor with quantity=2 will trigger 2 fill events
@@ -1549,6 +1660,7 @@ mod tests {
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 2,
+            self_match_id: None,
         }).unwrap();
 
         // Should have 2 fill events
@@ -1599,5 +1711,418 @@ mod tests {
         assert!(submit.completed_entry_ids.contains(&102)); // Resting order filled twice
         assert!(submit.completed_entry_ids.contains(&103)); // Resting order filled twice
         assert!(submit.completed_entry_ids.contains(&104)); // Aggressor filled twice
+    }
+
+    #[test]
+    fn test_self_match_id_cancels_other_lineups() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries to lineups 1, 2, and 3 with different self_match_ids initially
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        // Entry 102 should have cancelled entry 101
+        let state = pool.get_state();
+        assert_eq!(state.books[1].entries.len(), 0); // 101 was cancelled by 102
+        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
+
+        pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        // Entry 103 should have cancelled entry 102
+        let state = pool.get_state();
+        assert_eq!(state.books[2].entries.len(), 0); // 102 was cancelled by 103
+        assert_eq!(state.books[3].entries.len(), 1); // 103 remains
+
+        // Submit entry to lineup 0 with same self_match_id
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Should have cancelled only entry 103 (the only one remaining)
+        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        assert!(submit.cancelled_entry_ids.contains(&103));
+
+        // Verify entries are removed from books
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1); // Only new entry 100
+        assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled earlier
+        assert_eq!(state.books[2].entries.len(), 0); // 102 cancelled earlier
+        assert_eq!(state.books[3].entries.len(), 0); // 103 cancelled
+
+        // Cancelled entries should NOT be in completed_entry_ids
+        assert_eq!(submit.completed_entry_ids.len(), 0);
+    }
+
+    #[test]
+    fn test_self_match_id_same_lineup_allowed() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit multiple entries to the same lineup (0) with same self_match_id
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 300,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // No cancellations should occur (same lineup)
+        assert_eq!(submit.cancelled_entry_ids.len(), 0);
+
+        // All 3 entries should coexist in lineup 0
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 3);
+        assert!(state.books[0].entries.iter().any(|e| e.id == 100));
+        assert!(state.books[0].entries.iter().any(|e| e.id == 101));
+        assert!(state.books[0].entries.iter().any(|e| e.id == 102));
+    }
+
+    #[test]
+    fn test_self_match_id_none_no_cancellation() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries to different lineups with self_match_id=None
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: None,
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: None,
+        }).unwrap();
+        let submit = pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: None,
+        }).unwrap();
+
+        // No cancellations should occur
+        assert_eq!(submit.cancelled_entry_ids.len(), 0);
+
+        // All entries should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+    }
+
+    #[test]
+    fn test_self_match_id_different_ids_no_cancellation() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries to different lineups with different self_match_ids
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(1),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(2),
+        }).unwrap();
+        let submit = pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(3),
+        }).unwrap();
+
+        // No cancellations should occur (different IDs)
+        assert_eq!(submit.cancelled_entry_ids.len(), 0);
+
+        // All entries should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+    }
+
+    #[test]
+    fn test_self_match_id_cancellation_then_match() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries to lineups 0, 1, 2 with different self_match_ids to avoid cancelling each other
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(1),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(2),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(3),
+        }).unwrap();
+
+        // Verify all entries are resting
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+
+        // Now submit to lineup 3 with self_match_id=1, should cancel entry 100
+        let submit3 = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(1),
+        }).unwrap();
+
+        // Should have cancelled entry 100
+        assert_eq!(submit3.cancelled_entry_ids.len(), 1);
+        assert!(submit3.cancelled_entry_ids.contains(&100));
+
+        // Entry 100 should be cancelled, 101, 102, 103 are resting
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+        assert_eq!(state.books[3].entries.len(), 1);
+
+        // Now submit fresh entry to lineup 0 with different self_match_id to enable matching
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 200,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(99),
+        }).unwrap();
+
+        // Should trigger a fill event with entries 200, 101, 102, 103
+        assert_eq!(submit.fill_events.len(), 1);
+        assert_eq!(submit.completed_entry_ids.len(), 4);
+        assert!(submit.completed_entry_ids.contains(&200));
+        assert!(submit.completed_entry_ids.contains(&101));
+        assert!(submit.completed_entry_ids.contains(&102));
+        assert!(submit.completed_entry_ids.contains(&103));
+    }
+
+    #[test]
+    fn test_self_match_id_partial_cancellation() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries with mixed self_match_ids
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(99), // Different ID
+        }).unwrap();
+        pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: None, // No ID
+        }).unwrap();
+
+        // Submit entry to lineup 0 with self_match_id=Some(42)
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Should only cancel entry 101
+        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        assert!(submit.cancelled_entry_ids.contains(&101));
+
+        // Entries 102 and 103 should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled
+        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
+        assert_eq!(state.books[3].entries.len(), 1); // 103 remains
+    }
+
+    #[test]
+    fn test_self_match_id_market_entry_cancellation() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit limit entries to lineups 0, 1, 2 with different self_match_ids to avoid cancelling each other
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+            self_match_id: Some(1),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(2),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(3),
+        }).unwrap();
+
+        // Verify all entries are resting
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+
+        // Submit market entry to lineup 3 with self_match_id=1
+        // Market entry will calculate portion based on existing entries (including 100),
+        // then cancel entry 100, then try to match but fail silently (no fill events)
+        let submit = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Market,
+            portion: 0,
+            quantity: 1,
+            self_match_id: Some(1),
+        }).unwrap();
+
+        // Submission succeeds but with no fill events (market entry doesn't match)
+        assert_eq!(submit.fill_events.len(), 0);
+        // Entry 100 should be in cancelled_entry_ids
+        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        assert!(submit.cancelled_entry_ids.contains(&100));
+
+        // Entry 100 should be cancelled, market entry not resting (doesn't match)
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 1); // 101 remains
+        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
+        assert_eq!(state.books[3].entries.len(), 0); // Market entry not rested
+    }
+
+    #[test]
+    fn test_self_match_id_multiple_entries_same_id_cancelled() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit multiple entries to lineup 1 with same self_match_id
+        // They should NOT cancel each other (same lineup)
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 300,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Both entries should be in lineup 1
+        let state = pool.get_state();
+        assert_eq!(state.books[1].entries.len(), 2);
+
+        // Submit entry to lineup 2 with same self_match_id
+        // Should cancel both 101 and 102 (different lineup)
+        let submit2 = pool.submit_entry(2, EntryParameters {
+            entry_id: 201,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Should have cancelled both entries in lineup 1
+        assert_eq!(submit2.cancelled_entry_ids.len(), 2);
+        assert!(submit2.cancelled_entry_ids.contains(&101));
+        assert!(submit2.cancelled_entry_ids.contains(&102));
+
+        // Only entry 201 should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[2].entries.len(), 1);
+
+        // Submit entry to lineup 0 with same self_match_id
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Should cancel only entry 201
+        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        assert!(submit.cancelled_entry_ids.contains(&201));
+
+        // Verify only 100 remains
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1); // Only 100
+        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[2].entries.len(), 0);
     }
 }

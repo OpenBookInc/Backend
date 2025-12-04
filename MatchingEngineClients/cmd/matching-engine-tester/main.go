@@ -25,36 +25,36 @@ type WebClient struct {
 	mu     sync.RWMutex
 
 	// Request storage
-	heartbeatRequests      []string
-	orderNewRequests       []string
-	orderCancelRequests    []string
+	heartbeatRequests   []string
+	orderNewRequests    []string
+	orderCancelRequests []string
 
 	// Response storage
-	heartbeatResponses     []string
-	orderNewResponses      []string
-	orderCancelResponses   []string
+	heartbeatResponses   []string
+	orderNewResponses    []string
+	orderCancelResponses []string
 
 	// Persistent heartbeat stream
-	heartbeatStream        pb.MatchingServerService_CreateHeartbeatResponseStreamClient
-	heartbeatSendChan      chan *pb.Heartbeat
-	heartbeatStreamActive  bool
+	heartbeatStream       pb.MatchingServerService_CreateHeartbeatResponseStreamClient
+	heartbeatSendChan     chan *pb.Heartbeat
+	heartbeatStreamActive bool
 
 	// Persistent order new stream
-	orderNewStream         pb.MatchingServerService_CreateOrderNewResponseStreamClient
-	orderNewSendChan       chan *pb.OrderNew
-	orderNewStreamActive   bool
+	orderNewStream       pb.MatchingServerService_CreateOrderNewResponseStreamClient
+	orderNewSendChan     chan *pb.OrderNew
+	orderNewStreamActive bool
 
 	// Persistent order cancel stream
-	orderCancelStream      pb.MatchingServerService_CreateOrderCancelResponseStreamClient
-	orderCancelSendChan    chan *pb.OrderCancel
+	orderCancelStream       pb.MatchingServerService_CreateOrderCancelResponseStreamClient
+	orderCancelSendChan     chan *pb.OrderCancel
 	orderCancelStreamActive bool
 
 	// Global sequence number shared across all message types
-	globalSequenceNumber   uint64
+	globalSequenceNumber uint64
 
 	// Pool state tracking
-	poolTracker            *PoolTracker
-	pendingOrders          map[uint64]*pb.OrderNew // map[clientOrderId]OrderNew
+	poolTracker   *PoolTracker
+	pendingOrders map[uint64]*pb.OrderNew // map[clientOrderId]OrderNew
 }
 
 func NewWebClient(serverAddr string) (*WebClient, error) {
@@ -329,10 +329,10 @@ func (wc *WebClient) processOrderNewResponse(resp *pb.OrderNewResponseEnvelope) 
 		}
 
 	case *pb.OrderNewResponseEnvelope_Elimination:
-		// Handle elimination (order removed by server)
+		// Handle elimination (order removed by server due to self-match prevention, etc.)
 		elim := contents.Elimination
-		if elim != nil {
-			wc.poolTracker.RemoveOrder(elim.OrderId)
+		if elim != nil && elim.Body != nil {
+			wc.poolTracker.RemoveOrder(elim.Body.OrderId)
 		}
 	}
 }
@@ -745,7 +745,7 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Matching Service Client - Entry Pools</title>
+    <title>Matching Engine Tester - Entry Pools</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
         .header { background: #333; color: white; padding: 10px 20px; }
@@ -770,7 +770,7 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 </head>
 <body>
     <div class="header">
-        <h1>Matching Service Client</h1>
+        <h1>Matching Engine Tester</h1>
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>
@@ -951,7 +951,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Matching Service Client - {{.Title}}</title>
+    <title>Matching Engine Tester - {{.Title}}</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
         .header { background: #333; color: white; padding: 10px 20px; }
@@ -979,7 +979,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
 </head>
 <body>
     <div class="header">
-        <h1>Matching Service Client</h1>
+        <h1>Matching Engine Tester</h1>
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>

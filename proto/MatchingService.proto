@@ -27,6 +27,7 @@ enum MessageType {
   ORDER_CANCEL = 6;
   ORDER_CANCEL_ACKNOWLEDGEMENT = 7;
   ORDER_FILL = 8;
+  ORDER_ELIMINATION = 9;
 }
 
 enum OrderType {
@@ -127,13 +128,13 @@ message OrderCancelAcknowledgement {
 // Similar to OrderCancelAcknowledgement but sent if the order is cancelled when the user has not requested a cancel (e.g., during Matcher shutdown)
 message OrderElimination {
   message Body {
-    string eliminationDescription = 1;
+    uint64 orderId = 1;
+    string eliminationDescription = 2;
   }
 
   MessageBase messageBase = 1;
   SequencedMessageBase sequencedMessageBase = 2;
-  uint64 orderId = 3;
-  Body body = 4;
+  Body body = 3;
 }
 
 message FillEvent {

@@ -18,6 +18,7 @@ use crate::matching_service_package::{
     order_new_acknowledgement::Body as OrderNewAcknowledgementBody,
     order_cancel::Body as OrderCancelBody,
     order_cancel_acknowledgement::Body as OrderCancelAcknowledgementBody,
+    order_elimination::Body as OrderEliminationBody,
     fill_event::Body as FillEventBody,
     fill_event::body::Fill as FillEventBody_Fill,
     OrderType
@@ -60,12 +61,12 @@ impl PoolManager {
         }
     }
 
-    /// Creates a new entry/order and returns acknowledgement and any fill events
+    /// Creates a new entry/order and returns eliminations, acknowledgement, and any fill events
     /// Automatically creates the pool if it doesn't exist
     pub fn create_entry(
         &mut self,
         order: OrderNewBody,
-    ) -> Result<(OrderNewAcknowledgementBody, Vec<FillEventBody>), String> {
+    ) -> Result<(Vec<OrderEliminationBody>, OrderNewAcknowledgementBody, Vec<FillEventBody>), String> {
         // Validate we have at least one leg
         if order.legs.is_empty() {
             return Err("Order must have at least one leg".to_string());
@@ -119,6 +120,7 @@ impl PoolManager {
             entry_type,
             portion: order.portion,
             quantity: order.quantity,
+            self_match_id: order.self_match_id,
         };
 
         // Submit to the entry pool
@@ -126,6 +128,16 @@ impl PoolManager {
             .pool
             .submit_entry(lineup_index as usize, params)
             .map_err(|e| e)?;
+
+        // Create elimination bodies for any cancelled entries
+        let elimination_bodies: Vec<OrderEliminationBody> = submit_result
+            .cancelled_entry_ids
+            .iter()
+            .map(|&cancelled_id| OrderEliminationBody {
+                order_id: cancelled_id,
+                elimination_description: "Eliminated due to self-match prevention".to_string(),
+            })
+            .collect();
 
         // Create acknowledgement
         let ack = OrderNewAcknowledgementBody {
@@ -170,7 +182,7 @@ impl PoolManager {
             });
         }
 
-        Ok((ack, fill_event_bodies))
+        Ok((elimination_bodies, ack, fill_event_bodies))
     }
 
     /// Returns the number of pools currently managed
@@ -249,7 +261,7 @@ mod tests {
         // Pool should be created automatically when first order arrives
         assert_eq!(manager.num_pools(), 0);
 
-        let (ack, fills) = manager
+        let (_eliminations, ack, fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 1001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -305,7 +317,7 @@ mod tests {
 
         // Submit entries to all 4 lineups (using 250k portions to work with 1M total)
         // Lineup 0: both under (101=false, 102=false)
-        let (_ack0, fills0) = manager
+        let (_eliminations, _ack0, fills0) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -318,7 +330,7 @@ mod tests {
         assert_eq!(fills0.len(), 0);
 
         // Lineup 1: 101=over, 102=under
-        let (_ack1, fills1) = manager
+        let (_eliminations, _ack1, fills1) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3002,
                 legs: create_legs(&[(101, true), (102, false)]),
@@ -331,7 +343,7 @@ mod tests {
         assert_eq!(fills1.len(), 0);
 
         // Lineup 2: 101=under, 102=over
-        let (_ack2, fills2) = manager
+        let (_eliminations, _ack2, fills2) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3003,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -344,7 +356,7 @@ mod tests {
         assert_eq!(fills2.len(), 0);
 
         // Lineup 3: both over (101=true, 102=true) - should trigger fill
-        let (_ack3, fills3) = manager
+        let (_eliminations, _ack3, fills3) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 3004,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -426,7 +438,7 @@ mod tests {
             .unwrap();
 
         // Aggressor with enough for 2 fills
-        let (_ack, fills) = manager
+        let (_eliminations, _ack, fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 4005,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -479,7 +491,7 @@ mod tests {
             .unwrap();
 
         // Market order for lineup 1 (over) should calculate portion = 400k
-        let (_ack, fills) = manager
+        let (_eliminations, _ack, fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 6002,
                 legs: create_legs(&[(101, true)]),
@@ -507,7 +519,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         // Create an order
-        let (ack, _fills) = manager
+        let (_eliminations, ack, _fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 7001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -557,7 +569,7 @@ mod tests {
         let mut manager = PoolManager::new();
 
         // Create orders for 3 out of 4 lineups
-        let (ack0, _) = manager
+        let (_eliminations, ack0, _) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8001,
                 legs: create_legs(&[(101, false), (102, false)]),
@@ -568,7 +580,7 @@ mod tests {
             })
             .unwrap();
 
-        let (ack1, _) = manager
+        let (_eliminations, ack1, _) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8002,
                 legs: create_legs(&[(101, true), (102, false)]),
@@ -579,7 +591,7 @@ mod tests {
             })
             .unwrap();
 
-        let (ack2, _) = manager
+        let (_eliminations, ack2, _) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8003,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -598,7 +610,7 @@ mod tests {
             .unwrap();
 
         // Now create the 4th order - should NOT trigger a fill
-        let (_ack3, fills) = manager
+        let (_eliminations, _ack3, fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 8004,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -658,7 +670,7 @@ mod tests {
             })
             .unwrap();
 
-        let (ack2, _) = manager
+        let (_eliminations, ack2, _) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9004,
                 legs: create_legs(&[(101, false), (102, true)]),
@@ -670,7 +682,7 @@ mod tests {
             .unwrap();
 
         // First order triggers one fill
-        let (_ack3, fills) = manager
+        let (_eliminations, _ack3, fills) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9005,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -691,7 +703,7 @@ mod tests {
             .unwrap();
 
         // Try to trigger another fill - should fail because we cancelled an entry
-        let (_ack4, fills2) = manager
+        let (_eliminations, _ack4, fills2) = manager
             .create_entry(OrderNewBody {
                 client_order_id: 9006,
                 legs: create_legs(&[(101, true), (102, true)]),
@@ -704,5 +716,135 @@ mod tests {
 
         // No fill because lineup 2 is now empty (cancelled)
         assert_eq!(fills2.len(), 0);
+    }
+
+    #[test]
+    fn test_eliminations_zero() {
+        let mut manager = PoolManager::new();
+
+        // Submit entries with different self_match_ids - no eliminations should occur
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 1001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(1),
+            })
+            .unwrap();
+
+        manager
+            .create_entry(OrderNewBody {
+                client_order_id: 1002,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(2),
+            })
+            .unwrap();
+
+        // Submit entry with different self_match_id - should have 0 eliminations
+        let (eliminations, _ack, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 1003,
+                legs: create_legs(&[(101, false), (102, true)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(3),
+            })
+            .unwrap();
+
+        assert_eq!(eliminations.len(), 0);
+    }
+
+    #[test]
+    fn test_eliminations_one() {
+        let mut manager = PoolManager::new();
+
+        // Submit entry with self_match_id=42
+        let (_eliminations, ack1, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 2001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(42),
+            })
+            .unwrap();
+
+        // Submit entry to different lineup with same self_match_id - should eliminate the first
+        let (eliminations, _ack2, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 2002,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(42),
+            })
+            .unwrap();
+
+        assert_eq!(eliminations.len(), 1);
+        assert_eq!(eliminations[0].order_id, ack1.order_id);
+        assert_eq!(eliminations[0].elimination_description, "Eliminated due to self-match prevention");
+    }
+
+    #[test]
+    fn test_eliminations_two() {
+        let mut manager = PoolManager::new();
+
+        // Key insight: entries in the SAME lineup with the same self_match_id are allowed to coexist.
+        // So we can put 2 entries in lineup 0 with self_match_id=77, then submit to lineup 1 with
+        // self_match_id=77, which will eliminate both entries in lineup 0.
+
+        // Submit two entries to lineup 0 (same lineup) with self_match_id=77
+        let (_eliminations, ack1, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 3001,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(77),
+            })
+            .unwrap();
+
+        let (_eliminations, ack2, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 3002,
+                legs: create_legs(&[(101, false), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 200_000,
+                quantity: 200_000,
+                self_match_id: Some(77),
+            })
+            .unwrap();
+
+        // Both ack1 and ack2 should be in lineup 0 (same lineup allows same self_match_id)
+        // Now submit entry to lineup 1 (different lineup) with same self_match_id
+        // This should eliminate both ack1 and ack2
+        let (eliminations, _ack3, _fills) = manager
+            .create_entry(OrderNewBody {
+                client_order_id: 3003,
+                legs: create_legs(&[(101, true), (102, false)]),
+                order_type: OrderType::Limit as i32,
+                portion: 250_000,
+                quantity: 250_000,
+                self_match_id: Some(77),
+            })
+            .unwrap();
+
+        assert_eq!(eliminations.len(), 2);
+        // Check that both order IDs are in the eliminations
+        let eliminated_ids: Vec<u64> = eliminations.iter().map(|e| e.order_id).collect();
+        assert!(eliminated_ids.contains(&ack1.order_id));
+        assert!(eliminated_ids.contains(&ack2.order_id));
+        // Check elimination descriptions
+        assert_eq!(eliminations[0].elimination_description, "Eliminated due to self-match prevention");
+        assert_eq!(eliminations[1].elimination_description, "Eliminated due to self-match prevention");
     }
 }
