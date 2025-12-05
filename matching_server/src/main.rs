@@ -1,6 +1,7 @@
 use tonic::{transport::Server, Request, Response, Status};
 use std::sync::{Arc, Mutex};
 use std::collections::BTreeMap;
+use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use std::pin::Pin;
@@ -89,6 +90,12 @@ struct ServiceState {
     heartbeat_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Result<HeartbeatResponseEnvelope, Status>>>>>,
     order_new_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Result<OrderNewResponseEnvelope, Status>>>>>,
     order_cancel_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Result<OrderCancelResponseEnvelope, Status>>>>>,
+
+    /// Heartbeat timeout configuration (0 = disabled).
+    heartbeat_interval_ms: u64,
+
+    /// Flag indicating whether a heartbeat was received in the current interval.
+    heartbeat_received_in_interval: Arc<Mutex<bool>>,
 }
 
 // #[derive(Debug)] is a Rust attribute that automatically implements the Debug trait for the struct that follows.
@@ -98,7 +105,7 @@ pub struct MatcherService {
 }
 
 impl MatcherService {
-    pub fn new() -> Self {
+    pub fn new(heartbeat_interval_ms: u64) -> Self {
         Self {
             state: ServiceState {
                 expected_next_sequence_number: Arc::new(Mutex::new(0)),
@@ -108,8 +115,18 @@ impl MatcherService {
                 heartbeat_tx: Arc::new(Mutex::new(None)),
                 order_new_tx: Arc::new(Mutex::new(None)),
                 order_cancel_tx: Arc::new(Mutex::new(None)),
+                heartbeat_interval_ms,
+                heartbeat_received_in_interval: Arc::new(Mutex::new(false)),
             },
         }
+    }
+
+    /// Closes all client streams. Called when heartbeat timeout occurs.
+    fn close_all_streams(&self) {
+        // Take and drop all senders to close the streams
+        let _ = self.state.heartbeat_tx.lock().unwrap().take();
+        let _ = self.state.order_new_tx.lock().unwrap().take();
+        let _ = self.state.order_cancel_tx.lock().unwrap().take();
     }
 
     /// Generic helper to process a single sequenced message.
@@ -548,6 +565,9 @@ impl MatchingServerService for MatcherService {
         // Store the sender for potential use by other parts of the system
         *self.state.heartbeat_tx.lock().unwrap() = Some(tx.clone());
 
+        // Clone state for the heartbeat receiver task
+        let heartbeat_received_flag = self.state.heartbeat_received_in_interval.clone();
+
         // Spawn a task to handle incoming heartbeats
         // This task runs for the lifetime of the client connection
         tokio::spawn(async move {
@@ -557,6 +577,9 @@ impl MatchingServerService for MatcherService {
                     Ok(heartbeat) => {
                         heartbeat_count += 1;
                         println!("Received heartbeat #{}", heartbeat_count);
+
+                        // Mark that we received a heartbeat in this interval
+                        *heartbeat_received_flag.lock().unwrap() = true;
 
                         // Echo the heartbeat back to the client
                         let response = HeartbeatResponseEnvelope {
@@ -583,6 +606,39 @@ impl MatchingServerService for MatcherService {
             println!("Heartbeat stream closed (received {} heartbeats total)", heartbeat_count);
         });
         println!("Heartbeat stream created");
+
+        // Start heartbeat timeout timer if configured
+        if self.state.heartbeat_interval_ms > 0 {
+            let interval_ms = self.state.heartbeat_interval_ms;
+            let state = self.state.clone();
+
+            tokio::spawn(async move {
+                let service = MatcherService { state };
+                let interval = Duration::from_millis(interval_ms);
+
+                loop {
+                    // Wait for the interval
+                    tokio::time::sleep(interval).await;
+
+                    // Check if a heartbeat was received in this interval
+                    let received = {
+                        let mut flag = service.state.heartbeat_received_in_interval.lock().unwrap();
+                        let was_received = *flag;
+                        *flag = false; // Reset for next interval
+                        was_received
+                    };
+
+                    if !received {
+                        // No heartbeat received - close all streams
+                        eprintln!("Heartbeat timeout - no heartbeat received in {}ms. Closing all streams.", interval_ms);
+                        service.close_all_streams();
+                        break;
+                    }
+                }
+                println!("Heartbeat timeout monitor stopped");
+            });
+            println!("Heartbeat timeout monitor started (interval: {}ms)", interval_ms);
+        }
 
         // Create the output stream from the receiver
         // This stream is returned to the client and persists for the session
@@ -618,7 +674,6 @@ impl MatchingServerService for MatcherService {
 /// Configuration loaded from .env file
 struct Config {
     engine_port: u16,
-    #[allow(dead_code)] // Will be used in the future
     heartbeat_interval_ms: u64,
 }
 
@@ -655,9 +710,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Construct server address using configured port
     let addr = format!("[::1]:{}", config.engine_port).parse()?;
-    let matcher = MatcherService::new();
+    let matcher = MatcherService::new(config.heartbeat_interval_ms);
 
     println!("Matcher gRPC server listening on {}", addr);
+    if config.heartbeat_interval_ms > 0 {
+        println!("Heartbeat timeout enabled: {}ms", config.heartbeat_interval_ms);
+    } else {
+        println!("Heartbeat timeout disabled");
+    }
 
     Server::builder()
         .add_service(MatchingServerServiceServer::new(matcher))
