@@ -615,9 +615,46 @@ impl MatchingServerService for MatcherService {
     }
 }
 
+/// Configuration loaded from .env file
+struct Config {
+    engine_port: u16,
+    #[allow(dead_code)] // Will be used in the future
+    heartbeat_interval_ms: u64,
+}
+
+impl Config {
+    fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        // Load .env file from current directory
+        dotenvy::dotenv().map_err(|e| {
+            format!("Failed to load .env file: {}. Please ensure .env file exists with required fields (ENGINE_PORT, HEARTBEAT_INTERVAL_MS)", e)
+        })?;
+
+        // Read required ENGINE_PORT
+        let engine_port = std::env::var("ENGINE_PORT")
+            .map_err(|_| "Missing required environment variable: ENGINE_PORT")?
+            .parse::<u16>()
+            .map_err(|_| "ENGINE_PORT must be a valid port number (0-65535)")?;
+
+        // Read optional HEARTBEAT_INTERVAL_MS with default of 0 (disabled)
+        let heartbeat_interval_ms = std::env::var("HEARTBEAT_INTERVAL_MS")
+            .unwrap_or_else(|_| "0".to_string())
+            .parse::<u64>()
+            .map_err(|_| "HEARTBEAT_INTERVAL_MS must be a valid number")?;
+
+        Ok(Config {
+            engine_port,
+            heartbeat_interval_ms,
+        })
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
+    // Load configuration from .env file
+    let config = Config::load()?;
+
+    // Construct server address using configured port
+    let addr = format!("[::1]:{}", config.engine_port).parse()?;
     let matcher = MatcherService::new();
 
     println!("Matcher gRPC server listening on {}", addr);
