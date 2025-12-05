@@ -3,11 +3,10 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/openbook/shared/envloader"
 )
 
 // Season type constants
@@ -42,17 +41,12 @@ type Config struct {
 }
 
 // LoadFromFile loads environment variables from the specified file, then reads configuration
-// If envFile is empty, it will try to load from .env (non-fatal if not found)
+// If envFile is empty, it will load from .env in the current directory (required)
 // Validates that all required configuration variables are set
 func LoadFromFile(envFile string) (*Config, error) {
-	// If no file specified, try to load .env (but don't fail if it doesn't exist)
-	if envFile == "" {
-		_ = godotenv.Load() // Ignore error - .env is optional
-	} else {
-		// If a specific file is requested, fail if it doesn't exist
-		if err := godotenv.Load(envFile); err != nil {
-			return nil, fmt.Errorf("failed to load environment file %s: %w", envFile, err)
-		}
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
 	}
 
 	cfg := Load()
@@ -80,12 +74,12 @@ func Load() *Config {
 
 	cfg := &Config{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
-		RateLimitDelayMilliseconds: getEnvAsInt("RATE_LIMIT_DELAY_MS", 1000),
-		NFLSeasonYear:              getEnvAsInt("NFL_SEASON_YEAR", currentYear),
-		NFLSeasonType:              strings.ToUpper(getEnvAsString("NFL_SEASON_TYPE", SeasonTypeRegular)),
-		NFLWeek:                    getEnvAsInt("NFL_WEEK", 1),
-		NBASeasonYear:              getEnvAsInt("NBA_SEASON_YEAR", currentYear),
-		NBASeasonType:              strings.ToUpper(getEnvAsString("NBA_SEASON_TYPE", SeasonTypeRegular)),
+		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("RATE_LIMIT_DELAY_MS", 1000),
+		NFLSeasonYear:              envloader.GetEnvAsIntWithDefault("NFL_SEASON_YEAR", currentYear),
+		NFLSeasonType:              strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
+		NFLWeek:                    envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
+		NBASeasonYear:              envloader.GetEnvAsIntWithDefault("NBA_SEASON_YEAR", currentYear),
+		NBASeasonType:              strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
 		PGHost:                     os.Getenv("PG_HOST"),
 		PGPort:                     os.Getenv("PG_PORT"),
 		PGDatabase:                 os.Getenv("PG_DATABASE"),
@@ -146,22 +140,4 @@ func isValidSeasonType(seasonType string, validTypes []string) bool {
 		}
 	}
 	return false
-}
-
-// getEnvAsInt reads an environment variable as an integer or returns a default value
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return intVal
-		}
-	}
-	return defaultValue
-}
-
-// getEnvAsString reads an environment variable as a string or returns a default value
-func getEnvAsString(key string, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

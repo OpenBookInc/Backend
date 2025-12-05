@@ -8,12 +8,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	pb "CommandCenter/src/gen"
 
+	"github.com/openbook/shared/envloader"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -1385,12 +1387,61 @@ func getTitleForType(pageType string) string {
 	}
 }
 
+// fatal prints an error message to stderr and exits with code 1
+func fatal(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "Error: "+format+"\n", args...)
+	os.Exit(1)
+}
+
+// Config holds the configuration for the matching engine tester
+type Config struct {
+	ServerHost string
+	ServerPort string
+	WebPort    string
+}
+
+// loadConfig loads and validates the configuration from .env file
+func loadConfig() (*Config, error) {
+	// Load .env file from current directory (required)
+	if err := envloader.LoadEnvFile(""); err != nil {
+		return nil, err
+	}
+
+	// Load required configuration
+	serverHost, err := envloader.GetEnvAsString("SERVER_HOST", true)
+	if err != nil {
+		return nil, err
+	}
+
+	serverPort, err := envloader.GetEnvAsString("SERVER_PORT", true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load optional configuration with default
+	webPort := envloader.GetEnvAsStringWithDefault("WEB_PORT", "8080")
+
+	return &Config{
+		ServerHost: serverHost,
+		ServerPort: serverPort,
+		WebPort:    webPort,
+	}, nil
+}
+
 func main() {
-	serverAddr := "localhost:50051" // Change this to your gRPC server address
+	// Load configuration from .env file
+	cfg, err := loadConfig()
+	if err != nil {
+		fatal("Failed to load configuration: %v\nPlease ensure .env file exists with required fields (SERVER_HOST, SERVER_PORT, WEB_PORT)", err)
+	}
+
+	// Construct server address
+	serverAddr := fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort)
+	log.Printf("Connecting to matching server at %s", serverAddr)
 
 	client, err := NewWebClient(serverAddr)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		fatal("Failed to create client: %v", err)
 	}
 	defer client.Close()
 
@@ -1411,6 +1462,7 @@ func main() {
 	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
 	http.HandleFunc("/client-order-id", client.handleClientOrderId)
 
-	log.Println("Starting web server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	webAddr := fmt.Sprintf(":%s", cfg.WebPort)
+	log.Printf("Starting web server on %s", webAddr)
+	log.Fatal(http.ListenAndServe(webAddr, nil))
 }
