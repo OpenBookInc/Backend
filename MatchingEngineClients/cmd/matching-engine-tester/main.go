@@ -52,6 +52,9 @@ type WebClient struct {
 	// Global sequence number shared across all message types
 	globalSequenceNumber uint64
 
+	// Global client order ID counter
+	globalClientOrderId uint64
+
 	// Pool state tracking
 	poolTracker   *PoolTracker
 	pendingOrders map[uint64]*pb.OrderNew // map[clientOrderId]OrderNew
@@ -78,6 +81,7 @@ func NewWebClient(serverAddr string) (*WebClient, error) {
 		orderNewStreamActive:    false,
 		orderCancelSendChan:     make(chan *pb.OrderCancel, 10),
 		orderCancelStreamActive: false,
+		globalClientOrderId:     1000, // Start at 1001 (will increment on first use)
 		poolTracker:             NewPoolTracker(),
 		pendingOrders:           make(map[uint64]*pb.OrderNew),
 	}
@@ -665,7 +669,7 @@ func (wc *WebClient) handleOrderCancelResponses(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(responses)
 }
 
-// Global sequence number handler - returns current value and optionally increments
+// Global sequence number handler - returns current value and optionally increments or sets
 func (wc *WebClient) handleSequenceNumber(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		// Increment and return new value
@@ -679,6 +683,32 @@ func (wc *WebClient) handleSequenceNumber(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if r.Method == "PUT" {
+		// Set to specific value
+		if err := r.ParseForm(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
+			return
+		}
+
+		seqNum, err := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid sequence number"})
+			return
+		}
+
+		wc.mu.Lock()
+		wc.globalSequenceNumber = seqNum
+		wc.mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": seqNum})
+		return
+	}
+
 	// GET: just return current value
 	wc.mu.RLock()
 	currentSeq := wc.globalSequenceNumber
@@ -686,6 +716,55 @@ func (wc *WebClient) handleSequenceNumber(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": currentSeq})
+}
+
+// Global client order ID handler - returns current value and optionally increments or sets
+func (wc *WebClient) handleClientOrderId(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		// Increment and return new value
+		wc.mu.Lock()
+		wc.globalClientOrderId++
+		newId := wc.globalClientOrderId
+		wc.mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]uint64{"clientOrderId": newId})
+		return
+	}
+
+	if r.Method == "PUT" {
+		// Set to specific value
+		if err := r.ParseForm(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
+			return
+		}
+
+		clientOrderId, err := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid client order ID"})
+			return
+		}
+
+		wc.mu.Lock()
+		wc.globalClientOrderId = clientOrderId
+		wc.mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]uint64{"clientOrderId": clientOrderId})
+		return
+	}
+
+	// GET: just return current value
+	wc.mu.RLock()
+	currentId := wc.globalClientOrderId
+	wc.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]uint64{"clientOrderId": currentId})
 }
 
 // Entry Pools handler - displays all pool states
@@ -1082,21 +1161,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
         const requestList = document.getElementById('requestList');
         const responseList = document.getElementById('responseList');
 
-        // Fetch and update the global sequence number
-        async function updateSequenceNumber() {
-            const seqInput = form.querySelector('[name="sequenceNumber"]');
-            if (seqInput) {
-                try {
-                    const response = await fetch('/sequence-number');
-                    const data = await response.json();
-                    seqInput.value = data.sequenceNumber;
-                } catch (err) {
-                    console.error('Error fetching sequence number:', err);
-                }
-            }
-        }
-
-        // Increment the global sequence number on the server
+        // Increment the global sequence number on the server and update the field
         async function incrementSequenceNumber() {
             const seqInput = form.querySelector('[name="sequenceNumber"]');
             if (seqInput) {
@@ -1110,8 +1175,107 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             }
         }
 
-        // Load current sequence number on page load
-        updateSequenceNumber();
+        // Sync manually typed sequence number to server
+        async function syncSequenceNumberToServer() {
+            const seqInput = form.querySelector('[name="sequenceNumber"]');
+            if (seqInput) {
+                const manualValue = parseInt(seqInput.value, 10);
+                if (!isNaN(manualValue)) {
+                    try {
+                        await fetch('/sequence-number', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: 'sequenceNumber=' + manualValue
+                        });
+                    } catch (err) {
+                        console.error('Error setting sequence number:', err);
+                    }
+                }
+            }
+        }
+
+        // Load current sequence number from server on page load only
+        async function loadInitialSequenceNumber() {
+            const seqInput = form.querySelector('[name="sequenceNumber"]');
+            if (seqInput) {
+                try {
+                    const response = await fetch('/sequence-number');
+                    const data = await response.json();
+                    seqInput.value = data.sequenceNumber;
+                } catch (err) {
+                    console.error('Error fetching sequence number:', err);
+                }
+            }
+        }
+
+        // Increment the global client order ID on the server and update the field
+        async function incrementClientOrderId() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                try {
+                    const response = await fetch('/client-order-id', { method: 'POST' });
+                    const data = await response.json();
+                    clientOrderIdInput.value = data.clientOrderId;
+                } catch (err) {
+                    console.error('Error incrementing client order ID:', err);
+                }
+            }
+        }
+
+        // Sync manually typed client order ID to server
+        async function syncClientOrderIdToServer() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                const manualValue = parseInt(clientOrderIdInput.value, 10);
+                if (!isNaN(manualValue)) {
+                    try {
+                        await fetch('/client-order-id', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: 'clientOrderId=' + manualValue
+                        });
+                    } catch (err) {
+                        console.error('Error setting client order ID:', err);
+                    }
+                }
+            }
+        }
+
+        // Load current client order ID from server on page load only
+        async function loadInitialClientOrderId() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                try {
+                    const response = await fetch('/client-order-id');
+                    const data = await response.json();
+                    clientOrderIdInput.value = data.clientOrderId;
+                } catch (err) {
+                    console.error('Error fetching client order ID:', err);
+                }
+            }
+        }
+
+        // Load sequence number once on page load
+        loadInitialSequenceNumber();
+
+        // Load client order ID once on page load
+        loadInitialClientOrderId();
+
+        // Sync to server when user changes the value
+        const seqInput = form.querySelector('[name="sequenceNumber"]');
+        if (seqInput) {
+            seqInput.addEventListener('change', syncSequenceNumberToServer);
+        }
+
+        // Sync to server when user changes the client order ID
+        const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+        if (clientOrderIdInput) {
+            clientOrderIdInput.addEventListener('change', syncClientOrderIdToServer);
+        }
 
         // Handle form submission
         form.addEventListener('submit', async (e) => {
@@ -1136,6 +1300,10 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                     statusMessage.innerHTML = '<span class="status-message status-success">' + data.message + '</span>';
                     // Increment global sequence number on server
                     await incrementSequenceNumber();
+                    // Increment client order ID for order new submissions
+                    if (pageType === 'ordernew') {
+                        await incrementClientOrderId();
+                    }
                 } else {
                     statusMessage.innerHTML = '<span class="status-message status-error">Error: ' + data.message + '</span>';
                 }
@@ -1153,9 +1321,6 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
         // Fetch and update both requests and responses every 500ms
         setInterval(async () => {
             try {
-                // Update sequence number from server
-                await updateSequenceNumber();
-
                 // Fetch requests
                 const reqResponse = await fetch('/' + pageType + '-requests');
                 const requests = await reqResponse.json();
@@ -1244,6 +1409,7 @@ func main() {
 	http.HandleFunc("/ordercancel-requests", client.handleOrderCancelRequests)
 	http.HandleFunc("/ordercancel-responses", client.handleOrderCancelResponses)
 	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
+	http.HandleFunc("/client-order-id", client.handleClientOrderId)
 
 	log.Println("Starting web server on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
