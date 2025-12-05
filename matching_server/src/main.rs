@@ -27,6 +27,13 @@ use matching_server::matching_service_package::{
 
 use matching_server::pool_manager::PoolManager;
 
+/// Logs an error message and terminates the process.
+/// Used for unrecoverable errors that indicate a serious bug or protocol violation.
+fn fatal_error(msg: &str) -> ! {
+    eprintln!("FATAL: {}", msg);
+    std::process::exit(1);
+}
+
 /// Trait for messages that have sequence numbers and can be queued.
 trait SequencedMessage: Sized {
     /// Extracts the sequence number from the message.
@@ -121,12 +128,16 @@ impl MatcherService {
         }
     }
 
-    /// Closes all client streams. Called when heartbeat timeout occurs.
+    /// Closes all client streams and clears pending messages.
+    /// Called when heartbeat timeout occurs or client disconnects.
     fn close_all_streams(&self) {
         // Take and drop all senders to close the streams
         let _ = self.state.heartbeat_tx.lock().unwrap().take();
         let _ = self.state.order_new_tx.lock().unwrap().take();
         let _ = self.state.order_cancel_tx.lock().unwrap().take();
+
+        // Clear any pending messages
+        self.state.pending_messages.lock().unwrap().clear();
     }
 
     /// Generic helper to process a single sequenced message.
@@ -163,12 +174,11 @@ impl MatcherService {
             let mut expected = self.state.expected_next_sequence_number.lock().unwrap();
 
             if sequence_number < *expected {
-                // Message is too old or duplicate - this should never happen, terminate process
-                eprintln!(
-                    "FATAL: Received message with sequence {} but expected {}. Duplicate or out-of-order message.",
+                // Message is too old or duplicate - protocol violation
+                return Err(Status::invalid_argument(format!(
+                    "Received message with sequence {} but expected {}. Duplicate (too old) message.",
                     sequence_number, *expected
-                );
-                std::process::exit(1);
+                )));
             } else if sequence_number == *expected {
                 // This is the expected message, increment counter
                 *expected += 1;
@@ -177,11 +187,10 @@ impl MatcherService {
                 // Message arrived early, queue it for later
                 let mut queue = self.state.pending_messages.lock().unwrap();
                 if queue.contains_key(&sequence_number) {
-                    eprintln!(
-                        "FATAL: Received duplicate message with sequence {}. Message already in queue.",
+                    return Err(Status::invalid_argument(format!(
+                        "Received duplicate message with sequence {}. Message already in queue.",
                         sequence_number
-                    );
-                    std::process::exit(1);
+                    )));
                 }
                 queue.insert(sequence_number, message);
                 return Ok(false);
@@ -272,10 +281,9 @@ impl MatcherService {
                 // Get the tx channel and clone it to avoid holding the lock across await
                 let tx = {
                     let tx_guard = self.state.order_new_tx.lock().unwrap();
-                    tx_guard.as_ref().unwrap_or_else(|| {
-                        eprintln!("FATAL: OrderNew tx channel is None");
-                        std::process::exit(1);
-                    }).clone()
+                    tx_guard.as_ref()
+                        .ok_or_else(|| Status::internal("OrderNew tx channel is None"))?
+                        .clone()
                 };
 
                 match result {
@@ -424,10 +432,9 @@ impl MatcherService {
                 // Get the tx channel and clone it to avoid holding the lock across await
                 let tx = {
                     let tx_guard = self.state.order_cancel_tx.lock().unwrap();
-                    tx_guard.as_ref().unwrap_or_else(|| {
-                        eprintln!("FATAL: OrderCancel tx channel is None");
-                        std::process::exit(1);
-                    }).clone()
+                    tx_guard.as_ref()
+                        .ok_or_else(|| Status::internal("OrderCancel tx channel is None"))?
+                        .clone()
                 };
 
                 match result {
@@ -525,7 +532,15 @@ impl MatcherService {
             let service = MatcherService { state };
 
             if let Err(e) = service.handle_message_stream(in_stream).await {
-                eprintln!("{} stream error: {:?}", stream_name, e);
+                match e.code() {
+                    tonic::Code::InvalidArgument | tonic::Code::Internal => {
+                        fatal_error(&format!("{} stream error: {:?}", stream_name, e));
+                    }
+                    _ => {
+                        // Transport/disconnect error - close streams gracefully
+                        service.close_all_streams();
+                    }
+                }
             }
             println!("{} stream closed", stream_name);
         });
@@ -566,11 +581,12 @@ impl MatchingServerService for MatcherService {
         *self.state.heartbeat_tx.lock().unwrap() = Some(tx.clone());
 
         // Clone state for the heartbeat receiver task
-        let heartbeat_received_flag = self.state.heartbeat_received_in_interval.clone();
+        let state = self.state.clone();
 
         // Spawn a task to handle incoming heartbeats
         // This task runs for the lifetime of the client connection
         tokio::spawn(async move {
+            let service = MatcherService { state };
             let mut heartbeat_count = 0u64;
             while let Some(result) = in_stream.next().await {
                 match result {
@@ -579,7 +595,7 @@ impl MatchingServerService for MatcherService {
                         println!("Received heartbeat #{}", heartbeat_count);
 
                         // Mark that we received a heartbeat in this interval
-                        *heartbeat_received_flag.lock().unwrap() = true;
+                        *service.state.heartbeat_received_in_interval.lock().unwrap() = true;
 
                         // Echo the heartbeat back to the client
                         let response = HeartbeatResponseEnvelope {
@@ -589,20 +605,22 @@ impl MatchingServerService for MatcherService {
                         };
 
                         // Send the response through the channel
-                        // If send fails, the client has disconnected, so break
+                        // If send fails, the client has disconnected
                         if tx.send(Ok(response)).await.is_err() {
-                            println!("Failed to send heartbeat response - client disconnected");
+                            service.close_all_streams();
                             break;
                         }
                         println!("Sent heartbeat response #{}", heartbeat_count);
                     }
-                    Err(status) => {
-                        // Stream error occurred, log it and break
-                        eprintln!("Heartbeat stream error: {:?}", status);
+                    Err(_) => {
+                        // Stream error (client disconnect) - close all streams
+                        service.close_all_streams();
                         break;
                     }
                 }
             }
+            // Stream ended normally (client closed connection)
+            service.close_all_streams();
             println!("Heartbeat stream closed (received {} heartbeats total)", heartbeat_count);
         });
         println!("Heartbeat stream created");
@@ -619,6 +637,11 @@ impl MatchingServerService for MatcherService {
                 loop {
                     // Wait for the interval
                     tokio::time::sleep(interval).await;
+
+                    // Check if streams have already been closed (client disconnected)
+                    if service.state.heartbeat_tx.lock().unwrap().is_none() {
+                        break;
+                    }
 
                     // Check if a heartbeat was received in this interval
                     let received = {
