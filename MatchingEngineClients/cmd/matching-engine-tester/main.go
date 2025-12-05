@@ -379,51 +379,85 @@ func (wc *WebClient) Close() {
 	}
 }
 
+// sendHeartbeat sends a single heartbeat to the server
+func (wc *WebClient) sendHeartbeat() error {
+	// Check if stream is active
+	wc.mu.RLock()
+	active := wc.heartbeatStreamActive
+	wc.mu.RUnlock()
+
+	if !active {
+		return fmt.Errorf("heartbeat stream is not active")
+	}
+
+	// Create heartbeat message
+	heartbeat := &pb.Heartbeat{
+		MessageBase: &pb.MessageBase{
+			VersionMajor: uint32(pb.VersionMajor_VERSION_MAJOR_VALUE),
+			VersionMinor: uint32(pb.VersionMinor_VERSION_MINOR_VALUE),
+			MessageType:  pb.MessageType_HEARTBEAT,
+		},
+	}
+
+	// Store the request
+	marshaler := protojson.MarshalOptions{
+		Multiline:       true,
+		Indent:          "  ",
+		EmitUnpopulated: true,
+	}
+	reqJSON, _ := marshaler.Marshal(heartbeat)
+	wc.mu.Lock()
+	wc.heartbeatRequests = append(wc.heartbeatRequests, string(reqJSON))
+	wc.mu.Unlock()
+
+	// Send to the channel (non-blocking with timeout)
+	select {
+	case wc.heartbeatSendChan <- heartbeat:
+		return nil
+	case <-time.After(1 * time.Second):
+		return fmt.Errorf("timeout sending heartbeat")
+	}
+}
+
+// startAutomaticHeartbeats starts a goroutine that sends heartbeats at the specified interval
+func (wc *WebClient) startAutomaticHeartbeats(intervalMs int) {
+	if intervalMs <= 0 {
+		log.Println("Automatic heartbeats disabled (interval <= 0)")
+		return
+	}
+
+	interval := time.Duration(intervalMs) * time.Millisecond
+	log.Printf("Starting automatic heartbeats every %v", interval)
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			if err := wc.sendHeartbeat(); err != nil {
+				log.Printf("Failed to send automatic heartbeat: %v", err)
+			}
+		}
+	}()
+}
+
 // Heartbeat handler
 func (wc *WebClient) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		// Check if stream is active
-		wc.mu.RLock()
-		active := wc.heartbeatStreamActive
-		wc.mu.RUnlock()
-
-		if !active {
+		// Send heartbeat using the common method
+		if err := wc.sendHeartbeat(); err != nil {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status": "error", "message": "Heartbeat stream is not active"}`))
+			if err.Error() == "heartbeat stream is not active" {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			} else {
+				w.WriteHeader(http.StatusRequestTimeout)
+			}
+			w.Write([]byte(fmt.Sprintf(`{"status": "error", "message": "%s"}`, err.Error())))
 			return
 		}
 
-		// Send heartbeat through the persistent stream
-		heartbeat := &pb.Heartbeat{
-			MessageBase: &pb.MessageBase{
-				VersionMajor: uint32(pb.VersionMajor_VERSION_MAJOR_VALUE),
-				VersionMinor: uint32(pb.VersionMinor_VERSION_MINOR_VALUE),
-				MessageType:  pb.MessageType_HEARTBEAT,
-			},
-		}
-
-		// Store the request
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		reqJSON, _ := marshaler.Marshal(heartbeat)
-		wc.mu.Lock()
-		wc.heartbeatRequests = append(wc.heartbeatRequests, string(reqJSON))
-		wc.mu.Unlock()
-
-		// Send to the channel (non-blocking with timeout)
-		select {
-		case wc.heartbeatSendChan <- heartbeat:
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"status": "success", "message": "heartbeat sent"}`))
-		case <-time.After(1 * time.Second):
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusRequestTimeout)
-			w.Write([]byte(`{"status": "error", "message": "Timeout sending heartbeat"}`))
-		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "success", "message": "heartbeat sent"}`))
 		return
 	}
 
@@ -1395,9 +1429,10 @@ func fatal(format string, args ...interface{}) {
 
 // Config holds the configuration for the matching engine tester
 type Config struct {
-	ServerHost string
-	ServerPort string
-	WebPort    string
+	ServerHost           string
+	ServerPort           string
+	WebPort              string
+	HeartbeatIntervalMs  int // Interval in milliseconds for automatic heartbeats (0 = disabled)
 }
 
 // loadConfig loads and validates the configuration from .env file
@@ -1418,13 +1453,15 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Load optional configuration with default
+	// Load optional configuration with defaults
 	webPort := envloader.GetEnvAsStringWithDefault("WEB_PORT", "8080")
+	heartbeatIntervalMs := envloader.GetEnvAsIntWithDefault("HEARTBEAT_INTERVAL_MS", 0)
 
 	return &Config{
-		ServerHost: serverHost,
-		ServerPort: serverPort,
-		WebPort:    webPort,
+		ServerHost:          serverHost,
+		ServerPort:          serverPort,
+		WebPort:             webPort,
+		HeartbeatIntervalMs: heartbeatIntervalMs,
 	}, nil
 }
 
@@ -1432,7 +1469,7 @@ func main() {
 	// Load configuration from .env file
 	cfg, err := loadConfig()
 	if err != nil {
-		fatal("Failed to load configuration: %v\nPlease ensure .env file exists with required fields (SERVER_HOST, SERVER_PORT, WEB_PORT)", err)
+		fatal("Failed to load configuration: %v\nPlease ensure .env file exists with required fields (SERVER_HOST, SERVER_PORT)", err)
 	}
 
 	// Construct server address
@@ -1444,6 +1481,9 @@ func main() {
 		fatal("Failed to create client: %v", err)
 	}
 	defer client.Close()
+
+	// Start automatic heartbeats if configured
+	client.startAutomaticHeartbeats(cfg.HeartbeatIntervalMs)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/entrypools", http.StatusSeeOther)
