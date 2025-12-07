@@ -13,7 +13,8 @@ import (
 	"sync"
 	"time"
 
-	pb "CommandCenter/src/gen"
+	common "MatchingEngineClients/src/gen"
+	pb "MatchingEngineClients/src/gen/matching"
 
 	"github.com/openbook/shared/envloader"
 	"google.golang.org/grpc"
@@ -26,30 +27,14 @@ type WebClient struct {
 	client pb.MatchingServerServiceClient
 	mu     sync.RWMutex
 
-	// Request storage
-	heartbeatRequests   []string
-	orderNewRequests    []string
-	orderCancelRequests []string
+	// Unified request/response storage
+	requests  []string
+	responses []string
 
-	// Response storage
-	heartbeatResponses   []string
-	orderNewResponses    []string
-	orderCancelResponses []string
-
-	// Persistent heartbeat stream
-	heartbeatStream       pb.MatchingServerService_CreateHeartbeatResponseStreamClient
-	heartbeatSendChan     chan *pb.Heartbeat
-	heartbeatStreamActive bool
-
-	// Persistent order new stream
-	orderNewStream       pb.MatchingServerService_CreateOrderNewResponseStreamClient
-	orderNewSendChan     chan *pb.OrderNew
-	orderNewStreamActive bool
-
-	// Persistent order cancel stream
-	orderCancelStream       pb.MatchingServerService_CreateOrderCancelResponseStreamClient
-	orderCancelSendChan     chan *pb.OrderCancel
-	orderCancelStreamActive bool
+	// Unified trade stream
+	tradeStream       pb.MatchingServerService_CreateTradeStreamClient
+	tradeSendChan     chan *pb.GatewayMessage
+	tradeStreamActive bool
 
 	// Global sequence number shared across all message types
 	globalSequenceNumber uint64
@@ -59,7 +44,7 @@ type WebClient struct {
 
 	// Pool state tracking
 	poolTracker   *PoolTracker
-	pendingOrders map[uint64]*pb.OrderNew // map[clientOrderId]OrderNew
+	pendingOrders map[uint64]*pb.NewOrder // map[clientOrderId]NewOrder
 }
 
 func NewWebClient(serverAddr string) (*WebClient, error) {
@@ -69,67 +54,49 @@ func NewWebClient(serverAddr string) (*WebClient, error) {
 	}
 
 	wc := &WebClient{
-		conn:                    conn,
-		client:                  pb.NewMatchingServerServiceClient(conn),
-		heartbeatRequests:       make([]string, 0),
-		orderNewRequests:        make([]string, 0),
-		orderCancelRequests:     make([]string, 0),
-		heartbeatResponses:      make([]string, 0),
-		orderNewResponses:       make([]string, 0),
-		orderCancelResponses:    make([]string, 0),
-		heartbeatSendChan:       make(chan *pb.Heartbeat, 10),
-		heartbeatStreamActive:   false,
-		orderNewSendChan:        make(chan *pb.OrderNew, 10),
-		orderNewStreamActive:    false,
-		orderCancelSendChan:     make(chan *pb.OrderCancel, 10),
-		orderCancelStreamActive: false,
-		globalClientOrderId:     1000, // Start at 1001 (will increment on first use)
-		poolTracker:             NewPoolTracker(),
-		pendingOrders:           make(map[uint64]*pb.OrderNew),
+		conn:                conn,
+		client:              pb.NewMatchingServerServiceClient(conn),
+		requests:            make([]string, 0),
+		responses:           make([]string, 0),
+		tradeSendChan:       make(chan *pb.GatewayMessage, 10),
+		tradeStreamActive:   false,
+		globalClientOrderId: 1000, // Start at 1001 (will increment on first use)
+		poolTracker:         NewPoolTracker(),
+		pendingOrders:       make(map[uint64]*pb.NewOrder),
 	}
 
-	// Initialize persistent streams
-	if err := wc.initHeartbeatStream(); err != nil {
+	// Initialize unified trade stream
+	if err := wc.initTradeStream(); err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("failed to initialize heartbeat stream: %v", err)
-	}
-
-	if err := wc.initOrderNewStream(); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to initialize order new stream: %v", err)
-	}
-
-	if err := wc.initOrderCancelStream(); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to initialize order cancel stream: %v", err)
+		return nil, fmt.Errorf("failed to initialize trade stream: %v", err)
 	}
 
 	return wc, nil
 }
 
-func (wc *WebClient) initHeartbeatStream() error {
-	stream, err := wc.client.CreateHeartbeatResponseStream(context.Background())
+func (wc *WebClient) initTradeStream() error {
+	stream, err := wc.client.CreateTradeStream(context.Background())
 	if err != nil {
 		return err
 	}
 
-	wc.heartbeatStream = stream
-	wc.heartbeatStreamActive = true
+	wc.tradeStream = stream
+	wc.tradeStreamActive = true
 
-	// Goroutine to send heartbeats from the channel
+	// Goroutine to send messages from the channel
 	go func() {
-		for heartbeat := range wc.heartbeatSendChan {
-			if err := stream.Send(heartbeat); err != nil {
-				log.Printf("Failed to send heartbeat: %v", err)
+		for msg := range wc.tradeSendChan {
+			if err := stream.Send(msg); err != nil {
+				log.Printf("Failed to send message: %v", err)
 				wc.mu.Lock()
-				wc.heartbeatStreamActive = false
+				wc.tradeStreamActive = false
 				wc.mu.Unlock()
 				return
 			}
 		}
 	}()
 
-	// Goroutine to receive heartbeat responses
+	// Goroutine to receive responses
 	go func() {
 		marshaler := protojson.MarshalOptions{
 			Multiline:       true,
@@ -139,82 +106,26 @@ func (wc *WebClient) initHeartbeatStream() error {
 		for {
 			resp, err := stream.Recv()
 			if err == io.EOF {
-				log.Println("Heartbeat stream closed by server")
+				log.Println("Trade stream closed by server")
 				wc.mu.Lock()
-				wc.heartbeatStreamActive = false
+				wc.tradeStreamActive = false
 				wc.mu.Unlock()
 				return
 			}
 			if err != nil {
-				log.Printf("Error receiving heartbeat response: %v", err)
+				log.Printf("Error receiving response: %v", err)
 				wc.mu.Lock()
-				wc.heartbeatStreamActive = false
+				wc.tradeStreamActive = false
 				wc.mu.Unlock()
 				return
 			}
 
 			respJSON, _ := marshaler.Marshal(resp)
 			wc.mu.Lock()
-			wc.heartbeatResponses = append(wc.heartbeatResponses, string(respJSON))
-			wc.mu.Unlock()
-		}
-	}()
-
-	return nil
-}
-
-func (wc *WebClient) initOrderNewStream() error {
-	stream, err := wc.client.CreateOrderNewResponseStream(context.Background())
-	if err != nil {
-		return err
-	}
-
-	wc.orderNewStream = stream
-	wc.orderNewStreamActive = true
-
-	// Goroutine to send orders from the channel
-	go func() {
-		for order := range wc.orderNewSendChan {
-			if err := stream.Send(order); err != nil {
-				log.Printf("Failed to send order: %v", err)
-				wc.mu.Lock()
-				wc.orderNewStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-		}
-	}()
-
-	// Goroutine to receive order responses
-	go func() {
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				log.Println("Order new stream closed by server")
-				wc.mu.Lock()
-				wc.orderNewStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-			if err != nil {
-				log.Printf("Error receiving order new response: %v", err)
-				wc.mu.Lock()
-				wc.orderNewStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-
-			respJSON, _ := marshaler.Marshal(resp)
-			wc.mu.Lock()
-			wc.orderNewResponses = append(wc.orderNewResponses, string(respJSON))
+			wc.responses = append(wc.responses, string(respJSON))
 
 			// Process the response for pool tracking
-			wc.processOrderNewResponse(resp)
+			wc.processEngineMessage(resp)
 
 			wc.mu.Unlock()
 		}
@@ -223,77 +134,20 @@ func (wc *WebClient) initOrderNewStream() error {
 	return nil
 }
 
-func (wc *WebClient) initOrderCancelStream() error {
-	stream, err := wc.client.CreateOrderCancelResponseStream(context.Background())
-	if err != nil {
-		return err
-	}
-
-	wc.orderCancelStream = stream
-	wc.orderCancelStreamActive = true
-
-	// Goroutine to send cancels from the channel
-	go func() {
-		for cancel := range wc.orderCancelSendChan {
-			if err := stream.Send(cancel); err != nil {
-				log.Printf("Failed to send cancel: %v", err)
-				wc.mu.Lock()
-				wc.orderCancelStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-		}
-	}()
-
-	// Goroutine to receive cancel responses
-	go func() {
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				log.Println("Order cancel stream closed by server")
-				wc.mu.Lock()
-				wc.orderCancelStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-			if err != nil {
-				log.Printf("Error receiving order cancel response: %v", err)
-				wc.mu.Lock()
-				wc.orderCancelStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-
-			respJSON, _ := marshaler.Marshal(resp)
-			wc.mu.Lock()
-			wc.orderCancelResponses = append(wc.orderCancelResponses, string(respJSON))
-
-			// Process the response for pool tracking
-			wc.processOrderCancelResponse(resp)
-
-			wc.mu.Unlock()
-		}
-	}()
-
-	return nil
-}
-
-// processOrderNewResponse processes order new responses and updates pool state
+// processEngineMessage processes engine responses and updates pool state
 // NOTE: This method assumes wc.mu is already locked by the caller
-func (wc *WebClient) processOrderNewResponse(resp *pb.OrderNewResponseEnvelope) {
-	switch contents := resp.Contents.(type) {
-	case *pb.OrderNewResponseEnvelope_Acknowledgement:
-		// Handle acknowledgement
-		ack := contents.Acknowledgement
+func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
+	switch event := resp.Event.(type) {
+	case *pb.EngineMessage_NewOrderAcknowledgement:
+		// Handle new order acknowledgement
+		ack := event.NewOrderAcknowledgement
 		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
 			clientOrderID := ack.Body.ClientOrderId
 			orderID := ack.Body.OrderId
-			sequenceNumber := ack.SequencedMessageBase.SequenceNumber
+			var sequenceNumber uint64
+			if resp.SequencedMessageBase != nil {
+				sequenceNumber = resp.SequencedMessageBase.SequenceNumber
+			}
 
 			// Find the pending order
 			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
@@ -321,57 +175,43 @@ func (wc *WebClient) processOrderNewResponse(resp *pb.OrderNewResponseEnvelope) 
 			}
 		}
 
-	case *pb.OrderNewResponseEnvelope_Fill:
-		// Handle fill event
-		fill := contents.Fill
-		if fill.Body != nil {
-			for _, fillEntry := range fill.Body.Fills {
-				wc.poolTracker.UpdateFromFill(
-					fillEntry.OrderId,
-					fill.Body.MatchedQuantity,
-					fillEntry.IsComplete,
-				)
-			}
-		}
-
-	case *pb.OrderNewResponseEnvelope_Elimination:
-		// Handle elimination (order removed by server due to self-match prevention, etc.)
-		elim := contents.Elimination
-		if elim != nil && elim.Body != nil {
-			wc.poolTracker.RemoveOrder(elim.Body.OrderId)
-		}
-	}
-}
-
-// processOrderCancelResponse processes order cancel responses and updates pool state
-// NOTE: This method assumes wc.mu is already locked by the caller
-func (wc *WebClient) processOrderCancelResponse(resp *pb.OrderCancelResponseEnvelope) {
-	switch contents := resp.Contents.(type) {
-	case *pb.OrderCancelResponseEnvelope_Acknowledgement:
+	case *pb.EngineMessage_CancelOrderAcknowledgement:
 		// Handle cancel acknowledgement
-		ack := contents.Acknowledgement
+		ack := event.CancelOrderAcknowledgement
 		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
 			orderID := ack.Body.OrderId
 			wc.poolTracker.RemoveOrder(orderID)
+		}
+
+	case *pb.EngineMessage_Elimination:
+		// Handle elimination (order removed by server)
+		elim := event.Elimination
+		if elim != nil && elim.Body != nil {
+			wc.poolTracker.RemoveOrder(elim.Body.OrderId)
+		}
+
+	case *pb.EngineMessage_Match:
+		// Handle match/fill event
+		match := event.Match
+		if match.Body != nil {
+			for _, fillEvent := range match.Body.FillEvents {
+				wc.poolTracker.UpdateFromFill(
+					fillEvent.OrderId,
+					match.Body.MatchedQuantity,
+					fillEvent.IsComplete,
+				)
+			}
 		}
 	}
 }
 
 func (wc *WebClient) Close() {
-	// Close all channels to stop the sender goroutines
-	close(wc.heartbeatSendChan)
-	close(wc.orderNewSendChan)
-	close(wc.orderCancelSendChan)
+	// Close the send channel to stop the sender goroutine
+	close(wc.tradeSendChan)
 
-	// Close all streams
-	if wc.heartbeatStream != nil {
-		wc.heartbeatStream.CloseSend()
-	}
-	if wc.orderNewStream != nil {
-		wc.orderNewStream.CloseSend()
-	}
-	if wc.orderCancelStream != nil {
-		wc.orderCancelStream.CloseSend()
+	// Close the stream
+	if wc.tradeStream != nil {
+		wc.tradeStream.CloseSend()
 	}
 
 	if wc.conn != nil {
@@ -379,144 +219,54 @@ func (wc *WebClient) Close() {
 	}
 }
 
-// sendHeartbeat sends a single heartbeat to the server
-func (wc *WebClient) sendHeartbeat() error {
+// Send order handler
+func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte(`{"status": "error", "message": "Method not allowed"}`))
+		return
+	}
+
 	// Check if stream is active
 	wc.mu.RLock()
-	active := wc.heartbeatStreamActive
+	active := wc.tradeStreamActive
 	wc.mu.RUnlock()
 
 	if !active {
-		return fmt.Errorf("heartbeat stream is not active")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"status": "error", "message": "Trade stream is not active"}`))
+		return
 	}
 
-	// Create heartbeat message
-	heartbeat := &pb.Heartbeat{
-		MessageBase: &pb.MessageBase{
-			VersionMajor: uint32(pb.VersionMajor_VERSION_MAJOR_VALUE),
-			VersionMinor: uint32(pb.VersionMinor_VERSION_MINOR_VALUE),
-			MessageType:  pb.MessageType_HEARTBEAT,
-		},
+	if err := r.ParseForm(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status": "error", "message": "Failed to parse form"}`))
+		return
 	}
 
-	// Store the request
+	messageType := r.FormValue("messageType")
+	seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+
 	marshaler := protojson.MarshalOptions{
 		Multiline:       true,
 		Indent:          "  ",
 		EmitUnpopulated: true,
 	}
-	reqJSON, _ := marshaler.Marshal(heartbeat)
-	wc.mu.Lock()
-	wc.heartbeatRequests = append(wc.heartbeatRequests, string(reqJSON))
-	wc.mu.Unlock()
 
-	// Send to the channel (non-blocking with timeout)
-	select {
-	case wc.heartbeatSendChan <- heartbeat:
-		return nil
-	case <-time.After(1 * time.Second):
-		return fmt.Errorf("timeout sending heartbeat")
-	}
-}
+	var gatewayMsg *pb.GatewayMessage
 
-// startAutomaticHeartbeats starts a goroutine that sends heartbeats at the specified interval
-func (wc *WebClient) startAutomaticHeartbeats(intervalMs int) {
-	if intervalMs <= 0 {
-		log.Println("Automatic heartbeats disabled (interval <= 0)")
-		return
-	}
-
-	interval := time.Duration(intervalMs) * time.Millisecond
-	log.Printf("Starting automatic heartbeats every %v", interval)
-
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			if err := wc.sendHeartbeat(); err != nil {
-				log.Printf("Failed to send automatic heartbeat: %v", err)
-			}
-		}
-	}()
-}
-
-// Heartbeat handler
-func (wc *WebClient) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		// Send heartbeat using the common method
-		if err := wc.sendHeartbeat(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			if err.Error() == "heartbeat stream is not active" {
-				w.WriteHeader(http.StatusServiceUnavailable)
-			} else {
-				w.WriteHeader(http.StatusRequestTimeout)
-			}
-			w.Write([]byte(fmt.Sprintf(`{"status": "error", "message": "%s"}`, err.Error())))
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status": "success", "message": "heartbeat sent"}`))
-		return
-	}
-
-	wc.mu.RLock()
-	responses := wc.heartbeatResponses
-	wc.mu.RUnlock()
-	renderPage(w, "heartbeat", responses)
-}
-
-// Get heartbeat requests as JSON
-func (wc *WebClient) handleHeartbeatRequests(w http.ResponseWriter, r *http.Request) {
-	wc.mu.RLock()
-	requests := wc.heartbeatRequests
-	wc.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(requests)
-}
-
-// Get heartbeat responses as JSON
-func (wc *WebClient) handleHeartbeatResponses(w http.ResponseWriter, r *http.Request) {
-	wc.mu.RLock()
-	responses := wc.heartbeatResponses
-	wc.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(responses)
-}
-
-// Order New handler
-func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		// Check if stream is active
-		wc.mu.RLock()
-		active := wc.orderNewStreamActive
-		wc.mu.RUnlock()
-
-		if !active {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status": "error", "message": "Order new stream is not active"}`))
-			return
-		}
-
-		if err := r.ParseForm(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"status": "error", "message": "Failed to parse form"}`))
-			return
-		}
-
-		seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+	switch messageType {
+	case "NewOrder":
 		clientOrderId, _ := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
 
 		// Parse legs from form (legSecurityIds and isOvers as comma-separated)
 		legIdsStr := r.FormValue("legSecurityIds")
 		isOversStr := r.FormValue("isOvers")
 
-		var legs []*pb.OrderNew_Body_Leg
+		var legs []*pb.NewOrder_Body_Leg
 		if legIdsStr != "" && isOversStr != "" {
 			legIdStrs := splitAndTrim(legIdsStr, ",")
 			isOverStrs := splitAndTrim(isOversStr, ",")
@@ -524,16 +274,16 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 			for i := 0; i < len(legIdStrs) && i < len(isOverStrs); i++ {
 				legId, _ := strconv.ParseUint(legIdStrs[i], 10, 64)
 				isOver := isOverStrs[i] == "true" || isOverStrs[i] == "1"
-				legs = append(legs, &pb.OrderNew_Body_Leg{
+				legs = append(legs, &pb.NewOrder_Body_Leg{
 					LegSecurityId: legId,
 					IsOver:        isOver,
 				})
 			}
 		}
 
-		orderType := pb.OrderType_LIMIT
+		orderType := common.OrderType_LIMIT
 		if r.FormValue("orderType") == "MARKET" {
-			orderType = pb.OrderType_MARKET
+			orderType = common.OrderType_MARKET
 		}
 		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
@@ -545,16 +295,8 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 			selfMatchIdPtr = &parsed
 		}
 
-		order := &pb.OrderNew{
-			MessageBase: &pb.MessageBase{
-				VersionMajor: uint32(pb.VersionMajor_VERSION_MAJOR_VALUE),
-				VersionMinor: uint32(pb.VersionMinor_VERSION_MINOR_VALUE),
-				MessageType:  pb.MessageType_ORDER_NEW,
-			},
-			SequencedMessageBase: &pb.SequencedMessageBase{
-				SequenceNumber: seqNum,
-			},
-			Body: &pb.OrderNew_Body{
+		newOrder := &pb.NewOrder{
+			Body: &pb.NewOrder_Body{
 				ClientOrderId: clientOrderId,
 				Legs:          legs,
 				OrderType:     orderType,
@@ -564,141 +306,77 @@ func (wc *WebClient) handleOrderNew(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		// Store the request
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		reqJSON, _ := marshaler.Marshal(order)
-		wc.mu.Lock()
-		wc.orderNewRequests = append(wc.orderNewRequests, string(reqJSON))
-		// Track pending order for later matching with acknowledgement
-		wc.pendingOrders[clientOrderId] = order
-		wc.mu.Unlock()
-
-		// Send to the channel (non-blocking with timeout)
-		select {
-		case wc.orderNewSendChan <- order:
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"status": "success", "message": "order sent"}`))
-		case <-time.After(1 * time.Second):
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusRequestTimeout)
-			w.Write([]byte(`{"status": "error", "message": "Timeout sending order"}`))
-		}
-		return
-	}
-
-	wc.mu.RLock()
-	responses := wc.orderNewResponses
-	wc.mu.RUnlock()
-	renderPage(w, "ordernew", responses)
-}
-
-// Get order new requests as JSON
-func (wc *WebClient) handleOrderNewRequests(w http.ResponseWriter, r *http.Request) {
-	wc.mu.RLock()
-	requests := wc.orderNewRequests
-	wc.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(requests)
-}
-
-// Get order new responses as JSON
-func (wc *WebClient) handleOrderNewResponses(w http.ResponseWriter, r *http.Request) {
-	wc.mu.RLock()
-	responses := wc.orderNewResponses
-	wc.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(responses)
-}
-
-// Order Cancel handler
-func (wc *WebClient) handleOrderCancel(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		// Check if stream is active
-		wc.mu.RLock()
-		active := wc.orderCancelStreamActive
-		wc.mu.RUnlock()
-
-		if !active {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status": "error", "message": "Order cancel stream is not active"}`))
-			return
-		}
-
-		if err := r.ParseForm(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"status": "error", "message": "Failed to parse form"}`))
-			return
-		}
-
-		seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
-		orderId, _ := strconv.ParseUint(r.FormValue("orderId"), 10, 64)
-
-		cancel := &pb.OrderCancel{
-			MessageBase: &pb.MessageBase{
-				VersionMajor: uint32(pb.VersionMajor_VERSION_MAJOR_VALUE),
-				VersionMinor: uint32(pb.VersionMinor_VERSION_MINOR_VALUE),
-				MessageType:  pb.MessageType_ORDER_CANCEL,
-			},
-			SequencedMessageBase: &pb.SequencedMessageBase{
+		gatewayMsg = &pb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
-			Body: &pb.OrderCancel_Body{
+			Msg: &pb.GatewayMessage_NewOrder{
+				NewOrder: newOrder,
+			},
+		}
+
+		// Track pending order for later matching with acknowledgement
+		wc.mu.Lock()
+		wc.pendingOrders[clientOrderId] = newOrder
+		wc.mu.Unlock()
+
+	case "CancelOrder":
+		orderId, _ := strconv.ParseUint(r.FormValue("orderId"), 10, 64)
+
+		cancelOrder := &pb.CancelOrder{
+			Body: &pb.CancelOrder_Body{
 				OrderId: orderId,
 			},
 		}
 
-		// Store the request
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
+		gatewayMsg = &pb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
+				SequenceNumber: seqNum,
+			},
+			Msg: &pb.GatewayMessage_CancelOrder{
+				CancelOrder: cancelOrder,
+			},
 		}
-		reqJSON, _ := marshaler.Marshal(cancel)
-		wc.mu.Lock()
-		wc.orderCancelRequests = append(wc.orderCancelRequests, string(reqJSON))
-		wc.mu.Unlock()
 
-		// Send to the channel (non-blocking with timeout)
-		select {
-		case wc.orderCancelSendChan <- cancel:
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"status": "success", "message": "cancel sent"}`))
-		case <-time.After(1 * time.Second):
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusRequestTimeout)
-			w.Write([]byte(`{"status": "error", "message": "Timeout sending cancel"}`))
-		}
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status": "error", "message": "Invalid message type"}`))
 		return
 	}
 
-	wc.mu.RLock()
-	responses := wc.orderCancelResponses
-	wc.mu.RUnlock()
-	renderPage(w, "ordercancel", responses)
+	// Store the request
+	reqJSON, _ := marshaler.Marshal(gatewayMsg)
+	wc.mu.Lock()
+	wc.requests = append(wc.requests, string(reqJSON))
+	wc.mu.Unlock()
+
+	// Send to the channel (non-blocking with timeout)
+	select {
+	case wc.tradeSendChan <- gatewayMsg:
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "success", "message": "message sent"}`))
+	case <-time.After(1 * time.Second):
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusRequestTimeout)
+		w.Write([]byte(`{"status": "error", "message": "Timeout sending message"}`))
+	}
 }
 
-// Get order cancel requests as JSON
-func (wc *WebClient) handleOrderCancelRequests(w http.ResponseWriter, r *http.Request) {
+// Get requests as JSON
+func (wc *WebClient) handleRequests(w http.ResponseWriter, r *http.Request) {
 	wc.mu.RLock()
-	requests := wc.orderCancelRequests
+	requests := wc.requests
 	wc.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(requests)
 }
 
-// Get order cancel responses as JSON
-func (wc *WebClient) handleOrderCancelResponses(w http.ResponseWriter, r *http.Request) {
+// Get responses as JSON
+func (wc *WebClient) handleResponses(w http.ResponseWriter, r *http.Request) {
 	wc.mu.RLock()
-	responses := wc.orderCancelResponses
+	responses := wc.responses
 	wc.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -816,6 +494,11 @@ func (wc *WebClient) handleEntryPoolsData(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(pools)
 }
 
+// Trade page handler - displays unified send/receive interface
+func (wc *WebClient) handleTrade(w http.ResponseWriter, r *http.Request) {
+	renderTradePage(w)
+}
+
 func splitAndTrim(s, sep string) []string {
 	var result []string
 	for _, item := range splitString(s, sep) {
@@ -889,9 +572,7 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>
-        <a href="/heartbeat">Heartbeat</a>
-        <a href="/ordernew">Order New</a>
-        <a href="/ordercancel">Order Cancel</a>
+        <a href="/trade">Trade</a>
     </div>
     <div class="container" id="poolsContainer">
         <p>Loading pools...</p>
@@ -1061,12 +742,12 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 	t.Execute(w, nil)
 }
 
-func renderPage(w http.ResponseWriter, pageType string, responses []string) {
+func renderTradePage(w http.ResponseWriter) {
 	tmpl := `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Matching Engine Tester - {{.Title}}</title>
+    <title>Matching Engine Tester - Trade</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
         .header { background: #333; color: white; padding: 10px 20px; }
@@ -1090,6 +771,12 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
         .right-column { background: #f8f9fa; }
         .message-box { background: white; padding: 15px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ddd; }
         pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-size: 12px; }
+        .message-type-selector { margin-bottom: 15px; }
+        .message-type-selector label { display: inline; margin-right: 20px; font-weight: normal; }
+        .message-type-selector input[type="radio"] { margin-right: 5px; }
+        .form-fields { display: none; }
+        .form-fields.active { display: block; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -1098,81 +785,71 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>
-        <a href="/heartbeat">Heartbeat</a>
-        <a href="/ordernew">Order New</a>
-        <a href="/ordercancel">Order Cancel</a>
+        <a href="/trade">Trade</a>
     </div>
     <div class="form-panel">
-        {{if eq .Type "heartbeat"}}
-        <h2>Send Heartbeat</h2>
-        <form id="mainForm" style="display: inline;">
-            <button type="submit">Send Heartbeat</button>
-            <div id="statusMessage" style="display: inline;"></div>
-        </form>
-        {{end}}
-
-        {{if eq .Type "ordernew"}}
-        <h2>Send Order</h2>
+        <h2>Send Message</h2>
         <form id="mainForm">
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
-                <div class="form-group">
-                    <label>Sequence Number:</label>
-                    <input type="number" name="sequenceNumber" value="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Client Order ID:</label>
-                    <input type="number" name="clientOrderId" value="1001" required>
-                </div>
-                <div class="form-group">
-                    <label>Leg Security IDs:</label>
-                    <input type="text" name="legSecurityIds" placeholder="101,102" value="101,102" required>
-                </div>
-                <div class="form-group">
-                    <label>Is Over (true/false):</label>
-                    <input type="text" name="isOvers" placeholder="false,true" value="false,true" required>
-                </div>
-                <div class="form-group">
-                    <label>Order Type:</label>
-                    <select name="orderType">
-                        <option value="LIMIT">LIMIT</option>
-                        <option value="MARKET">MARKET</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Portion:</label>
-                    <input type="number" name="portion" value="250000" required>
-                </div>
-                <div class="form-group">
-                    <label>Quantity:</label>
-                    <input type="number" name="quantity" value="5" required>
-                </div>
-                <div class="form-group">
-                    <label>Self Match ID (optional):</label>
-                    <input type="number" name="selfMatchId" placeholder="Optional">
+            <div class="message-type-selector">
+                <label><input type="radio" name="messageType" value="NewOrder" checked> New Order</label>
+                <label><input type="radio" name="messageType" value="CancelOrder"> Cancel Order</label>
+            </div>
+
+            <div class="form-group">
+                <label>Sequence Number:</label>
+                <input type="number" name="sequenceNumber" value="0" required>
+            </div>
+
+            <!-- New Order Fields -->
+            <div id="newOrderFields" class="form-fields active">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                    <div class="form-group">
+                        <label>Client Order ID:</label>
+                        <input type="number" name="clientOrderId" value="1001">
+                    </div>
+                    <div class="form-group">
+                        <label>Leg Security IDs:</label>
+                        <input type="text" name="legSecurityIds" placeholder="101,102" value="101,102">
+                    </div>
+                    <div class="form-group">
+                        <label>Is Over (true/false):</label>
+                        <input type="text" name="isOvers" placeholder="false,true" value="false,true">
+                    </div>
+                    <div class="form-group">
+                        <label>Order Type:</label>
+                        <select name="orderType">
+                            <option value="LIMIT">LIMIT</option>
+                            <option value="MARKET">MARKET</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Portion:</label>
+                        <input type="number" name="portion" value="250000">
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity:</label>
+                        <input type="number" name="quantity" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label>Self Match ID (optional):</label>
+                        <input type="number" name="selfMatchId" placeholder="Optional">
+                    </div>
                 </div>
             </div>
-            <button type="submit">Send Order</button>
-            <div id="statusMessage" style="display: inline;"></div>
-        </form>
-        {{end}}
 
-        {{if eq .Type "ordercancel"}}
-        <h2>Cancel Order</h2>
-        <form id="mainForm">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 600px;">
-                <div class="form-group">
-                    <label>Sequence Number:</label>
-                    <input type="number" name="sequenceNumber" value="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Order ID:</label>
-                    <input type="number" name="orderId" required>
+            <!-- Cancel Order Fields -->
+            <div id="cancelOrderFields" class="form-fields">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 600px;">
+                    <div class="form-group">
+                        <label>Order ID:</label>
+                        <input type="number" name="orderId">
+                    </div>
                 </div>
             </div>
-            <button type="submit">Cancel Order</button>
+
+            <button type="submit">Send Message</button>
             <div id="statusMessage" style="display: inline;"></div>
         </form>
-        {{end}}
     </div>
 
     <div class="columns">
@@ -1191,11 +868,26 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
     </div>
 
     <script>
-        const pageType = '{{.Type}}';
         const form = document.getElementById('mainForm');
         const statusMessage = document.getElementById('statusMessage');
         const requestList = document.getElementById('requestList');
         const responseList = document.getElementById('responseList');
+        const newOrderFields = document.getElementById('newOrderFields');
+        const cancelOrderFields = document.getElementById('cancelOrderFields');
+        const messageTypeRadios = document.querySelectorAll('input[name="messageType"]');
+
+        // Toggle form fields based on message type
+        messageTypeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'NewOrder') {
+                    newOrderFields.classList.add('active');
+                    cancelOrderFields.classList.remove('active');
+                } else {
+                    newOrderFields.classList.remove('active');
+                    cancelOrderFields.classList.add('active');
+                }
+            });
+        });
 
         // Increment the global sequence number on the server and update the field
         async function incrementSequenceNumber() {
@@ -1321,8 +1013,10 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
             // Convert FormData to URLSearchParams for proper URL encoding
             const urlEncoded = new URLSearchParams(formData);
 
+            const messageType = formData.get('messageType');
+
             try {
-                const response = await fetch(window.location.pathname, {
+                const response = await fetch('/send', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -1336,8 +1030,8 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                     statusMessage.innerHTML = '<span class="status-message status-success">' + data.message + '</span>';
                     // Increment global sequence number on server
                     await incrementSequenceNumber();
-                    // Increment client order ID for order new submissions
-                    if (pageType === 'ordernew') {
+                    // Increment client order ID for new order submissions
+                    if (messageType === 'NewOrder') {
                         await incrementClientOrderId();
                     }
                 } else {
@@ -1358,7 +1052,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
         setInterval(async () => {
             try {
                 // Fetch requests
-                const reqResponse = await fetch('/' + pageType + '-requests');
+                const reqResponse = await fetch('/requests');
                 const requests = await reqResponse.json();
 
                 if (requests && requests.length > 0) {
@@ -1370,7 +1064,7 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
                 }
 
                 // Fetch responses
-                const respResponse = await fetch('/' + pageType + '-responses');
+                const respResponse = await fetch('/responses');
                 const responses = await respResponse.json();
 
                 if (responses && responses.length > 0) {
@@ -1389,36 +1083,13 @@ func renderPage(w http.ResponseWriter, pageType string, responses []string) {
 </html>
 `
 
-	data := struct {
-		Type      string
-		Title     string
-		Responses []string
-	}{
-		Type:      pageType,
-		Title:     getTitleForType(pageType),
-		Responses: responses,
-	}
-
-	t, err := template.New("page").Parse(tmpl)
+	t, err := template.New("trade").Parse(tmpl)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	t.Execute(w, data)
-}
-
-func getTitleForType(pageType string) string {
-	switch pageType {
-	case "heartbeat":
-		return "Heartbeat"
-	case "ordernew":
-		return "New Order"
-	case "ordercancel":
-		return "Cancel Order"
-	default:
-		return "Unknown"
-	}
+	t.Execute(w, nil)
 }
 
 // fatal prints an error message to stderr and exits with code 1
@@ -1429,10 +1100,9 @@ func fatal(format string, args ...interface{}) {
 
 // Config holds the configuration for the matching engine tester
 type Config struct {
-	ServerHost           string
-	ServerPort           string
-	WebPort              string
-	HeartbeatIntervalMs  int // Interval in milliseconds for automatic heartbeats (0 = disabled)
+	ServerHost string
+	ServerPort string
+	WebPort    string
 }
 
 // loadConfig loads and validates the configuration from .env file
@@ -1455,13 +1125,11 @@ func loadConfig() (*Config, error) {
 
 	// Load optional configuration with defaults
 	webPort := envloader.GetEnvAsStringWithDefault("WEB_PORT", "8080")
-	heartbeatIntervalMs := envloader.GetEnvAsIntWithDefault("HEARTBEAT_INTERVAL_MS", 0)
 
 	return &Config{
-		ServerHost:          serverHost,
-		ServerPort:          serverPort,
-		WebPort:             webPort,
-		HeartbeatIntervalMs: heartbeatIntervalMs,
+		ServerHost: serverHost,
+		ServerPort: serverPort,
+		WebPort:    webPort,
 	}, nil
 }
 
@@ -1482,23 +1150,15 @@ func main() {
 	}
 	defer client.Close()
 
-	// Start automatic heartbeats if configured
-	client.startAutomaticHeartbeats(cfg.HeartbeatIntervalMs)
-
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/entrypools", http.StatusSeeOther)
 	})
 	http.HandleFunc("/entrypools", client.handleEntryPools)
 	http.HandleFunc("/entrypools-data", client.handleEntryPoolsData)
-	http.HandleFunc("/heartbeat", client.handleHeartbeat)
-	http.HandleFunc("/heartbeat-requests", client.handleHeartbeatRequests)
-	http.HandleFunc("/heartbeat-responses", client.handleHeartbeatResponses)
-	http.HandleFunc("/ordernew", client.handleOrderNew)
-	http.HandleFunc("/ordernew-requests", client.handleOrderNewRequests)
-	http.HandleFunc("/ordernew-responses", client.handleOrderNewResponses)
-	http.HandleFunc("/ordercancel", client.handleOrderCancel)
-	http.HandleFunc("/ordercancel-requests", client.handleOrderCancelRequests)
-	http.HandleFunc("/ordercancel-responses", client.handleOrderCancelResponses)
+	http.HandleFunc("/trade", client.handleTrade)
+	http.HandleFunc("/send", client.handleSendOrder)
+	http.HandleFunc("/requests", client.handleRequests)
+	http.HandleFunc("/responses", client.handleResponses)
 	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
 	http.HandleFunc("/client-order-id", client.handleClientOrderId)
 

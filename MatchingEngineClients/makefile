@@ -1,12 +1,15 @@
 # Directories
 BIN_DIR := .bin
-PROTO_DIR := proto
+PROTO_DIR := ../proto
 GEN_OUT_DIR := src/gen
 BUILD_DIR = out/build
 
 # Plugin paths
 PROTOC_GEN_GO := $(BIN_DIR)/protoc-gen-go
 PROTOC_GEN_GO_GRPC := $(BIN_DIR)/protoc-gen-go-grpc
+
+# Go module name
+MODULE := MatchingEngineClients
 
 # Install protoc plugins locally into .bin/
 .PHONY: setup
@@ -18,14 +21,22 @@ setup:
 # Generate Go code from proto files
 .PHONY: codegen
 codegen: setup
-	mkdir -p "$(GEN_OUT_DIR)"
+	mkdir -p "$(GEN_OUT_DIR)" "$(GEN_OUT_DIR)/matching" "$(GEN_OUT_DIR)/gateway"
 	protoc \
 		--plugin=protoc-gen-go=$(PROTOC_GEN_GO) \
 		--plugin=protoc-gen-go-grpc=$(PROTOC_GEN_GO_GRPC) \
 		--proto_path=$(PROTO_DIR) \
-		--go_out=$(GEN_OUT_DIR) --go_opt=paths=source_relative \
-		--go-grpc_out=$(GEN_OUT_DIR) --go-grpc_opt=paths=source_relative \
-		$(PROTO_DIR)/*.proto
+		--go_out=. \
+		--go_opt=module=$(MODULE) \
+		--go_opt=MCommon.proto=$(MODULE)/$(GEN_OUT_DIR) \
+		--go_opt=MMatchingService.proto=$(MODULE)/$(GEN_OUT_DIR)/matching \
+		--go_opt=MGatewayService.proto=$(MODULE)/$(GEN_OUT_DIR)/gateway \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=$(MODULE) \
+		--go-grpc_opt=MCommon.proto=$(MODULE)/$(GEN_OUT_DIR) \
+		--go-grpc_opt=MMatchingService.proto=$(MODULE)/$(GEN_OUT_DIR)/matching \
+		--go-grpc_opt=MGatewayService.proto=$(MODULE)/$(GEN_OUT_DIR)/gateway \
+		$(PROTO_DIR)/Common.proto $(PROTO_DIR)/MatchingService.proto $(PROTO_DIR)/GatewayService.proto
 
 # Check if generated code is up-to-date, useful for CI/CD pipelines
 .PHONY: check-codegen
@@ -57,12 +68,7 @@ $(BUILD_DIR)/%: src/apps/%.go
 .PHONY: matching-engine-tester
 matching-engine-tester:
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_DIR)/MatchingEngineTester" ./cmd/matching-engine-tester/main.go
-
-.PHONY: matching-engine-gateway
-matching-engine-gateway:
-	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_DIR)/MatchingEngineGateway" ./cmd/matching-engine-gateway/main.go
+	go build -o "$(BUILD_DIR)/MatchingEngineTester" ./cmd/matching-engine-tester
 
 # Clean build artifacts
 .PHONY: clean

@@ -4,7 +4,7 @@ package OpenBook.MatchingServicePackage;
 
 import "Common.proto";
 
-option go_package = "OpenBook/proto";
+option go_package = "OpenBook/MatchingService/proto";
 
 service MatchingServerService {
   rpc CreateTradeStream(stream GatewayMessage) returns (stream EngineMessage);
@@ -99,8 +99,8 @@ message Match {
           5; // only marked true for the final fill notification of an order
     }
 
-    uint64 transactionId = 1;
-    uint64 matchId = 2;
+    uint64 transactionId = 1; // If there are multiple matches resulting from one new order, they all share the same transactionId
+    uint64 matchId = 2; // If there are multiple matches resulting from one new order, they all have unique matchIds
     uint64 matchedQuantity = 3;
     repeated FillEvent fillEvents = 4;
   }

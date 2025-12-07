@@ -1,5 +1,5 @@
 // entry_pool.rs
-// 
+//
 // EntryPool manages a multi-sided pool where entries are submitted for different lineups.
 // Similar to an exchange order book, but instead of buy/sell sides, there are 2^N different
 // lineup books (one for each possible combination of outcomes in an N-leg slate).
@@ -8,8 +8,8 @@
 // - A "slate" has N legs (e.g., player stat predictions)
 // - Each leg has 2 outcomes (over/under), creating 2^N possible lineups
 // - Users submit entries backing a specific lineup with a portion of the pool and quantity
-// - When the best entry from each lineup can form a valid pool, a "fill event" occurs
-// - In one fill event, there are 2^N fills (one from each entry in each lineup)
+// - When the best entry from each lineup can form a valid pool, a "match" occurs
+// - In one match, there are 2^N fills (one from each entry in each lineup)
 // - Fills consume quantity from matched entries
 
 use std::fmt;
@@ -212,7 +212,7 @@ impl fmt::Display for PoolState {
     }
 }
 
-/// Represents a single fill in a fill event, including original and matched portions
+/// Represents a single fill in a match, including original and matched portions
 #[derive(Debug, Clone)]
 pub struct FilledEntry {
     /// The entry that was matched
@@ -225,20 +225,20 @@ pub struct FilledEntry {
     pub is_complete: bool,
 }
 
-/// Represents a successful fill event across all lineups
+/// Represents a successful match across all lineups
 #[derive(Debug, Clone)]
-pub struct FillEvent {
+pub struct MatchInfo {
     /// One filled entry from each lineup (2^N entries total)
     pub filled_entries: Vec<FilledEntry>,
     /// Index of the lineup that was the aggressor
     pub aggressor_lineup_index: usize,
-    /// Quantity that was matched in this fill (same for all entries)
+    /// Quantity that was matched in this match (same for all entries)
     pub matched_quantity: u64,
 }
 
-impl fmt::Display for FillEvent {
+impl fmt::Display for MatchInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "FillEvent (Aggressor: Lineup {}, Matched Qty: {}):", 
+        writeln!(f, "MatchInfo (Aggressor: Lineup {}, Matched Qty: {}):",
                  self.aggressor_lineup_index, self.matched_quantity)?;
         for fill in &self.filled_entries {
             let aggressor_marker = if fill.entry.lineup_index == self.aggressor_lineup_index {
@@ -265,8 +265,8 @@ impl fmt::Display for FillEvent {
 pub struct SubmitInfo {
     /// Entry IDs that were cancelled due to self_match_id conflicts
     pub cancelled_entry_ids: Vec<u64>,
-    /// Any fill events that occurred as a result of this submission
-    pub fill_events: Vec<FillEvent>,
+    /// Any matches that occurred as a result of this submission
+    pub match_infos: Vec<MatchInfo>,
     /// Market entries that were removed from the book because they weren't fully filled. In practice, there will only be zero or one of these.
     pub cancelled_market_entry_ids: Vec<u64>,
 }
@@ -307,14 +307,14 @@ impl EntryPool {
     /// * `params` - Entry parameters (type, portion, quantity)
     ///
     /// # Returns
-    /// * `Ok(SubmitInfo)` - Contains any fill events that occurred and completed entry IDs
+    /// * `Ok(SubmitInfo)` - Contains any matches that occurred and completed entry IDs
     /// * `Err(String)` - Error message if submission failed
     ///
-    /// For Market entries: attempts immediate matching. If no valid fill exists, 
+    /// For Market entries: attempts immediate matching. If no valid match exists,
     /// the market entry is rejected (not rested on book).
     ///
-    /// For Limit entries: added to book, then checked for potential fills.
-    /// May trigger multiple fill events if quantity is large enough.
+    /// For Limit entries: added to book, then checked for potential matches.
+    /// May trigger multiple matches if quantity is large enough.
     pub fn submit_entry(
         &mut self,
         lineup_index: usize,
@@ -405,18 +405,18 @@ impl EntryPool {
 
         // Add to book
         self.state.books[lineup_index].add_entry(entry);
-        
-        // Attempt fills
-        let mut fill_events = self.attempt_fills();
+
+        // Attempt matches
+        let mut match_infos = self.attempt_matches();
         
         // Collect completed entry IDs
         let mut completed_entry_ids = Vec::new();
-        for fill_event in &fill_events {
-            for filled_entry in &fill_event.filled_entries {
+        for match_info in &match_infos {
+            for filled_entry in &match_info.filled_entries {
                 let lineup_idx = filled_entry.entry.lineup_index;
                 let entry_id = filled_entry.entry.id;
 
-                // no need to add the same completed entry_id twice if it was part of multiple fill events
+                // no need to add the same completed entry_id twice if it was part of multiple matches
                 if completed_entry_ids.contains(&entry_id) {
                     continue;
                 }
@@ -431,19 +431,19 @@ impl EntryPool {
             }
         }
 
-        // Update is_complete flag for entries in their final fill event
+        // Update is_complete flag for entries in their final match
         for entry_id in &completed_entry_ids {
-            // Find the last fill event index where this entry appears
-            let mut last_fill_event_idx = None;
-            for (fill_idx, fill_event) in fill_events.iter().enumerate() {
-                if fill_event.filled_entries.iter().any(|fe| fe.entry.id == *entry_id) {
-                    last_fill_event_idx = Some(fill_idx);
+            // Find the last match index where this entry appears
+            let mut last_match_idx = None;
+            for (match_idx, match_info) in match_infos.iter().enumerate() {
+                if match_info.filled_entries.iter().any(|fe| fe.entry.id == *entry_id) {
+                    last_match_idx = Some(match_idx);
                 }
             }
 
-            // Mark is_complete = true for this entry in its last fill event
-            if let Some(fill_idx) = last_fill_event_idx {
-                for filled_entry in &mut fill_events[fill_idx].filled_entries {
+            // Mark is_complete = true for this entry in its last match
+            if let Some(match_idx) = last_match_idx {
+                for filled_entry in &mut match_infos[match_idx].filled_entries {
                     if filled_entry.entry.id == *entry_id {
                         filled_entry.is_complete = true;
                     }
@@ -459,7 +459,7 @@ impl EntryPool {
 
         Ok(SubmitInfo {
             cancelled_entry_ids,
-            fill_events,
+            match_infos,
             cancelled_market_entry_ids,
         })
     }
@@ -488,24 +488,24 @@ impl EntryPool {
         Err(format!("Entry with ID {} not found", entry_id))
     }
 
-    /// Attempts to create fills from the current book state
-    /// Continues attempting fills until no valid fill can be made
-    fn attempt_fills(&mut self) -> Vec<FillEvent> {
-        let mut fill_events = Vec::new();
+    /// Attempts to create matches from the current book state
+    /// Continues attempting matches until no valid match can be made
+    fn attempt_matches(&mut self) -> Vec<MatchInfo> {
+        let mut match_infos = Vec::new();
 
         loop {
-            match self.try_create_fill() {
-                Some(fill_event) => fill_events.push(fill_event),
+            match self.try_create_match() {
+                Some(match_info) => match_infos.push(match_info),
                 None => break,
             }
         }
 
-        fill_events
+        match_infos
     }
-    
-    /// Attempts to create a single fill event from best entries across all lineups
-    /// Returns Some(FillEvent) if successful, None if no valid fill exists
-    fn try_create_fill(&mut self) -> Option<FillEvent> {
+
+    /// Attempts to create a single match from best entries across all lineups
+    /// Returns Some(MatchInfo) if successful, None if no valid match exists
+    fn try_create_match(&mut self) -> Option<MatchInfo> {
         // Collect best entry from each lineup
         let mut best_entries = Vec::new();
         for (lineup_idx, book) in self.state.books.iter().enumerate() {
@@ -590,10 +590,10 @@ impl EntryPool {
                 entry: entry.clone(),
                 original_portion: entry.portion,
                 matched_portion: adjusted_portions[idx],
-                is_complete: false, // Will be set properly in submit_entry after all fills
+                is_complete: false, // Will be set properly in submit_entry after all matches
             });
         }
-        
+
         // Apply the fills - consume quantity from all matched entries
         for fill in &filled_entries {
             if let Some(book_entry) = self.state.books[fill.entry.lineup_index]
@@ -602,13 +602,13 @@ impl EntryPool {
                 book_entry.consume_quantity(min_quantity);
             }
         }
-        
+
         // Remove depleted entries from all books
         for book in &mut self.state.books {
             book.remove_depleted_entries();
         }
-        
-        Some(FillEvent {
+
+        Some(MatchInfo {
             filled_entries,
             aggressor_lineup_index,
             matched_quantity: min_quantity,
@@ -654,16 +654,16 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Last submission should trigger a fill event
-        assert_eq!(submit0.fill_events.len(), 0);
-        assert_eq!(submit1.fill_events.len(), 0);
-        assert_eq!(submit2.fill_events.len(), 0);
-        assert_eq!(submit3.fill_events.len(), 1);
+        // Last submission should trigger a match
+        assert_eq!(submit0.match_infos.len(), 0);
+        assert_eq!(submit1.match_infos.len(), 0);
+        assert_eq!(submit2.match_infos.len(), 0);
+        assert_eq!(submit3.match_infos.len(), 1);
 
         // No market entries, so cancelled_market_entry_ids should be empty
         assert_eq!(submit3.cancelled_market_entry_ids.len(), 0);
 
-        // All entries should be consumed in the fill event
+        // All entries should be consumed in the match
         let state = pool.get_state();
         for book in &state.books {
             assert_eq!(book.entries.len(), 0);
@@ -706,17 +706,17 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
         
         // Aggressor should have portion reduced from 200 to 100
-        let fill_event = &submit.fill_events[0];
-        let aggressor_entry = fill_event.filled_entries.iter()
+        let match_info =&submit.match_infos[0];
+        let aggressor_entry = match_info.filled_entries.iter()
             .find(|e| e.entry.lineup_index == 3)
             .unwrap();
         assert_eq!(aggressor_entry.original_portion, 200);
         assert_eq!(aggressor_entry.matched_portion, 100);
-        assert_eq!(fill_event.matched_quantity, 1);
+        assert_eq!(match_info.matched_quantity, 1);
         
         // All entries consumed
         let state = pool.get_state();
@@ -761,11 +761,11 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
-        let fill_event = &submit.fill_events[0];
-        assert_eq!(fill_event.filled_entries[fill_event.aggressor_lineup_index].matched_portion, 300);
-        assert_eq!(fill_event.matched_quantity, 1);
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
+        let match_info =&submit.match_infos[0];
+        assert_eq!(match_info.filled_entries[match_info.aggressor_lineup_index].matched_portion, 300);
+        assert_eq!(match_info.matched_quantity, 1);
 
         // Market entry was fully filled, so it should not be in cancelled_market_entry_ids
         assert_eq!(submit.cancelled_market_entry_ids.len(), 0);
@@ -851,10 +851,10 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have 2 fill events
-        assert_eq!(submit.fill_events.len(), 2);
+        // Should have 2 matches
+        assert_eq!(submit.match_infos.len(), 2);
         
-        // All should be consumed in 2 fill events
+        // All should be consumed in 2 matches
         let state = pool.get_state();
         for book in &state.books {
             assert_eq!(book.entries.len(), 0);
@@ -976,9 +976,9 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
-        assert_eq!(submit.fill_events[0].matched_quantity, 1);
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
+        assert_eq!(submit.match_infos[0].matched_quantity, 1);
 
         // Market entry had quantity=3 but only matched once, so it still had remaining quantity
         // and should be in cancelled_market_entry_ids
@@ -1031,40 +1031,40 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
-        let fill_event = &submit.fill_events[0];
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
+        let match_info =&submit.match_infos[0];
         
         // Aggressor (lineup 0, sequence 3) should have portion=1
-        let aggressor_fill = fill_event.filled_entries.iter()
+        let aggressor_fill = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 0)
             .unwrap();
         assert_eq!(aggressor_fill.matched_portion, 1);
         
         // Passive entries should be reduced from oldest to newest
         // sequence 0 (lineup 1) should have portion=1
-        let passive0 = fill_event.filled_entries.iter()
+        let passive0 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 1)
             .unwrap();
         assert_eq!(passive0.original_portion, 999);
         assert_eq!(passive0.matched_portion, 1);
         
         // sequence 1 (lineup 2) should have portion=1
-        let passive1 = fill_event.filled_entries.iter()
+        let passive1 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 2)
             .unwrap();
         assert_eq!(passive1.original_portion, 999);
         assert_eq!(passive1.matched_portion, 1);
         
         // sequence 2 (lineup 3) should have portion=997 (total must equal 1000)
-        let passive2 = fill_event.filled_entries.iter()
+        let passive2 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 3)
             .unwrap();
         assert_eq!(passive2.original_portion, 999);
         assert_eq!(passive2.matched_portion, 997);
         
         // Verify total portions = 1000
-        let total: u64 = fill_event.filled_entries.iter()
+        let total: u64 = match_info.filled_entries.iter()
             .map(|f| f.matched_portion)
             .sum();
         assert_eq!(total, 1000);
@@ -1106,9 +1106,9 @@ mod tests {
             self_match_id: None,
         }).unwrap();
         
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
-        let fill_event = &submit.fill_events[0];
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
+        let match_info =&submit.match_infos[0];
         
         // Total without adjustment would be 1500, need to reduce by 500
         // First reduce aggressor: 300 -> 1 (reduction of 299)
@@ -1117,28 +1117,28 @@ mod tests {
         //   seq 0: 400 -> 1 (reduction of 399, but we only need 201)
         //   So seq 0: 400 -> 199
         
-        let aggressor_fill = fill_event.filled_entries.iter()
+        let aggressor_fill = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 0)
             .unwrap();
         assert_eq!(aggressor_fill.matched_portion, 1);
         
-        let passive0 = fill_event.filled_entries.iter()
+        let passive0 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 1)
             .unwrap();
         assert_eq!(passive0.matched_portion, 199);
         
-        let passive1 = fill_event.filled_entries.iter()
+        let passive1 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 2)
             .unwrap();
         assert_eq!(passive1.matched_portion, 400);
         
-        let passive2 = fill_event.filled_entries.iter()
+        let passive2 = match_info.filled_entries.iter()
             .find(|f| f.entry.lineup_index == 3)
             .unwrap();
         assert_eq!(passive2.matched_portion, 400);
         
         // Verify total = 1000
-        let total: u64 = fill_event.filled_entries.iter()
+        let total: u64 = match_info.filled_entries.iter()
             .map(|f| f.matched_portion)
             .sum();
         assert_eq!(total, 1000);
@@ -1256,8 +1256,8 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have NO fill events because lineup 2 has no entries
-        assert_eq!(submit.fill_events.len(), 0);
+        // Should have NO matches because lineup 2 has no entries
+        assert_eq!(submit.match_infos.len(), 0);
 
         // Verify entries are still on the book (except the cancelled one)
         let state = pool.get_state();
@@ -1343,12 +1343,12 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
 
         // All entries should be completed, so is_complete should be true for all
-        let fill_event = &submit.fill_events[0];
-        for filled_entry in &fill_event.filled_entries {
+        let match_info =&submit.match_infos[0];
+        for filled_entry in &match_info.filled_entries {
             assert!(filled_entry.is_complete,
                 "Entry {} should have is_complete=true", filled_entry.entry.id);
         }
@@ -1388,12 +1388,12 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have 1 fill event
-        assert_eq!(submit.fill_events.len(), 1);
+        // Should have 1 match
+        assert_eq!(submit.match_infos.len(), 1);
 
         // Only entry 103 should have is_complete=true
-        let fill_event = &submit.fill_events[0];
-        for filled_entry in &fill_event.filled_entries {
+        let match_info =&submit.match_infos[0];
+        for filled_entry in &match_info.filled_entries {
             if filled_entry.entry.id == 103 {
                 assert!(filled_entry.is_complete,
                     "Entry 103 should have is_complete=true");
@@ -1423,7 +1423,7 @@ mod tests {
             quantity: 2,
             self_match_id: None,
         }).unwrap();
-        // Add TWO entries to lineup 2 to enable 2 fill events
+        // Add TWO entries to lineup 2 to enable 2 matches
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
@@ -1439,7 +1439,7 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Aggressor with quantity=2 will trigger 2 fill events
+        // Aggressor with quantity=2 will trigger 2 matches
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 104,
             entry_type: EntryType::Limit,
@@ -1448,13 +1448,13 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have 2 fill events
-        assert_eq!(submit.fill_events.len(), 2);
+        // Should have 2 matches
+        assert_eq!(submit.match_infos.len(), 2);
 
-        // Fill event 0: entries 100, 101, 102, 104
+        // Match 0: entries 100, 101, 102, 104
         // Only entry 102 is completed after this fill
-        let fill_event_0 = &submit.fill_events[0];
-        for filled_entry in &fill_event_0.filled_entries {
+        let match_info_0 = &submit.match_infos[0];
+        for filled_entry in &match_info_0.filled_entries {
             match filled_entry.entry.id {
                 102 => {
                     assert!(filled_entry.is_complete,
@@ -1462,19 +1462,19 @@ mod tests {
                 }
                 100 | 101 | 104 => {
                     assert!(!filled_entry.is_complete,
-                        "Entry {} should have is_complete=false in first fill event",
+                        "Entry {} should have is_complete=false in first match",
                         filled_entry.entry.id);
                 }
-                _ => panic!("Unexpected entry in fill event 0"),
+                _ => panic!("Unexpected entry in match 0"),
             }
         }
 
-        // Fill event 1: entries 100, 101, 103, 104
+        // Match 1: entries 100, 101, 103, 104
         // All entries are completed after this fill
-        let fill_event_1 = &submit.fill_events[1];
-        for filled_entry in &fill_event_1.filled_entries {
+        let match_info_1 = &submit.match_infos[1];
+        for filled_entry in &match_info_1.filled_entries {
             assert!(filled_entry.is_complete,
-                "Entry {} should have is_complete=true in second (final) fill event",
+                "Entry {} should have is_complete=true in second (final) match",
                 filled_entry.entry.id);
         }
     }
@@ -1483,10 +1483,10 @@ mod tests {
     fn test_is_complete_resting_order_multiple_fills() {
         // This test specifically addresses the requirement:
         // "if a resting (non-aggressor) order gets filled multiple times as the result of one OrderNew,
-        // but only the final fill event should have "isComplete" as true for that order"
+        // but only the final match should have "isComplete" as true for that order"
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
 
-        // Submit TWO entries to lineup 0 with quantity=1 each (to create 2 fill events)
+        // Submit TWO entries to lineup 0 with quantity=1 each (to create 2 matches)
         pool.submit_entry(0, EntryParameters {
             entry_id: 100,
             entry_type: EntryType::Limit,
@@ -1503,7 +1503,7 @@ mod tests {
         }).unwrap();
 
         // Submit resting entries to lineups 1 and 2 with quantity=2 each
-        // These will participate in BOTH fill events
+        // These will participate in BOTH matches
         pool.submit_entry(1, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
@@ -1519,7 +1519,7 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Aggressor with quantity=2 will trigger 2 fill events
+        // Aggressor with quantity=2 will trigger 2 matches
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 104,
             entry_type: EntryType::Limit,
@@ -1528,12 +1528,12 @@ mod tests {
             self_match_id: None,
         }).unwrap();
 
-        // Should have 2 fill events
-        assert_eq!(submit.fill_events.len(), 2);
+        // Should have 2 matches
+        assert_eq!(submit.match_infos.len(), 2);
 
-        // Fill event 0: entries 100, 102, 103, 104
-        let fill_event_0 = &submit.fill_events[0];
-        for filled_entry in &fill_event_0.filled_entries {
+        // Match 0: entries 100, 102, 103, 104
+        let match_info_0 = &submit.match_infos[0];
+        for filled_entry in &match_info_0.filled_entries {
             match filled_entry.entry.id {
                 100 => {
                     // Entry 100 is completed after first fill
@@ -1543,29 +1543,29 @@ mod tests {
                 102 | 103 => {
                     // Resting orders 102 and 103 are NOT completed after first fill
                     assert!(!filled_entry.is_complete,
-                        "Resting entry {} should have is_complete=false in first fill event",
+                        "Resting entry {} should have is_complete=false in first match",
                         filled_entry.entry.id);
                 }
                 104 => {
                     // Aggressor 104 is NOT completed after first fill
                     assert!(!filled_entry.is_complete,
-                        "Aggressor entry 104 should have is_complete=false in first fill event");
+                        "Aggressor entry 104 should have is_complete=false in first match");
                 }
-                _ => panic!("Unexpected entry in fill event 0"),
+                _ => panic!("Unexpected entry in match 0"),
             }
         }
 
-        // Fill event 1: entries 101, 102, 103, 104
-        let fill_event_1 = &submit.fill_events[1];
-        for filled_entry in &fill_event_1.filled_entries {
+        // Match 1: entries 101, 102, 103, 104
+        let match_info_1 = &submit.match_infos[1];
+        for filled_entry in &match_info_1.filled_entries {
             match filled_entry.entry.id {
                 101 | 102 | 103 | 104 => {
                     // All entries are completed after second fill
                     assert!(filled_entry.is_complete,
-                        "Entry {} should have is_complete=true in second (final) fill event",
+                        "Entry {} should have is_complete=true in second (final) match",
                         filled_entry.entry.id);
                 }
-                _ => panic!("Unexpected entry in fill event 1"),
+                _ => panic!("Unexpected entry in match 1"),
             }
         }
     }
@@ -1801,8 +1801,8 @@ mod tests {
             self_match_id: Some(99),
         }).unwrap();
 
-        // Should trigger a fill event with entries 200, 101, 102, 103
-        assert_eq!(submit.fill_events.len(), 1);
+        // Should trigger a match with entries 200, 101, 102, 103
+        assert_eq!(submit.match_infos.len(), 1);
     }
 
     #[test]
@@ -1887,7 +1887,7 @@ mod tests {
 
         // Submit market entry to lineup 3 with self_match_id=1
         // Market entry will calculate portion based on existing entries (including 100),
-        // then cancel entry 100, then try to match but fail silently (no fill events)
+        // then cancel entry 100, then try to match but fail silently (no matches)
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Market,
@@ -1896,8 +1896,8 @@ mod tests {
             self_match_id: Some(1),
         }).unwrap();
 
-        // Submission succeeds but with no fill events (market entry doesn't match)
-        assert_eq!(submit.fill_events.len(), 0);
+        // Submission succeeds but with no matches (market entry doesn't match)
+        assert_eq!(submit.match_infos.len(), 0);
         // Entry 100 should be in cancelled_entry_ids
         assert_eq!(submit.cancelled_entry_ids.len(), 1);
         assert!(submit.cancelled_entry_ids.contains(&100));

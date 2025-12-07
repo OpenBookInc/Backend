@@ -1,4 +1,4 @@
-module CommandCenter
+module MatchingEngineClients
 
 go 1.25.4
 

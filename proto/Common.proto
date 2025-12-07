@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "OpenBook/proto";
+option go_package = "OpenBook/Common/proto";
 
 enum OrderType {
   LIMIT = 0;
