@@ -1,76 +1,38 @@
 syntax = "proto3";
 
-package MatchingServicePackage;
+package OpenBook.MatchingServicePackage;
 
-option go_package = "CommandCenter/proto";
+import "Common.proto";
+
+option go_package = "OpenBook/proto";
 
 service MatchingServerService {
-  rpc CreateHeartbeatResponseStream(stream Heartbeat) returns (stream HeartbeatResponseEnvelope);
-  rpc CreateOrderNewResponseStream(stream OrderNew) returns (stream OrderNewResponseEnvelope);
-  rpc CreateOrderCancelResponseStream(stream OrderCancel) returns (stream OrderCancelResponseEnvelope);
+  rpc CreateTradeStream(stream GatewayMessage) returns (stream EngineMessage);
 }
 
-enum VersionMajor {
-  IGNORE_0 = 0;
-  VERSION_MAJOR_VALUE = 1;
-}
+// Messages sent from gateway → engine
+message GatewayMessage {
+  SequencedMessageBase sequencedMessageBase = 1;
 
-enum VersionMinor {
-  VERSION_MINOR_VALUE = 0;
-}
-
-enum MessageType {
-  HEARTBEAT = 0;
-  GENERAL_REJECT = 1;
-  ORDER_NEW = 4;
-  ORDER_NEW_ACKNOWLEDGEMENT = 5;
-  ORDER_CANCEL = 6;
-  ORDER_CANCEL_ACKNOWLEDGEMENT = 7;
-  ORDER_FILL = 8;
-  ORDER_ELIMINATION = 9;
-}
-
-enum OrderType {
-  LIMIT = 0;
-  MARKET = 1;
-}
-
-message MessageBase {
-  uint32 versionMajor = 1;
-  uint32 versionMinor = 2;
-  MessageType messageType = 3;
-}
-
-message SequencedMessageBase {
-  uint64 sequenceNumber = 1;
-}
-
-message ResponseBase {
-  uint64 requestSequenceNumber = 1;
-}
-
-// Some response types can fail if the request has invalid information, in which case they compose themselves with this message
-message FallibleBase {
-  bool success = 1;
-  string errorDescription = 2;
-}
-
-message Heartbeat {
-  MessageBase messageBase = 1;
-}
-
-message GeneralReject {
-  message Body {
-    string errorDescription = 1;
+  oneof msg {
+    NewOrder newOrder = 2;
+    CancelOrder cancelOrder = 3;
   }
-
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  ResponseBase responseBase = 3;
-  Body body = 4;
 }
 
-message OrderNew {
+// Messages sent from engine → gateway
+message EngineMessage {
+  SequencedMessageBase sequencedMessageBase = 1;
+
+  oneof event {
+    NewOrderAcknowledgement newOrderAcknowledgement = 2;
+    CancelOrderAcknowledgement cancelOrderAcknowledgement = 3;
+    OrderElimination elimination = 4;
+    Match match = 5;
+  }
+}
+
+message NewOrder {
   message Body {
     message Leg {
       uint64 legSecurityId = 1;
@@ -82,105 +44,66 @@ message OrderNew {
     OrderType orderType = 3;
     uint64 portion = 4;
     uint64 quantity = 5;
-    optional uint64 selfMatchId = 6; // Protects a user from filling against orders entirely against themselves. If unpopulated, user gets no protections
+    optional uint64 selfMatchId =
+        6; // Protects a user from filling against orders entirely against
+           // themselves. If unpopulated, user gets no protections
   }
 
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  Body body = 3;
+  Body body = 1;
 }
 
-message OrderNewAcknowledgement {
+message NewOrderAcknowledgement {
   message Body {
     uint64 clientOrderId = 1;
     uint64 orderId = 2;
   }
 
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  ResponseBase responseBase = 3;
-  FallibleBase fallibleBase = 4;
-  Body body = 5;
-}
-
-message OrderCancel {
-  message Body {
-    uint64 orderId = 1;
-  }
-
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
+  ResponseBase responseBase = 1;
+  FallibleBase fallibleBase = 2;
   Body body = 3;
 }
 
-message OrderCancelAcknowledgement {
-  message Body {
-    uint64 orderId = 1;
-  }
+message CancelOrder {
+  message Body { uint64 orderId = 1; }
 
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  ResponseBase responseBase = 3;
-  FallibleBase fallibleBase = 4;
-  Body body = 5;
+  Body body = 1;
 }
 
-// Similar to OrderCancelAcknowledgement but sent if the order is cancelled when the user has not requested a cancel (e.g., during Matcher shutdown)
+message CancelOrderAcknowledgement {
+  message Body { uint64 orderId = 1; }
+
+  ResponseBase responseBase = 1;
+  FallibleBase fallibleBase = 2;
+  Body body = 3;
+}
+
+// Similar to CancelOrderAcknowledgement but sent if the order is cancelled when
+// the user has not requested a cancel (e.g., during Matcher shutdown)
 message OrderElimination {
   message Body {
     uint64 orderId = 1;
     string eliminationDescription = 2;
   }
 
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  Body body = 3;
+  Body body = 1;
 }
 
-message FillEvent {
-  message Body
-  {
-    message Fill {
-      uint64 fillId = 1;
+message Match {
+  message Body {
+    message FillEvent {
+      uint64 fillEventId = 1;
       uint64 orderId = 2;
       bool isAggressor = 3;
       uint64 matchedPortion = 4;
-      bool isComplete = 5; // only marked true for the final fill notification of an order
+      bool isComplete =
+          5; // only marked true for the final fill notification of an order
     }
 
     uint64 transactionId = 1;
-    uint64 fillEventId = 2;
+    uint64 matchId = 2;
     uint64 matchedQuantity = 3;
-    repeated Fill fills = 4;
+    repeated FillEvent fillEvents = 4;
   }
 
-  MessageBase messageBase = 1;
-  SequencedMessageBase sequencedMessageBase = 2;
-  Body body = 3;
-}
-
-// Encapsulate all possible messages that can be sent as a result of Heartbeat
-message HeartbeatResponseEnvelope {
-  oneof contents {
-    GeneralReject generalReject = 1;
-    Heartbeat heartbeat = 2;
-  }
-}
-
-// Encapsulate all possible messages that can be sent as a result of OrderNew
-message OrderNewResponseEnvelope {
-  oneof contents {
-    GeneralReject generalReject = 1;
-    OrderNewAcknowledgement acknowledgement = 2;
-    OrderElimination elimination = 3;
-    FillEvent fill = 4;
-  }
-}
-
-// Encapsulate all possible messages that can be sent as a result of OrderCancel
-message OrderCancelResponseEnvelope {
-  oneof contents {
-    GeneralReject generalReject = 1;
-    OrderCancelAcknowledgement acknowledgement = 2;
-  }
+  Body body = 1;
 }

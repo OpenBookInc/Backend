@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package OpenBook.GatewayServicePackage;
+
+import "Common.proto";
+
+option go_package = "OpenBook/proto";
+
+service GatewayServerService {
+  // Bidirectional streaming RPC:
+  // Client sends NewOrder / CancelOrder messages.
+  // Gateway sends ordered GatewayEvents (acks, matches, snapshots).
+  rpc CreateTradeStream(stream BackendMessage) returns (stream GatewayMessage);
+}
+
+// Messages sent from client → server
+message BackendMessage {
+  oneof msg {
+    NewOrder newOrder = 1;
+    CancelOrder cancelOrder = 2;
+  }
+}
+
+// Messages sent from server → client
+message GatewayMessage {
+  SequencedMessageBase sequencedMessageBase = 1;
+
+  oneof event {
+    NewOrderAcknowledgement newOrderAcknowledgement = 2;
+    CancelOrderAcknowledgement cancelOrderAcknowledgement = 3;
+    Match match = 4;
+    OrderBookSnapshot orderBookSnapshot = 5;
+  }
+}
+
+message NewOrder {
+  message Body {
+    message Leg {
+      uint64 legSecurityId = 1;
+      bool isOver = 2;
+    }
+
+    uint64 userId = 1;
+    uint64 clientOrderId = 2;
+    repeated Leg legs = 3;
+    OrderType orderType = 4;
+    uint64 portion = 5;
+    uint64 quantity = 6;
+  }
+
+  Body body = 1;
+}
+
+message CancelOrder {
+  message Body { uint64 orderId = 1; }
+
+  Body body = 1;
+}
+
+message CancelOrderAcknowledgement {
+  message Body { uint64 orderId = 1; }
+
+  ResponseBase responseBase = 1;
+  FallibleBase fallibleBase = 2;
+  Body body = 3;
+}
+
+message NewOrderAcknowledgement {
+  message Body {
+    uint64 clientOrderId = 1;
+    uint64 orderId = 2;
+  }
+
+  ResponseBase responseBase = 1;
+  FallibleBase fallibleBase = 2;
+  Body body = 3;
+}
+
+message Match {
+  message Body {
+    message FillEvent {
+      uint64 fillEventId = 1;
+      uint64 orderId = 2;
+      bool isAggressor = 3;
+      uint64 matchedPortion = 4;
+      bool isComplete =
+          5; // only marked true for the final fill notification of an order
+    }
+
+    uint64 transactionId = 1;
+    uint64 matchId = 2;
+    uint64 matchedQuantity = 3;
+    repeated FillEvent fillEvents = 4;
+  }
+
+  Body body = 1;
+}
+
+message OrderBookSnapshot {
+  message LineupBook {
+    message Level {
+      message Order { uint64 quantityRemaining = 1; }
+
+      uint64 portion = 1;
+      repeated Order orders = 2;
+    }
+
+    repeated bool isOver = 1;
+    repeated Level levels = 2;
+  }
+
+  repeated uint64 legSecurityIds = 1;
+}

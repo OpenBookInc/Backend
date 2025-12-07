@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package = "OpenBook/proto";
+
+enum OrderType {
+  LIMIT = 0;
+  MARKET = 1;
+}
+
+message SequencedMessageBase { uint64 sequenceNumber = 1; }
+
+message ResponseBase { uint64 requestSequenceNumber = 1; }
+
+// Some response types can fail if the request has invalid information, in which
+// case they compose themselves with this message
+message FallibleBase {
+  bool success = 1;
+  string errorDescription = 2;
+}
