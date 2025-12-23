@@ -23,7 +23,7 @@ go.work
 .env.local
 
 # Output files
-PopulationScriptOutput.txt
+update_reference_data_output.txt
 
 # IDE
 .vscode/
