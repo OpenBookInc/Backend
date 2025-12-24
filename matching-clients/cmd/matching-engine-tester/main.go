@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	common "MatchingEngineClients/src/gen"
-	pb "MatchingEngineClients/src/gen/matching"
+	common "matching-clients/src/gen"
+	pb "matching-clients/src/gen/matching"
 
 	"github.com/openbook/shared/envloader"
 	"google.golang.org/grpc"

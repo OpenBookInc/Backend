@@ -39,7 +39,7 @@ message NewOrder {
       bool isOver = 2;
     }
 
-    uint64 clientOrderId = 1;
+    uint64 clientOrderId = 1; // Unique identifier (assigned by the matching engine gateway) to tie OrderNewAcknowledgement back to this OrderNew
     repeated Leg legs = 2;
     OrderType orderType = 3;
     uint64 portion = 4;

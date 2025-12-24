@@ -1,0 +1,5 @@
+/.bin
+/out/
+
+# Environment files
+.env

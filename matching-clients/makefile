@@ -9,7 +9,7 @@ PROTOC_GEN_GO := $(BIN_DIR)/protoc-gen-go
 PROTOC_GEN_GO_GRPC := $(BIN_DIR)/protoc-gen-go-grpc
 
 # Go module name
-MODULE := MatchingEngineClients
+MODULE := matching-clients
 
 # Install protoc plugins locally into .bin/
 .PHONY: setup
