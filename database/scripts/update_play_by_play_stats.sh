@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # =============================================================================
-# Update Live Stats Script
+# Update Play-by-Play Stats Script
 # =============================================================================
-# Fetches and updates live game statistics every 1-5 seconds.
+# Fetches and updates play-by-play game statistics.
 # Uses the shared .env file in the database/ directory.
 #
-# Usage: ./update_live_stats.sh
+# Usage: ./update_play_by_play_stats.sh
 # =============================================================================
 
 set -e
@@ -17,6 +17,6 @@ DATABASE_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$DATABASE_DIR"
 
 # Run the Go script from the database directory
-go run scripts/cmd/update-live-stats/main.go && \
-    echo 'Update Live Stats Script stopped' || \
-    echo 'Update Live Stats Script failed'
+go run scripts/cmd/update-play-by-play-stats/main.go && \
+    echo 'Update Play-by-Play Stats Script stopped' || \
+    echo 'Update Play-by-Play Stats Script failed'
