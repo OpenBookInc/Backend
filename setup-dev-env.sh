@@ -96,13 +96,19 @@ setup_go() {
         fi
     fi
     
-    print_info "Please install Go $GO_VERSION from https://go.dev/dl/"
-    print_info "Or use a version manager like 'goenv' or 'gvm'"
-    
     if [ "$OS" == "macos" ]; then
-        print_info "On macOS, you can use: brew install go@${GO_VERSION%.*}"
+        if check_command brew; then
+            print_info "Installing Go via Homebrew..."
+            brew install go || brew upgrade go
+            print_success "Go installed via Homebrew"
+            return 0
+        else
+            print_error "Homebrew not found. Please install Homebrew first: https://brew.sh"
+            return 1
+        fi
     elif [ "$OS" == "linux" ]; then
         print_info "On Linux, download from https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz"
+        return 1
     fi
     
     return 1
@@ -129,6 +135,18 @@ setup_rust() {
         fi
     fi
     
+    if [ "$OS" == "macos" ]; then
+        if check_command brew; then
+            print_info "Installing rustup via Homebrew..."
+            brew install rustup-init
+            rustup-init -y --default-toolchain "$RUST_VERSION"
+            source "$HOME/.cargo/env"
+            print_success "Rust $RUST_VERSION installed via Homebrew + rustup"
+            return 0
+        fi
+    fi
+    
+    # Fallback to rustup installer
     print_info "Installing Rust via rustup..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$RUST_VERSION"
     source "$HOME/.cargo/env"
@@ -151,17 +169,16 @@ setup_protoc() {
         fi
     fi
     
-    print_info "Installing protoc $PROTOC_VERSION..."
-    
     if [ "$OS" == "macos" ]; then
         if check_command brew; then
-            # Check if a specific version can be installed
-            print_info "Installing via Homebrew..."
+            print_info "Installing protobuf via Homebrew..."
             brew install protobuf || brew upgrade protobuf
             print_success "protoc installed via Homebrew"
-            print_warning "Homebrew may install a different version. For exact version control, install manually."
+            print_warning "Homebrew may install a different version than $PROTOC_VERSION"
+            return 0
         else
-            print_info "Download protoc from: https://github.com/protocolbuffers/protobuf/releases/tag/v${PROTOC_VERSION}"
+            print_error "Homebrew not found. Please install Homebrew first: https://brew.sh"
+            return 1
         fi
     elif [ "$OS" == "linux" ]; then
         PROTOC_ZIP="protoc-${PROTOC_VERSION}-linux-x86_64.zip"
@@ -221,17 +238,35 @@ setup_protoc_go_plugins() {
 setup_goose() {
     print_header "Setting up Goose $GOOSE_VERSION"
     
-    print_info "Installing goose@${GOOSE_VERSION}..."
-    go install "github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}"
-    
     if check_command goose; then
-        print_success "Goose installed: $(goose --version 2>&1 | head -1)"
-    else
-        GOBIN=$(go env GOBIN)
-        if [ -z "$GOBIN" ]; then
-            GOBIN="$(go env GOPATH)/bin"
+        print_success "Goose is already installed: $(goose --version 2>&1 | head -1)"
+        return 0
+    fi
+    
+    if [ "$OS" == "macos" ]; then
+        if check_command brew; then
+            print_info "Installing goose via Homebrew..."
+            brew install goose
+            print_success "Goose installed via Homebrew"
+            return 0
+        else
+            print_error "Homebrew not found. Please install Homebrew first: https://brew.sh"
+            return 1
         fi
-        print_warning "Goose installed but not in PATH. Binary is at: $GOBIN/goose"
+    else
+        # Fallback for non-macOS
+        print_info "Installing goose@${GOOSE_VERSION} via go install..."
+        go install "github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}"
+        
+        if check_command goose; then
+            print_success "Goose installed: $(goose --version 2>&1 | head -1)"
+        else
+            GOBIN=$(go env GOBIN)
+            if [ -z "$GOBIN" ]; then
+                GOBIN="$(go env GOPATH)/bin"
+            fi
+            print_warning "Goose installed but not in PATH. Binary is at: $GOBIN/goose"
+        fi
     fi
 }
 
