@@ -396,6 +396,8 @@ func (e *Event) String() string {
 	sb.WriteString(fmt.Sprintf("      Sequence:    %.1f\n", e.Sequence))
 	sb.WriteString(fmt.Sprintf("      Clock:       %s\n", e.Clock))
 	sb.WriteString(fmt.Sprintf("      Wall Clock:  %s\n", e.WallClock))
+	sb.WriteString(fmt.Sprintf("      Created At:  %s\n", e.CreatedAt))
+	sb.WriteString(fmt.Sprintf("      Updated At:  %s\n", e.UpdatedAt))
 	sb.WriteString(fmt.Sprintf("      Description: %s\n", e.Description))
 	if e.AltDescription != "" {
 		sb.WriteString(fmt.Sprintf("      Alt Desc:    %s\n", e.AltDescription))
