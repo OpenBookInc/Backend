@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	// Load configuration from environment file and variables
-	cfg, err := config.LoadFromFile(*envFile)
+	cfg, err := config.LoadReferenceDataConfigFromFile(*envFile)
 	if err != nil {
 		fatal("Failed to load configuration: %v\nPlease set your Sportradar API key in .env file or as an environment variable", err)
 	}

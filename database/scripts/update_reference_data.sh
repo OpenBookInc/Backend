@@ -9,14 +9,5 @@
 # Usage: ./update_reference_data.sh
 # =============================================================================
 
-set -e
-
-# Change to the database directory where the shared .env file lives
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DATABASE_DIR="$(dirname "$SCRIPT_DIR")"
-cd "$DATABASE_DIR"
-
-# Run the Go script from the database directory
-go run scripts/cmd/update-reference-data/main.go > scripts/update_reference_data_output.txt && \
-    echo 'Update Reference Data Script completed successfully' || \
-    echo 'Update Reference Data Script failed'
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+run_go_script "update-reference-data" "Update Reference Data"

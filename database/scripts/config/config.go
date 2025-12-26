@@ -16,20 +16,13 @@ const (
 	SeasonTypePreSeason  = "PRE" // Pre-season (NFL only)
 )
 
-// Config holds all configuration for the application
-type Config struct {
+// BaseConfig holds common configuration shared across all scripts
+type BaseConfig struct {
 	// API Configuration
 	SportradarAPIKey string
 
 	// Rate Limiting Configuration
 	RateLimitDelayMilliseconds int
-
-	// Season Configuration
-	NFLSeasonYear int    // Year for NFL season (default: current year)
-	NFLSeasonType string // Type of NFL season: SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason (default: SeasonTypeRegular)
-	NFLWeek       int    // NFL week for injury data (default: 1)
-	NBASeasonYear int    // Year for NBA season (default: current year)
-	NBASeasonType string // Type of NBA season: SeasonTypeRegular, SeasonTypePostSeason (default: SeasonTypeRegular)
 
 	// Database Configuration
 	PGHost     string
@@ -40,46 +33,31 @@ type Config struct {
 	PGKeyPath  string // Path to SSL certificate file
 }
 
-// LoadFromFile loads environment variables from the specified file, then reads configuration
-// If envFile is empty, it will load from .env in the current directory (required)
-// Validates that all required configuration variables are set
-func LoadFromFile(envFile string) (*Config, error) {
-	// Load .env file - fail if not found
-	if err := envloader.LoadEnvFile(envFile); err != nil {
-		return nil, err
-	}
+// ReferenceDataConfig holds configuration for the reference data population script
+type ReferenceDataConfig struct {
+	BaseConfig
 
-	cfg := Load()
-
-	// Validate required fields
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	// Season Configuration
+	NFLSeasonYear int    // Year for NFL season (default: current year)
+	NFLSeasonType string // Type of NFL season: SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason (default: SeasonTypeRegular)
+	NFLWeek       int    // NFL week for injury data (default: 1)
+	NBASeasonYear int    // Year for NBA season (default: current year)
+	NBASeasonType string // Type of NBA season: SeasonTypeRegular, SeasonTypePostSeason (default: SeasonTypeRegular)
 }
 
-// Load reads configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
-// Optional fields (with defaults):
-//   - RATE_LIMIT_DELAY_MS (default: 1000)
-//   - NFL_SEASON_YEAR (default: current year)
-//   - NFL_SEASON_TYPE (default: "REG")
-//   - NFL_WEEK (default: 1)
-//   - NBA_SEASON_YEAR (default: current year)
-//   - NBA_SEASON_TYPE (default: "REG")
-// This does not load any .env files - use LoadFromFile for that
-func Load() *Config {
-	currentYear := time.Now().Year()
+// PlayByPlayConfig holds configuration for the play-by-play stats script
+type PlayByPlayConfig struct {
+	BaseConfig
 
-	cfg := &Config{
+	// Game Configuration
+	NFLGameID string // Sportradar game UUID (e.g., "0972a79b-c571-466b-b28d-1b7f8a00f5d3")
+}
+
+// loadBaseConfig reads common configuration from environment variables
+func loadBaseConfig() BaseConfig {
+	return BaseConfig{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
 		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("RATE_LIMIT_DELAY_MS", 1000),
-		NFLSeasonYear:              envloader.GetEnvAsIntWithDefault("NFL_SEASON_YEAR", currentYear),
-		NFLSeasonType:              strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
-		NFLWeek:                    envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
-		NBASeasonYear:              envloader.GetEnvAsIntWithDefault("NBA_SEASON_YEAR", currentYear),
-		NBASeasonType:              strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
 		PGHost:                     os.Getenv("PG_HOST"),
 		PGPort:                     os.Getenv("PG_PORT"),
 		PGDatabase:                 os.Getenv("PG_DATABASE"),
@@ -87,12 +65,10 @@ func Load() *Config {
 		PGPassword:                 os.Getenv("PG_PASSWORD"),
 		PGKeyPath:                  os.Getenv("PG_KEY_PATH"),
 	}
-
-	return cfg
 }
 
-// Validate checks that all required configuration fields are set
-func (c *Config) Validate() error {
+// Validate checks that all required base configuration fields are set
+func (c *BaseConfig) Validate() error {
 	if c.SportradarAPIKey == "" {
 		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEY")
 	}
@@ -117,6 +93,59 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
 	}
 
+	return nil
+}
+
+// LoadReferenceDataConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadReferenceDataConfigFromFile(envFile string) (*ReferenceDataConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadReferenceDataConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadReferenceDataConfig reads reference data configuration from environment variables
+// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+// Optional fields (with defaults):
+//   - RATE_LIMIT_DELAY_MS (default: 1000)
+//   - NFL_SEASON_YEAR (default: current year)
+//   - NFL_SEASON_TYPE (default: "REG")
+//   - NFL_WEEK (default: 1)
+//   - NBA_SEASON_YEAR (default: current year)
+//   - NBA_SEASON_TYPE (default: "REG")
+//
+// This does not load any .env files - use LoadReferenceDataConfigFromFile for that
+func LoadReferenceDataConfig() *ReferenceDataConfig {
+	currentYear := time.Now().Year()
+
+	return &ReferenceDataConfig{
+		BaseConfig:    loadBaseConfig(),
+		NFLSeasonYear: envloader.GetEnvAsIntWithDefault("NFL_SEASON_YEAR", currentYear),
+		NFLSeasonType: strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
+		NFLWeek:       envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
+		NBASeasonYear: envloader.GetEnvAsIntWithDefault("NBA_SEASON_YEAR", currentYear),
+		NBASeasonType: strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
+	}
+}
+
+// Validate checks that all required reference data configuration fields are set
+func (c *ReferenceDataConfig) Validate() error {
+	// Validate base config first
+	if err := c.BaseConfig.Validate(); err != nil {
+		return err
+	}
+
 	// Season type validation
 	validNFLSeasonTypes := []string{SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason}
 	if !isValidSeasonType(c.NFLSeasonType, validNFLSeasonTypes) {
@@ -126,6 +155,53 @@ func (c *Config) Validate() error {
 	validNBASeasonTypes := []string{SeasonTypeRegular, SeasonTypePostSeason}
 	if !isValidSeasonType(c.NBASeasonType, validNBASeasonTypes) {
 		return fmt.Errorf("invalid NBA_SEASON_TYPE '%s': must be one of %v", c.NBASeasonType, validNBASeasonTypes)
+	}
+
+	return nil
+}
+
+// LoadPlayByPlayConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadPlayByPlayConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadPlayByPlayConfig reads play-by-play configuration from environment variables
+// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID
+// Optional fields (with defaults):
+//   - RATE_LIMIT_DELAY_MS (default: 1000)
+//
+// This does not load any .env files - use LoadPlayByPlayConfigFromFile for that
+func LoadPlayByPlayConfig() *PlayByPlayConfig {
+	return &PlayByPlayConfig{
+		BaseConfig: loadBaseConfig(),
+		NFLGameID:  os.Getenv("NFL_GAME_ID"),
+	}
+}
+
+// Validate checks that all required play-by-play configuration fields are set
+func (c *PlayByPlayConfig) Validate() error {
+	// Validate base config first
+	if err := c.BaseConfig.Validate(); err != nil {
+		return err
+	}
+
+	// Play-by-play specific validation
+	if c.NFLGameID == "" {
+		return fmt.Errorf("missing required environment variable: NFL_GAME_ID")
 	}
 
 	return nil

@@ -22,7 +22,7 @@ go.work
 .env.local
 
 # Output files
-update_reference_data_output.txt
+out/
 
 # IDE
 .vscode/
