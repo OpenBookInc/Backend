@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -66,4 +67,9 @@ func New(ctx context.Context, host, port, database, user, password, sslKeyPath s
 // Close closes the database connection pool
 func (s *Store) Close() {
 	s.pool.Close()
+}
+
+// BeginTx starts a new database transaction
+func (s *Store) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	return s.pool.Begin(ctx)
 }

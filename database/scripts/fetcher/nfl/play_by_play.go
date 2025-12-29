@@ -10,19 +10,19 @@ import (
 
 // PlayByPlayResponse represents the complete NFL play-by-play API response
 type PlayByPlayResponse struct {
-	ID        string    `json:"id"`
-	Status    string    `json:"status"`
-	Scheduled string    `json:"scheduled"`
-	Attendance int      `json:"attendance"`
-	EntryMode  string   `json:"entry_mode"`
-	Weather    *Weather  `json:"weather"`
-	Coin_Toss  *CoinToss `json:"coin_toss"`
-	Summary    *Summary  `json:"summary"`
+	ID         string     `json:"id"`
+	Status     string     `json:"status"`
+	Scheduled  string     `json:"scheduled"`
+	Attendance int        `json:"attendance"`
+	EntryMode  string     `json:"entry_mode"`
+	Weather    *Weather   `json:"weather"`
+	Coin_Toss  *CoinToss  `json:"coin_toss"`
+	Summary    *Summary   `json:"summary"`
 	Situation  *Situation `json:"situation"`
-	LastEvent  *Event    `json:"last_event"`
-	Home       *Team     `json:"home"`
-	Away       *Team     `json:"away"`
-	Periods    []Period  `json:"periods"`
+	LastEvent  *Event     `json:"last_event"`
+	Home       *Team      `json:"home"`
+	Away       *Team      `json:"away"`
+	Periods    []Period   `json:"periods"`
 }
 
 func (p *PlayByPlayResponse) String() string {
@@ -86,10 +86,10 @@ func (p *PlayByPlayResponse) String() string {
 
 // Weather represents weather conditions for the game
 type Weather struct {
-	Condition   string  `json:"condition"`
-	Humidity    int     `json:"humidity"`
-	Temp        int     `json:"temp"`
-	Wind        *Wind   `json:"wind"`
+	Condition string `json:"condition"`
+	Humidity  int    `json:"humidity"`
+	Temp      int    `json:"temp"`
+	Wind      *Wind  `json:"wind"`
 }
 
 func (w *Weather) String() string {
@@ -116,10 +116,10 @@ func (w *Wind) String() string {
 
 // CoinToss represents the coin toss result
 type CoinToss struct {
-	HomeCall    string `json:"home_call"`
-	Winner      string `json:"winner"`
-	Direction   string `json:"direction"`
-	Decision    string `json:"decision"`
+	HomeCall  string `json:"home_call"`
+	Winner    string `json:"winner"`
+	Direction string `json:"direction"`
+	Decision  string `json:"decision"`
 }
 
 func (c *CoinToss) String() string {
@@ -134,11 +134,11 @@ func (c *CoinToss) String() string {
 
 // Summary represents the game scoring summary
 type Summary struct {
-	Season  *SeasonInfo  `json:"season"`
-	Week    *WeekInfo    `json:"week"`
-	Venue   *Venue       `json:"venue"`
-	Home    *TeamSummary `json:"home"`
-	Away    *TeamSummary `json:"away"`
+	Season *SeasonInfo  `json:"season"`
+	Week   *WeekInfo    `json:"week"`
+	Venue  *Venue       `json:"venue"`
+	Home   *TeamSummary `json:"home"`
+	Away   *TeamSummary `json:"away"`
 }
 
 func (s *Summary) String() string {
@@ -190,17 +190,17 @@ func (w *WeekInfo) String() string {
 
 // Venue represents the stadium/venue information
 type Venue struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	City      string   `json:"city"`
-	State     string   `json:"state"`
-	Country   string   `json:"country"`
-	Zip       string   `json:"zip"`
-	Address   string   `json:"address"`
-	Capacity  int      `json:"capacity"`
-	Surface   string   `json:"surface"`
-	RoofType  string   `json:"roof_type"`
-	Location  *Location `json:"location"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	City     string    `json:"city"`
+	State    string    `json:"state"`
+	Country  string    `json:"country"`
+	Zip      string    `json:"zip"`
+	Address  string    `json:"address"`
+	Capacity int       `json:"capacity"`
+	Surface  string    `json:"surface"`
+	RoofType string    `json:"roof_type"`
+	Location *Location `json:"location"`
 }
 
 func (v *Venue) String() string {
@@ -231,11 +231,11 @@ func (l *Location) String() string {
 
 // TeamSummary represents a team's scoring summary
 type TeamSummary struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Market string   `json:"market"`
-	Alias  string   `json:"alias"`
-	Points int      `json:"points"`
+	ID      string    `json:"id"`
+	Name    string    `json:"name"`
+	Market  string    `json:"market"`
+	Alias   string    `json:"alias"`
+	Points  int       `json:"points"`
 	Scoring []Scoring `json:"scoring"`
 }
 
@@ -264,11 +264,11 @@ func (s *Scoring) String() string {
 
 // Situation represents the current game situation
 type Situation struct {
-	Clock     string      `json:"clock"`
-	Down      int         `json:"down"`
-	YFD       int         `json:"yfd"`
-	Possession *Possession `json:"possession"`
-	Location  *FieldLocation `json:"location"`
+	Clock      string         `json:"clock"`
+	Down       int            `json:"down"`
+	YFD        int            `json:"yfd"`
+	Possession *Possession    `json:"possession"`
+	Location   *FieldLocation `json:"location"`
 }
 
 func (s *Situation) String() string {
@@ -300,11 +300,11 @@ func (p *Possession) String() string {
 
 // FieldLocation represents the field position
 type FieldLocation struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Market string `json:"market"`
-	Alias  string `json:"alias"`
-	Yardline int  `json:"yardline"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Market   string `json:"market"`
+	Alias    string `json:"alias"`
+	Yardline int    `json:"yardline"`
 }
 
 func (f *FieldLocation) String() string {
@@ -313,16 +313,16 @@ func (f *FieldLocation) String() string {
 
 // Team represents a team in the game
 type Team struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Market       string    `json:"market"`
-	Alias        string    `json:"alias"`
-	SRId         string    `json:"sr_id"`
-	Used_Timeouts int      `json:"used_timeouts"`
-	Remaining_Timeouts int `json:"remaining_timeouts"`
-	Points       int       `json:"points"`
-	Used_Challenges int    `json:"used_challenges"`
-	Remaining_Challenges int `json:"remaining_challenges"`
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	Market               string `json:"market"`
+	Alias                string `json:"alias"`
+	SRId                 string `json:"sr_id"`
+	Used_Timeouts        int    `json:"used_timeouts"`
+	Remaining_Timeouts   int    `json:"remaining_timeouts"`
+	Points               int    `json:"points"`
+	Used_Challenges      int    `json:"used_challenges"`
+	Remaining_Challenges int    `json:"remaining_challenges"`
 }
 
 func (t *Team) String() string {
@@ -438,12 +438,12 @@ func (e *Event) String() string {
 
 // Score represents scoring information for an event
 type Score struct {
-	Sequence  int    `json:"sequence"`
-	Clock     string `json:"clock"`
-	Points    int    `json:"points"`
-	Type      string `json:"type"`
-	AwayPoints int   `json:"away_points"`
-	HomePoints int   `json:"home_points"`
+	Sequence   int    `json:"sequence"`
+	Clock      string `json:"clock"`
+	Points     int    `json:"points"`
+	Type       string `json:"type"`
+	AwayPoints int    `json:"away_points"`
+	HomePoints int    `json:"home_points"`
 }
 
 func (s *Score) String() string {
@@ -452,37 +452,37 @@ func (s *Score) String() string {
 
 // Statistic represents a single statistic entry for a play
 type Statistic struct {
-	StatType       string     `json:"stat_type"`
-	Category       string     `json:"category"`
-	Attempt        float64    `json:"attempt"`
-	Yards          float64    `json:"yards"`
-	NetYards       float64    `json:"net_yards"`
-	Touchback      float64    `json:"touchback"`
-	TouchbackPct   float64    `json:"touchback_pct"`
-	OnsideAttempt  float64    `json:"onside_attempt"`
-	OnsideSuccess  float64    `json:"onside_success"`
-	SquibKick      float64    `json:"squib_kick"`
-	Complete       float64    `json:"complete"`
-	Incomplete     float64    `json:"incomplete"`
-	Interception   float64    `json:"interception"`
-	Sack           float64    `json:"sack"`
-	SackYards      float64    `json:"sack_yards"`
-	Touchdown      float64    `json:"touchdown"`
-	FirstDown      float64    `json:"firstdown"`
-	GoalToGo       float64    `json:"goaltogo"`
-	Inside20       float64    `json:"inside_20"`
-	Broken         float64    `json:"broken"`
-	Kneel          float64    `json:"kneel"`
-	Scramble       float64    `json:"scramble"`
-	OnTarget       float64    `json:"on_target"`
-	Reception      float64    `json:"reception"`
-	Target         float64    `json:"target"`
-	Tackle         float64    `json:"tackle"`
-	Assist         float64    `json:"assist"`
-	Nullified      bool       `json:"nullified"`
-	Penalty        float64    `json:"penalty"`
-	Player         *PlayerRef `json:"player"`
-	Team           *TeamRef   `json:"team"`
+	StatType      string     `json:"stat_type"`
+	Category      string     `json:"category"`
+	Attempt       float64    `json:"attempt"`
+	Yards         float64    `json:"yards"`
+	NetYards      float64    `json:"net_yards"`
+	Touchback     float64    `json:"touchback"`
+	TouchbackPct  float64    `json:"touchback_pct"`
+	OnsideAttempt float64    `json:"onside_attempt"`
+	OnsideSuccess float64    `json:"onside_success"`
+	SquibKick     float64    `json:"squib_kick"`
+	Complete      float64    `json:"complete"`
+	Incomplete    float64    `json:"incomplete"`
+	Interception  float64    `json:"interception"`
+	Sack          float64    `json:"sack"`
+	SackYards     float64    `json:"sack_yards"`
+	Touchdown     float64    `json:"touchdown"`
+	FirstDown     float64    `json:"firstdown"`
+	GoalToGo      float64    `json:"goaltogo"`
+	Inside20      float64    `json:"inside_20"`
+	Broken        float64    `json:"broken"`
+	Kneel         float64    `json:"kneel"`
+	Scramble      float64    `json:"scramble"`
+	OnTarget      float64    `json:"on_target"`
+	Reception     float64    `json:"reception"`
+	Target        float64    `json:"target"`
+	Tackle        float64    `json:"tackle"`
+	Assist        float64    `json:"assist"`
+	Nullified     bool       `json:"nullified"`
+	Penalty       float64    `json:"penalty"`
+	Player        *PlayerRef `json:"player"`
+	Team          *TeamRef   `json:"team"`
 }
 
 func (s *Statistic) String() string {
@@ -589,24 +589,33 @@ func (l *LocationInfo) String() string {
 
 // Drive represents a drive in the game
 type Drive struct {
-	Type           string        `json:"type"`
-	ID             string        `json:"id"`
-	Sequence       float64       `json:"sequence"`
-	StartReason    string        `json:"start_reason"`
-	EndReason      string        `json:"end_reason"`
-	PlayCount      int           `json:"play_count"`
-	Duration       string        `json:"duration"`
-	FirstDowns     int           `json:"first_downs"`
-	Gain           int           `json:"gain"`
-	Penalty_Yards  int           `json:"penalty_yards"`
-	Inside20       bool          `json:"inside_20"`
-	Scoring_Drive  bool          `json:"scoring_drive"`
-	Team           *TeamRef      `json:"team"`
-	OffensiveTeam  *TeamRef      `json:"offensive_team"`
-	DefensiveTeam  *TeamRef      `json:"defensive_team"`
-	StartLocation  *LocationInfo `json:"start_location"`
-	EndLocation    *LocationInfo `json:"end_location"`
-	Events         []Event       `json:"events"`
+	Type          string        `json:"type"`
+	ID            string        `json:"id"`
+	Sequence      float64       `json:"sequence"`
+	StartReason   string        `json:"start_reason"`
+	EndReason     string        `json:"end_reason"`
+	PlayCount     int           `json:"play_count"`
+	Duration      string        `json:"duration"`
+	FirstDowns    int           `json:"first_downs"`
+	Gain          int           `json:"gain"`
+	Penalty_Yards int           `json:"penalty_yards"`
+	Inside20      bool          `json:"inside_20"`
+	Scoring_Drive bool          `json:"scoring_drive"`
+	OffensiveTeam *DriveTeam    `json:"offensive_team"`
+	DefensiveTeam *DriveTeam    `json:"defensive_team"`
+	StartLocation *LocationInfo `json:"start_location"`
+	EndLocation   *LocationInfo `json:"end_location"`
+	Events        []Event       `json:"events"`
+}
+
+// DriveTeam represents minimal team info in a drive (only ID and points)
+type DriveTeam struct {
+	ID     string `json:"id"`
+	Points int    `json:"points"`
+}
+
+func (dt *DriveTeam) String() string {
+	return fmt.Sprintf("ID: %s, Points: %d", dt.ID, dt.Points)
 }
 
 func (d *Drive) String() string {
@@ -623,14 +632,17 @@ func (d *Drive) String() string {
 	sb.WriteString(fmt.Sprintf("    Penalty Yards: %d\n", d.Penalty_Yards))
 	sb.WriteString(fmt.Sprintf("    Inside 20:     %t\n", d.Inside20))
 	sb.WriteString(fmt.Sprintf("    Scoring Drive: %t\n", d.Scoring_Drive))
-	if d.Team != nil {
-		sb.WriteString(fmt.Sprintf("    Team:          %s\n", d.Team.String()))
-	}
+
+	// Print team information (show null explicitly for debugging)
 	if d.OffensiveTeam != nil {
-		sb.WriteString(fmt.Sprintf("    Offense:       %s\n", d.OffensiveTeam.String()))
+		sb.WriteString(fmt.Sprintf("    OffensiveTeam: %s\n", d.OffensiveTeam.String()))
+	} else {
+		sb.WriteString("    OffensiveTeam: <nil>\n")
 	}
 	if d.DefensiveTeam != nil {
-		sb.WriteString(fmt.Sprintf("    Defense:       %s\n", d.DefensiveTeam.String()))
+		sb.WriteString(fmt.Sprintf("    DefensiveTeam: %s\n", d.DefensiveTeam.String()))
+	} else {
+		sb.WriteString("    DefensiveTeam: <nil>\n")
 	}
 	if d.StartLocation != nil {
 		sb.WriteString(fmt.Sprintf("    Start:         %s\n", d.StartLocation.String()))
@@ -676,15 +688,15 @@ func (p *PlayerRef) String() string {
 
 // Detail represents a play detail
 type Detail struct {
-	Category    string     `json:"category"`
-	Description string     `json:"description"`
-	Sequence    int        `json:"sequence"`
-	Direction   string     `json:"direction"`
-	Result      string     `json:"result"`
-	Yards       int        `json:"yards"`
-	StartLocation *LocationInfo `json:"start_location"`
-	EndLocation   *LocationInfo `json:"end_location"`
-	Players     []DetailPlayer `json:"players"`
+	Category      string         `json:"category"`
+	Description   string         `json:"description"`
+	Sequence      int            `json:"sequence"`
+	Direction     string         `json:"direction"`
+	Result        string         `json:"result"`
+	Yards         int            `json:"yards"`
+	StartLocation *LocationInfo  `json:"start_location"`
+	EndLocation   *LocationInfo  `json:"end_location"`
+	Players       []DetailPlayer `json:"players"`
 }
 
 func (d *Detail) String() string {
@@ -714,11 +726,11 @@ func (d *Detail) String() string {
 
 // DetailPlayer represents a player in a play detail
 type DetailPlayer struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Jersey   string `json:"jersey"`
-	Position string `json:"position"`
-	Role     string `json:"role"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Jersey   string   `json:"jersey"`
+	Position string   `json:"position"`
+	Role     string   `json:"role"`
 	Team     *TeamRef `json:"team"`
 }
 
@@ -732,12 +744,12 @@ func (d *DetailPlayer) String() string {
 
 // Player represents a player involved in an event
 type Player struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Jersey   string `json:"jersey"`
-	Position string `json:"position"`
-	Role     string `json:"role"`
-	SRId     string `json:"sr_id"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Jersey   string   `json:"jersey"`
+	Position string   `json:"position"`
+	Role     string   `json:"role"`
+	SRId     string   `json:"sr_id"`
 	Team     *TeamRef `json:"team"`
 }
 

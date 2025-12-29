@@ -74,7 +74,26 @@ COMMAND=$1
 shift
 
 case "$COMMAND" in
-    up|down|status|redo|reset|version)
+    up|down|redo)
+        echo -e "${BLUE}Running: goose $COMMAND${NC}"
+        goose "$COMMAND" "$@"
+        GOOSE_EXIT_CODE=$?
+
+        if [ $GOOSE_EXIT_CODE -eq 0 ]; then
+            echo -e "${GREEN}✅ Migration $COMMAND completed${NC}"
+            echo -e "${BLUE}Updating Go enums from database...${NC}"
+            "$SCRIPT_DIR/update_go_enums.sh"
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✅ Go enums updated${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Warning: Failed to update Go enums${NC}"
+            fi
+        else
+            echo -e "${RED}❌ Migration $COMMAND failed${NC}"
+            exit $GOOSE_EXIT_CODE
+        fi
+        ;;
+    status|reset|version)
         echo -e "${BLUE}Running: goose $COMMAND${NC}"
         goose "$COMMAND" "$@"
         echo -e "${GREEN}✅ Migration $COMMAND completed${NC}"

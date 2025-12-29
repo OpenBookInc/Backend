@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/persister"
 	"github.com/openbook/shared/models"
+	"github.com/openbook/shared/models/gen"
 )
 
 // NFLInjuriesResponse represents the NFL weekly injuries API response
@@ -78,15 +80,15 @@ func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 				statusStr = playerData.Injuries[0].Status
 			}
 
-			// Validate the status against our enum
-			status, err := models.ValidateIndividualStatusType(statusStr)
+			// Map the status to database enum format
+			mappedStatus, err := persister.MapIndividualStatusToDB(statusStr)
 			if err != nil {
 				return fmt.Errorf("invalid status for NFL player %s (%s): %w", playerData.Name, playerData.ID, err)
 			}
 
 			individualStatus := &models.IndividualStatus{
 				Individual: individual,
-				Status:     status,
+				Status:     gen.IndividualStatus(mappedStatus),
 				// IndividualID will be set during persistence in main.go
 			}
 
@@ -125,15 +127,15 @@ func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 				statusStr = playerData.Injuries[0].Status
 			}
 
-			// Validate the status against our enum
-			status, err := models.ValidateIndividualStatusType(statusStr)
+			// Map the status to database enum format
+			mappedStatus, err := persister.MapIndividualStatusToDB(statusStr)
 			if err != nil {
 				return fmt.Errorf("invalid status for NBA player %s (%s): %w", playerData.FullName, playerData.ID, err)
 			}
 
 			individualStatus := &models.IndividualStatus{
 				Individual: individual,
-				Status:     status,
+				Status:     gen.IndividualStatus(mappedStatus),
 				// IndividualID will be set during persistence in main.go
 			}
 
@@ -153,7 +155,7 @@ func SetDefaultActiveStatuses(dataStore *models.DataStore) {
 			// No status yet, set to Active
 			individualStatus := &models.IndividualStatus{
 				Individual: individual,
-				Status:     models.StatusActive,
+				Status:     gen.IndividualStatusActive,
 				// IndividualID will be set during persistence in main.go
 			}
 			dataStore.AddIndividualStatus(individualStatus)

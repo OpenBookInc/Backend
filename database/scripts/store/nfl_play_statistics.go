@@ -1,0 +1,196 @@
+package store
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	nflmodels "github.com/openbook/shared/models/nfl"
+	"github.com/shopspring/decimal"
+)
+
+// =============================================================================
+// NFL Play Statistics Store
+// =============================================================================
+// Unlike other tables (drives, plays), nfl_play_statistics does NOT have a
+// unique constraint because a single player can have multiple statistics of
+// different types on the same play (e.g., a player could have both a reception
+// and a fumble on the same play).
+//
+// Because of this, we use a DELETE + INSERT approach instead of ON CONFLICT:
+// 1. Delete all existing statistics for the given play_id
+// 2. Insert all new statistics
+//
+// This ensures we always have the latest data without complex matching logic,
+// and it handles cases where statistics are corrected or removed after review.
+// =============================================================================
+
+// PlayStatisticForUpsert represents the data needed to insert a play statistic.
+// This is an internal type used only by the store layer for upserts.
+// It uses VendorPlayerID instead of IndividualID - the ID is looked up via subquery.
+type PlayStatisticForUpsert struct {
+	VendorPlayerID      string
+	StatType            string
+	PassingAttempts     decimal.Decimal
+	RushingAttempts     decimal.Decimal
+	ReceivingTargets    decimal.Decimal
+	PassingYards        decimal.Decimal
+	RushingYards        decimal.Decimal
+	ReceivingYards      decimal.Decimal
+	PassingTouchdowns   decimal.Decimal
+	RushingTouchdowns   decimal.Decimal
+	ReceivingTouchdowns decimal.Decimal
+	Completions         decimal.Decimal
+	Incompletions       decimal.Decimal
+	Receptions          decimal.Decimal
+	InterceptionsThrown decimal.Decimal
+	Interceptions       decimal.Decimal
+	Fumbles             decimal.Decimal
+	FumblesLost         decimal.Decimal
+	SacksTaken          decimal.Decimal
+	Sacks               decimal.Decimal
+	Tackles             decimal.Decimal
+	Assists             decimal.Decimal
+	Nullified           bool
+}
+
+// ReplaceNFLPlayStatistics replaces all statistics for a play with new statistics.
+// This function first deletes all existing statistics for the play, then inserts
+// all the new statistics. This is necessary because there is no unique constraint
+// on the nfl_play_statistics table (a player can have multiple stat entries per play).
+// This function accepts a transaction (pgx.Tx) to support atomic operations.
+// The VendorPlayerID in each stat is looked up via subquery to get the individual_id.
+func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID int, stats []*PlayStatisticForUpsert) error {
+	// Step 1: Delete all existing statistics for this play
+	deleteQuery := `DELETE FROM nfl_play_statistics WHERE play_id = $1`
+	_, err := tx.Exec(ctx, deleteQuery, playID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing statistics for play_id %d: %w", playID, err)
+	}
+
+	// Step 2: Insert all new statistics
+	// If there are no statistics, we're done (the delete already cleared any old data)
+	if len(stats) == 0 {
+		return nil
+	}
+
+	insertQuery := `
+		INSERT INTO nfl_play_statistics (
+			play_id, individual_id, stat_type,
+			passing_attempts, rushing_attempts, receiving_targets,
+			passing_yards, rushing_yards, receiving_yards,
+			passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
+			completions, incompletions, receptions,
+			interceptions_thrown, interceptions,
+			fumbles, fumbles_lost,
+			sacks_taken, sacks, tackles, assists,
+			nullified
+		)
+		VALUES (
+			$1,
+			(SELECT id FROM individuals WHERE vendor_id = $2),
+			$3::nfl_stat_type,
+			$4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+		)
+	`
+
+	for _, stat := range stats {
+		_, err := tx.Exec(ctx, insertQuery,
+			playID,
+			stat.VendorPlayerID,
+			stat.StatType,
+			stat.PassingAttempts,
+			stat.RushingAttempts,
+			stat.ReceivingTargets,
+			stat.PassingYards,
+			stat.RushingYards,
+			stat.ReceivingYards,
+			stat.PassingTouchdowns,
+			stat.RushingTouchdowns,
+			stat.ReceivingTouchdowns,
+			stat.Completions,
+			stat.Incompletions,
+			stat.Receptions,
+			stat.InterceptionsThrown,
+			stat.Interceptions,
+			stat.Fumbles,
+			stat.FumblesLost,
+			stat.SacksTaken,
+			stat.Sacks,
+			stat.Tackles,
+			stat.Assists,
+			stat.Nullified,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert statistic for play_id %d, vendor_player_id %s (player may not exist in database): %w",
+				playID, stat.VendorPlayerID, err)
+		}
+	}
+
+	return nil
+}
+
+// GetNFLPlayStatisticsByPlayID retrieves all statistics for a given play
+func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([]*nflmodels.PlayStatistic, error) {
+	query := `
+		SELECT id, play_id, individual_id, stat_type,
+		       passing_attempts, rushing_attempts, receiving_targets,
+		       passing_yards, rushing_yards, receiving_yards,
+		       passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
+		       completions, incompletions, receptions,
+		       interceptions_thrown, interceptions,
+		       fumbles, fumbles_lost,
+		       sacks_taken, sacks, tackles, assists,
+		       nullified
+		FROM nfl_play_statistics
+		WHERE play_id = $1
+	`
+
+	rows, err := s.pool.Query(ctx, query, playID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query statistics for play_id %d: %w", playID, err)
+	}
+	defer rows.Close()
+
+	var stats []*nflmodels.PlayStatistic
+	for rows.Next() {
+		var stat nflmodels.PlayStatistic
+		err := rows.Scan(
+			&stat.ID,
+			&stat.PlayID,
+			&stat.IndividualID,
+			&stat.StatType,
+			&stat.PassingAttempts,
+			&stat.RushingAttempts,
+			&stat.ReceivingTargets,
+			&stat.PassingYards,
+			&stat.RushingYards,
+			&stat.ReceivingYards,
+			&stat.PassingTouchdowns,
+			&stat.RushingTouchdowns,
+			&stat.ReceivingTouchdowns,
+			&stat.Completions,
+			&stat.Incompletions,
+			&stat.Receptions,
+			&stat.InterceptionsThrown,
+			&stat.Interceptions,
+			&stat.Fumbles,
+			&stat.FumblesLost,
+			&stat.SacksTaken,
+			&stat.Sacks,
+			&stat.Tackles,
+			&stat.Assists,
+			&stat.Nullified,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan statistic row: %w", err)
+		}
+		stats = append(stats, &stat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating statistics rows: %w", err)
+	}
+
+	return stats, nil
+}
