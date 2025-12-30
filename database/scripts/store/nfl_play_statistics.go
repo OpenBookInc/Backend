@@ -194,3 +194,72 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 
 	return stats, nil
 }
+
+// GetNFLPlayStatisticsByGameID retrieves all statistics for a given game.
+// Joins through nfl_plays -> nfl_drives to filter by game_id.
+// Returns all PlayStatistic records associated with plays in the specified game.
+func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([]*nflmodels.PlayStatistic, error) {
+	query := `
+		SELECT ps.id, ps.play_id, ps.individual_id, ps.stat_type,
+		       ps.passing_attempts, ps.rushing_attempts, ps.receiving_targets,
+		       ps.passing_yards, ps.rushing_yards, ps.receiving_yards,
+		       ps.passing_touchdowns, ps.rushing_touchdowns, ps.receiving_touchdowns,
+		       ps.completions, ps.incompletions, ps.receptions,
+		       ps.interceptions_thrown, ps.interceptions,
+		       ps.fumbles, ps.fumbles_lost,
+		       ps.sacks_taken, ps.sacks, ps.tackles, ps.assists,
+		       ps.nullified
+		FROM nfl_play_statistics ps
+		JOIN nfl_plays p ON ps.play_id = p.id
+		JOIN nfl_drives d ON p.drive_id = d.id
+		WHERE d.game_id = $1
+	`
+
+	rows, err := s.pool.Query(ctx, query, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query statistics for game_id %d: %w", gameID, err)
+	}
+	defer rows.Close()
+
+	var stats []*nflmodels.PlayStatistic
+	for rows.Next() {
+		var stat nflmodels.PlayStatistic
+		err := rows.Scan(
+			&stat.ID,
+			&stat.PlayID,
+			&stat.IndividualID,
+			&stat.StatType,
+			&stat.PassingAttempts,
+			&stat.RushingAttempts,
+			&stat.ReceivingTargets,
+			&stat.PassingYards,
+			&stat.RushingYards,
+			&stat.ReceivingYards,
+			&stat.PassingTouchdowns,
+			&stat.RushingTouchdowns,
+			&stat.ReceivingTouchdowns,
+			&stat.Completions,
+			&stat.Incompletions,
+			&stat.Receptions,
+			&stat.InterceptionsThrown,
+			&stat.Interceptions,
+			&stat.Fumbles,
+			&stat.FumblesLost,
+			&stat.SacksTaken,
+			&stat.Sacks,
+			&stat.Tackles,
+			&stat.Assists,
+			&stat.Nullified,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan statistic row: %w", err)
+		}
+		stats = append(stats, &stat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating statistics rows: %w", err)
+	}
+
+	return stats, nil
+}

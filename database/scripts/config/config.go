@@ -53,6 +53,14 @@ type PlayByPlayConfig struct {
 	NFLGameID string // Sportradar game UUID (e.g., "0972a79b-c571-466b-b28d-1b7f8a00f5d3")
 }
 
+// BoxScoreConfig holds configuration for the box score generation script
+type BoxScoreConfig struct {
+	BaseConfig
+
+	// Game Configuration
+	NFLGameID int // Database game ID (not vendor UUID)
+}
+
 // loadBaseConfig reads common configuration from environment variables
 func loadBaseConfig() BaseConfig {
 	return BaseConfig{
@@ -216,4 +224,67 @@ func isValidSeasonType(seasonType string, validTypes []string) bool {
 		}
 	}
 	return false
+}
+
+// LoadBoxScoreConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadBoxScoreConfigFromFile(envFile string) (*BoxScoreConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadBoxScoreConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadBoxScoreConfig reads box score configuration from environment variables
+// Required fields (no defaults): PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID
+// Note: SPORTRADAR_API_KEY is not required for box score generation (no API calls)
+// Optional fields (with defaults):
+//   - RATE_LIMIT_DELAY_MS (default: 1000) - not used but inherited from BaseConfig
+//
+// This does not load any .env files - use LoadBoxScoreConfigFromFile for that
+func LoadBoxScoreConfig() *BoxScoreConfig {
+	return &BoxScoreConfig{
+		BaseConfig: loadBaseConfig(),
+		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
+	}
+}
+
+// Validate checks that all required box score configuration fields are set
+func (c *BoxScoreConfig) Validate() error {
+	// Validate database config (skip API key validation since we don't need it)
+	if c.PGHost == "" {
+		return fmt.Errorf("missing required environment variable: PG_HOST")
+	}
+	if c.PGPort == "" {
+		return fmt.Errorf("missing required environment variable: PG_PORT")
+	}
+	if c.PGDatabase == "" {
+		return fmt.Errorf("missing required environment variable: PG_DATABASE")
+	}
+	if c.PGUser == "" {
+		return fmt.Errorf("missing required environment variable: PG_USER")
+	}
+	if c.PGPassword == "" {
+		return fmt.Errorf("missing required environment variable: PG_PASSWORD")
+	}
+	if c.PGKeyPath == "" {
+		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
+	}
+
+	// Box score specific validation
+	if c.NFLGameID == 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID (must be a positive integer database ID)")
+	}
+
+	return nil
 }

@@ -1,0 +1,42 @@
+package reader
+
+import (
+	"context"
+	"fmt"
+
+	nflmodels "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/population-scripts/store"
+)
+
+// =============================================================================
+// NFL Play-by-Play Reader
+// =============================================================================
+// This package reads NFL play-by-play data from the database for use in
+// downstream processing (e.g., box score generation).
+//
+// Design principles:
+// - Reads from database using store package
+// - Returns shared/models types for use by other packages
+// - No transformation logic - just data retrieval
+// =============================================================================
+
+// NFLPlayByPlayData holds all play statistics for a game
+type NFLPlayByPlayData struct {
+	GameID     int
+	Statistics []*nflmodels.PlayStatistic
+}
+
+// ReadNFLPlayByPlay reads all play statistics for a game from the database.
+// Returns all PlayStatistic records associated with the given game_id.
+// The game_id is the database integer ID, not the vendor UUID.
+func ReadNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int) (*NFLPlayByPlayData, error) {
+	stats, err := dbStore.GetNFLPlayStatisticsByGameID(ctx, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read play-by-play statistics for game_id %d: %w", gameID, err)
+	}
+
+	return &NFLPlayByPlayData{
+		GameID:     gameID,
+		Statistics: stats,
+	}, nil
+}
