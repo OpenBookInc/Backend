@@ -28,18 +28,12 @@ import (
 // Only events with Type == "play" AND Official == true are persisted.
 // These represent official, confirmed plays (not timeouts, penalties without plays, etc.)
 //
+// The gameID parameter is the database game ID (not vendor UUID).
 // All foreign key lookups (teams, players) are done via database subqueries.
 // All enum validations are done by the database.
 // If any operation fails, the entire transaction is rolled back.
-func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, pbp *nfl.PlayByPlayResponse) error {
-	// Step 1: Lookup the game by vendor_id (outside transaction - read-only)
-	// The game must already exist in our database (created by schedule sync)
-	game, err := dbStore.GetGameByVendorID(ctx, pbp.ID)
-	if err != nil {
-		return fmt.Errorf("game not found in database (vendor_id: %s) - ensure game schedule is synced first: %w", pbp.ID, err)
-	}
-
-	// Step 2: Start transaction for all write operations
+func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int, pbp *nfl.PlayByPlayResponse) error {
+	// Step 1: Start transaction for all write operations
 	tx, err := dbStore.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -52,30 +46,30 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, pbp *nfl.Pl
 		}
 	}()
 
-	// Step 3: Upsert game status
+	// Step 2: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
 	if err != nil {
 		return fmt.Errorf("failed to map game status: %w", err)
 	}
 	gameStatus := &store.GameStatusForUpsert{
-		GameID: game.ID,
+		GameID: gameID,
 		Status: mappedGameStatus,
 	}
 	if err := dbStore.UpsertGameStatus(ctx, tx, gameStatus); err != nil {
 		return fmt.Errorf("failed to upsert game status: %w", err)
 	}
 
-	// Step 4: Process all drives, plays, and statistics
+	// Step 3: Process all drives, plays, and statistics
 	for _, period := range pbp.Periods {
 		for _, drive := range period.PBP {
-			if err := persistDrive(ctx, dbStore, tx, game.ID, &period, &drive); err != nil {
+			if err := persistDrive(ctx, dbStore, tx, gameID, &period, &drive); err != nil {
 				return fmt.Errorf("failed to persist drive (vendor_id: %s): %w", drive.ID, err)
 			}
 		}
 	}
 
-	// Step 5: Commit the transaction
+	// Step 4: Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}

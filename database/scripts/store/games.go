@@ -67,3 +67,26 @@ func (s *Store) GetGameByVendorID(ctx context.Context, vendorID string) (*models
 
 	return &game, nil
 }
+
+// GetGameByID retrieves a game by database ID
+func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, error) {
+	query := `
+		SELECT id, contender_id_a, contender_id_b, vendor_id, scheduled_start_time
+		FROM games
+		WHERE id = $1
+	`
+
+	var game models.Game
+	err := s.pool.QueryRow(ctx, query, gameID).Scan(
+		&game.ID,
+		&game.ContenderIDA,
+		&game.ContenderIDB,
+		&game.VendorID,
+		&game.ScheduledStartTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game with id %d: %w", gameID, err)
+	}
+
+	return &game, nil
+}

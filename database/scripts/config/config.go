@@ -50,7 +50,7 @@ type PlayByPlayConfig struct {
 	BaseConfig
 
 	// Game Configuration
-	NFLGameID string // Sportradar game UUID (e.g., "0972a79b-c571-466b-b28d-1b7f8a00f5d3")
+	NFLGameID int // Database game ID (not vendor UUID)
 }
 
 // BoxScoreConfig holds configuration for the box score generation script
@@ -196,7 +196,7 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 func LoadPlayByPlayConfig() *PlayByPlayConfig {
 	return &PlayByPlayConfig{
 		BaseConfig: loadBaseConfig(),
-		NFLGameID:  os.Getenv("NFL_GAME_ID"),
+		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
 	}
 }
 
@@ -208,8 +208,8 @@ func (c *PlayByPlayConfig) Validate() error {
 	}
 
 	// Play-by-play specific validation
-	if c.NFLGameID == "" {
-		return fmt.Errorf("missing required environment variable: NFL_GAME_ID")
+	if c.NFLGameID == 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID (must be a positive integer database ID)")
 	}
 
 	return nil
