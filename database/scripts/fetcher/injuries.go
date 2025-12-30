@@ -5,9 +5,6 @@ import (
 	"fmt"
 
 	"github.com/openbook/population-scripts/client"
-	"github.com/openbook/population-scripts/persister"
-	"github.com/openbook/shared/models"
-	"github.com/openbook/shared/models/gen"
 )
 
 // NFLInjuriesResponse represents the NFL weekly injuries API response
@@ -52,7 +49,7 @@ type NBAInjuriesResponse struct {
 }
 
 // FetchNFLPlayerStatuses fetches player injury statuses from NFL weekly injuries endpoint
-func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *models.DataStore, year int, seasonType string, week int) error {
+func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string, week int) error {
 	injuriesData, err := apiClient.GetNFLWeeklyInjuries(year, seasonType, week)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NFL weekly injuries: %w", err)
@@ -80,16 +77,10 @@ func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 				statusStr = playerData.Injuries[0].Status
 			}
 
-			// Map the status to database enum format
-			mappedStatus, err := persister.MapIndividualStatusToDB(statusStr)
-			if err != nil {
-				return fmt.Errorf("invalid status for NFL player %s (%s): %w", playerData.Name, playerData.ID, err)
-			}
-
-			individualStatus := &models.IndividualStatus{
+			// Store raw API status string - enum mapping happens in persister
+			individualStatus := &IndividualStatus{
 				Individual: individual,
-				Status:     gen.IndividualStatus(mappedStatus),
-				// IndividualID will be set during persistence in main.go
+				Status:     statusStr,
 			}
 
 			dataStore.AddIndividualStatus(individualStatus)
@@ -100,7 +91,7 @@ func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 }
 
 // FetchNBAPlayerStatuses fetches player injury statuses from NBA injuries endpoint
-func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *models.DataStore) error {
+func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *ReferenceData) error {
 	injuriesData, err := apiClient.GetNBAInjuries()
 	if err != nil {
 		return fmt.Errorf("failed to fetch NBA injuries: %w", err)
@@ -127,16 +118,10 @@ func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 				statusStr = playerData.Injuries[0].Status
 			}
 
-			// Map the status to database enum format
-			mappedStatus, err := persister.MapIndividualStatusToDB(statusStr)
-			if err != nil {
-				return fmt.Errorf("invalid status for NBA player %s (%s): %w", playerData.FullName, playerData.ID, err)
-			}
-
-			individualStatus := &models.IndividualStatus{
+			// Store raw API status string - enum mapping happens in persister
+			individualStatus := &IndividualStatus{
 				Individual: individual,
-				Status:     gen.IndividualStatus(mappedStatus),
-				// IndividualID will be set during persistence in main.go
+				Status:     statusStr,
 			}
 
 			dataStore.AddIndividualStatus(individualStatus)
@@ -148,15 +133,14 @@ func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *models.DataStor
 
 // SetDefaultActiveStatuses sets all players without a status to "Active"
 // This should be called after fetching injury data to ensure all players have a status
-func SetDefaultActiveStatuses(dataStore *models.DataStore) {
+func SetDefaultActiveStatuses(dataStore *ReferenceData) {
 	for _, individual := range dataStore.Individuals {
 		// Check if this individual already has a status
 		if _, exists := dataStore.IndividualStatuses[individual.VendorID]; !exists {
 			// No status yet, set to Active
-			individualStatus := &models.IndividualStatus{
+			individualStatus := &IndividualStatus{
 				Individual: individual,
-				Status:     gen.IndividualStatusActive,
-				// IndividualID will be set during persistence in main.go
+				Status:     "Active",
 			}
 			dataStore.AddIndividualStatus(individualStatus)
 		}

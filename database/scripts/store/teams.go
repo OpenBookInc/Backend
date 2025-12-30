@@ -7,10 +7,22 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// TeamForUpsert contains the data needed to upsert a team
+type TeamForUpsert struct {
+	VendorID   string
+	Name       string
+	Market     string
+	Alias      string
+	DivisionID int
+	VenueName  string
+	VenueCity  string
+	VenueState string
+}
+
 // UpsertTeam inserts or updates a team in the database
 // Uses vendor_id as the unique identifier (ON CONFLICT)
 // Returns the database ID of the team
-func (s *Store) UpsertTeam(ctx context.Context, team *models.Team) (int, error) {
+func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error) {
 	query := `
 		INSERT INTO teams (name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

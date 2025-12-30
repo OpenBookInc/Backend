@@ -7,11 +7,17 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// RosterForUpsert contains the data needed to upsert a roster
+type RosterForUpsert struct {
+	TeamID        int
+	IndividualIDs []int64
+}
+
 // UpsertRoster inserts or updates a roster in the database
 // Uses team_id as the unique identifier (ON CONFLICT)
 // Only stores the latest roster for each team (no historical tracking)
 // Returns the database ID of the roster
-func (s *Store) UpsertRoster(ctx context.Context, roster *models.Roster) (int, error) {
+func (s *Store) UpsertRoster(ctx context.Context, roster *RosterForUpsert) (int, error) {
 	query := `
 		INSERT INTO rosters (team_id, individual_ids)
 		VALUES ($1, $2)

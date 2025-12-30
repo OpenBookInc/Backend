@@ -3,14 +3,26 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/openbook/shared/models"
 )
 
+// IndividualForUpsert contains the data needed to upsert an individual
+type IndividualForUpsert struct {
+	VendorID        string
+	DisplayName     string
+	AbbreviatedName string
+	DateOfBirth     *time.Time
+	LeagueID        int
+	Position        string
+	JerseyNumber    string
+}
+
 // UpsertIndividual inserts or updates an individual in the database
 // Uses vendor_id as the unique identifier (ON CONFLICT)
 // Returns the database ID of the individual
-func (s *Store) UpsertIndividual(ctx context.Context, individual *models.Individual) (int, error) {
+func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForUpsert) (int, error) {
 	query := `
 		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)

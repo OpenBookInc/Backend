@@ -8,10 +8,16 @@ import (
 	nflmodels "github.com/openbook/shared/models/nfl"
 )
 
+// GameStatusForUpsert contains the data needed to upsert a game status
+type GameStatusForUpsert struct {
+	GameID int
+	Status string // DB enum value as string (e.g., "scheduled", "in_progress")
+}
+
 // UpsertGameStatus inserts or updates a game's status in the database.
 // Uses game_id as the unique identifier (primary key) for ON CONFLICT.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *nflmodels.GameStatus) error {
+func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *GameStatusForUpsert) error {
 	query := `
 		INSERT INTO game_statuses (game_id, status, updated_at)
 		VALUES ($1, $2::game_status_type, NOW())
@@ -23,7 +29,7 @@ func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *nflmode
 
 	_, err := tx.Exec(ctx, query,
 		status.GameID,
-		string(status.Status),
+		status.Status,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert game status (game_id: %d): %w", status.GameID, err)

@@ -7,10 +7,18 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// ConferenceForUpsert contains the data needed to upsert a conference
+type ConferenceForUpsert struct {
+	VendorID string
+	Name     string
+	LeagueID int
+	Alias    string
+}
+
 // UpsertConference inserts or updates a conference in the database
 // Uses vendor_id as the unique identifier (ON CONFLICT)
 // Returns the database ID of the conference
-func (s *Store) UpsertConference(ctx context.Context, conference *models.Conference) (int, error) {
+func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForUpsert) (int, error) {
 	query := `
 		INSERT INTO conferences (name, league_id, vendor_id, alias)
 		VALUES ($1, $2, $3, $4)

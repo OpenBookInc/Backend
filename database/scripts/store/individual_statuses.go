@@ -7,10 +7,16 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// IndividualStatusForUpsert contains the data needed to upsert an individual status
+type IndividualStatusForUpsert struct {
+	IndividualID int
+	Status       string // DB enum value as string (e.g., "active", "questionable")
+}
+
 // UpsertIndividualStatus inserts or updates an individual's status in the database
 // Uses individual_id as the unique identifier (ON CONFLICT) - one status per player
 // Returns the database ID of the individual status
-func (s *Store) UpsertIndividualStatus(ctx context.Context, status *models.IndividualStatus) (int, error) {
+func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualStatusForUpsert) (int, error) {
 	query := `
 		INSERT INTO individual_statuses (individual_id, status)
 		VALUES ($1, $2::individual_status_type)
@@ -23,7 +29,7 @@ func (s *Store) UpsertIndividualStatus(ctx context.Context, status *models.Indiv
 	var id int
 	err := s.pool.QueryRow(ctx, query,
 		status.IndividualID,
-		string(status.Status),
+		status.Status,
 	).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("failed to upsert individual status (individual_id: %d): %w", status.IndividualID, err)

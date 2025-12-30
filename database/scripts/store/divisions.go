@@ -7,10 +7,18 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// DivisionForUpsert contains the data needed to upsert a division
+type DivisionForUpsert struct {
+	VendorID     string
+	Name         string
+	ConferenceID int
+	Alias        string
+}
+
 // UpsertDivision inserts or updates a division in the database
 // Uses vendor_id as the unique identifier (ON CONFLICT)
 // Returns the database ID of the division
-func (s *Store) UpsertDivision(ctx context.Context, division *models.Division) (int, error) {
+func (s *Store) UpsertDivision(ctx context.Context, division *DivisionForUpsert) (int, error) {
 	query := `
 		INSERT INTO divisions (name, conference_id, vendor_id, alias)
 		VALUES ($1, $2, $3, $4)

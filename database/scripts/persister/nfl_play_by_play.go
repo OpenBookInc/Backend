@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/openbook/population-scripts/fetcher/nfl"
 	"github.com/openbook/population-scripts/store"
-	nflmodels "github.com/openbook/shared/models/nfl"
 	"github.com/shopspring/decimal"
 )
 
@@ -22,7 +21,7 @@ import (
 // - Single transaction: All operations succeed together or fail together
 // - Database validation: Enums and foreign keys validated by database constraints
 // - Subquery lookups: Foreign keys resolved inline via vendor_id lookups
-// - Fail loudly: Any constraint violation causes full transaction rollback
+// - Fault-intolerant: Any constraint violation causes full transaction rollback
 // =============================================================================
 
 // PersistNFLPlayByPlay persists play-by-play data to the database in a single transaction.
@@ -59,9 +58,9 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, pbp *nfl.Pl
 	if err != nil {
 		return fmt.Errorf("failed to map game status: %w", err)
 	}
-	gameStatus := &nflmodels.GameStatus{
+	gameStatus := &store.GameStatusForUpsert{
 		GameID: game.ID,
-		Status: nflmodels.GameStatusType(mappedGameStatus),
+		Status: mappedGameStatus,
 	}
 	if err := dbStore.UpsertGameStatus(ctx, tx, gameStatus); err != nil {
 		return fmt.Errorf("failed to upsert game status: %w", err)
@@ -85,34 +84,6 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, pbp *nfl.Pl
 	tx = nil
 
 	return nil
-}
-
-// shouldPersistDrive determines whether a drive should be persisted to the database.
-// Returns false for "event" type entries (timeouts, end-of-period markers, etc.).
-// Returns true for "drive" type entries.
-func shouldPersistDrive(drive *nfl.Drive) bool {
-	if drive.Type == "event" {
-		return false
-	}
-	return true
-}
-
-// shouldPersistPlayStatistic determines whether a play statistic should be persisted to the database.
-func shouldPersistPlayStatistic(stat *nfl.Statistic) bool {
-	// Skip statistics without a player (team-level stats)
-	if stat.Player == nil {
-		return false
-	}
-
-	// Skip ignoreable stat types (stat types that we don't need for our use case)
-	ignoreableStatTypes := []string{"return", "first_down", "kick", "punt", "penalty", "block"}
-	for _, ignoreType := range ignoreableStatTypes {
-		if stat.StatType == ignoreType {
-			return false
-		}
-	}
-
-	return true
 }
 
 // persistDrive upserts a drive and all its plays within the transaction.
@@ -188,11 +159,11 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	}
 
 	// Upsert the play
-	play := &nflmodels.Play{
+	play := &store.NFLPlayForUpsert{
 		DriveID:                driveID,
 		VendorID:               event.ID,
 		Sequence:               decimal.NewFromFloat(event.Sequence),
-		PeriodType:             nflmodels.PeriodType(periodType),
+		PeriodType:             periodType,
 		PeriodNumber:           period.Number,
 		Description:            event.Description,
 		AlternativeDescription: event.AltDescription,

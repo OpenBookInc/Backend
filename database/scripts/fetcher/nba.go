@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/openbook/population-scripts/client"
-	"github.com/openbook/shared/models"
 )
 
 // NBAHierarchyResponse represents the NBA league hierarchy API response
@@ -58,7 +57,7 @@ type NBATeamProfileResponse struct {
 }
 
 // FetchNBAData fetches all NBA teams and rosters
-func FetchNBAData(apiClient *client.Client, dataStore *models.DataStore) error {
+func FetchNBAData(apiClient *client.Client, dataStore *ReferenceData) error {
 	// Fetch teams
 	teamsData, err := apiClient.GetNBATeams()
 	if err != nil {
@@ -70,30 +69,31 @@ func FetchNBAData(apiClient *client.Client, dataStore *models.DataStore) error {
 		return fmt.Errorf("failed to parse NBA teams response: %w", err)
 	}
 
+	// Get NBA league from dataStore (must be added by caller first)
+	nbaLeague := dataStore.GetLeagueByName("NBA")
+
 	// Process conferences, divisions, and teams
 	teamVendorIDs := []string{}
 	for _, conferenceData := range hierarchyResp.Conferences {
-		// Add conference (LeagueID will be set during persistence in main.go)
-		conference := &models.Conference{
+		conference := &Conference{
 			Name:     conferenceData.Name,
 			VendorID: conferenceData.ID,
 			Alias:    conferenceData.Alias,
+			League:   nbaLeague,
 		}
 		dataStore.AddConference(conference)
 
 		for _, divisionData := range conferenceData.Divisions {
-			// Add division (ConferenceID will be set during persistence in main.go)
-			division := &models.Division{
-				Name:     divisionData.Name,
-				VendorID: divisionData.ID,
-				Alias:    divisionData.Alias,
+			division := &Division{
+				Name:       divisionData.Name,
+				VendorID:   divisionData.ID,
+				Alias:      divisionData.Alias,
+				Conference: conference,
 			}
-			division.Conference = conference // Set pointer relationship
 			dataStore.AddDivision(division)
 
 			for _, teamData := range divisionData.Teams {
-				// Add team (DivisionID will be set during persistence in main.go)
-				team := &models.Team{
+				team := &Team{
 					Name:       teamData.Name,
 					Market:     teamData.Market,
 					Alias:      teamData.Alias,
@@ -101,8 +101,8 @@ func FetchNBAData(apiClient *client.Client, dataStore *models.DataStore) error {
 					VenueName:  teamData.Venue.Name,
 					VenueCity:  teamData.Venue.City,
 					VenueState: teamData.Venue.State,
+					Division:   division,
 				}
-				team.Division = division // Set pointer relationship
 				dataStore.AddTeam(team)
 				teamVendorIDs = append(teamVendorIDs, teamData.ID)
 			}
@@ -117,7 +117,7 @@ func FetchNBAData(apiClient *client.Client, dataStore *models.DataStore) error {
 		// Rate limiting - wait before each API request
 		apiClient.RateLimitWait()
 
-		if err := fetchNBATeamRoster(apiClient, dataStore, teamVendorID); err != nil {
+		if err := fetchNBATeamRoster(apiClient, dataStore, teamVendorID, nbaLeague); err != nil {
 			return fmt.Errorf("failed to fetch roster for team %s: %w", teamVendorID, err)
 		}
 	}
@@ -125,7 +125,7 @@ func FetchNBAData(apiClient *client.Client, dataStore *models.DataStore) error {
 	return nil
 }
 
-func fetchNBATeamRoster(apiClient *client.Client, dataStore *models.DataStore, teamVendorID string) error {
+func fetchNBATeamRoster(apiClient *client.Client, dataStore *ReferenceData, teamVendorID string, league *League) error {
 	rosterData, err := apiClient.GetNBATeamRoster(teamVendorID)
 	if err != nil {
 		return err
@@ -139,10 +139,9 @@ func fetchNBATeamRoster(apiClient *client.Client, dataStore *models.DataStore, t
 	// Get the team from dataStore to link roster
 	team := dataStore.Teams[teamVendorID]
 
-	roster := &models.Roster{
+	roster := &Roster{
 		Team:    team,
-		Players: []*models.Individual{},
-		// TeamID and IndividualIDs will be set during persistence in main.go
+		Players: []*Individual{},
 	}
 
 	for _, playerData := range profileResp.Players {
@@ -166,14 +165,14 @@ func fetchNBATeamRoster(apiClient *client.Client, dataStore *models.DataStore, t
 			abbreviatedName = fmt.Sprintf("%c.%s", playerData.FirstName[0], playerData.LastName)
 		}
 
-		individual := &models.Individual{
+		individual := &Individual{
 			VendorID:        playerData.ID,
 			DisplayName:     displayName,
 			AbbreviatedName: abbreviatedName,
 			DateOfBirth:     dateOfBirth,
 			Position:        playerData.Position,
 			JerseyNumber:    playerData.JerseyNum,
-			// LeagueID will be set during persistence in main.go
+			League:          league,
 		}
 
 		dataStore.AddIndividual(individual)

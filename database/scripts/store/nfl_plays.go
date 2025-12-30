@@ -3,16 +3,32 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	nflmodels "github.com/openbook/shared/models/nfl"
+	"github.com/shopspring/decimal"
 )
+
+// NFLPlayForUpsert contains the data needed to upsert an NFL play
+type NFLPlayForUpsert struct {
+	DriveID                int
+	VendorID               string
+	Sequence               decimal.Decimal
+	PeriodType             string // DB enum value as string (e.g., "quarter", "overtime")
+	PeriodNumber           int
+	Description            string
+	AlternativeDescription string
+	Nullified              bool
+	VendorCreatedAt        time.Time
+	VendorUpdatedAt        time.Time
+}
 
 // UpsertNFLPlay inserts or updates an NFL play in the database.
 // Uses (drive_id, vendor_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the play for use as a foreign key in statistics.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *nflmodels.Play) (int, error) {
+func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nfl_plays (
 			drive_id, vendor_id, sequence,
@@ -40,7 +56,7 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *nflmodels.Pl
 		play.DriveID,
 		play.VendorID,
 		play.Sequence,
-		string(play.PeriodType),
+		play.PeriodType,
 		play.PeriodNumber,
 		play.Description,
 		play.AlternativeDescription,

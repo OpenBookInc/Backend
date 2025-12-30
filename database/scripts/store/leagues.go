@@ -7,10 +7,16 @@ import (
 	"github.com/openbook/shared/models"
 )
 
+// LeagueForUpsert contains the data needed to upsert a league
+type LeagueForUpsert struct {
+	SportID int
+	Name    string
+}
+
 // UpsertLeague inserts or updates a league in the database
 // Uses name as the unique identifier (ON CONFLICT)
 // Returns the database ID of the league
-func (s *Store) UpsertLeague(ctx context.Context, league *models.League) (int, error) {
+func (s *Store) UpsertLeague(ctx context.Context, league *LeagueForUpsert) (int, error) {
 	query := `
 		INSERT INTO leagues (sport_id, name)
 		VALUES ($1, $2)

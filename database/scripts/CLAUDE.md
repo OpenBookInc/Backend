@@ -4,99 +4,195 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sports data population tool that fetches NBA/NFL data from Sportradar API and persists it to PostgreSQL. Maintains in-memory data structures with pointer relationships, then syncs to database using upsert logic.
+Sports data population tool that fetches NBA/NFL data from Sportradar API and persists it to PostgreSQL. Supports both reference data (teams, players, games) and play-by-play statistics.
 
 ## Commands
 
 ```bash
-# Build
-go build
+# Validate/compile all packages
+go build ./...
 
-# Run with default .env file
-go run main.go
+# Run reference data update
+./update_reference_data.sh
 
-# Run with custom environment file
-go run main.go --env=.env.production
+# Run play-by-play update
+./update_play_by_play_stats.sh
 
 # Download dependencies
 go mod download
-
-# Database migrations (run from parent ../MigrationScripts directory)
-cd ../MigrationScripts
-goose postgres "your-connection-string" up
-goose postgres "your-connection-string" status
-goose postgres "your-connection-string" down
 ```
 
 ## Architecture
 
-### Data Flow
-1. **Fetch**: Sportradar API → fetcher/ packages → models.DataStore (in-memory)
-2. **Persist**: models.DataStore → store/ package → PostgreSQL (upsert via vendor_id)
-3. **Print**: Display all persisted data with database IDs
+### Package Structure & Dependencies
 
-### Package Structure
-- **config/**: Environment-based configuration (Sportradar API key, database credentials, rate limits, season parameters)
-- **client/**: Sportradar API client with rate limiting
-- **fetcher/**: NBA and NFL data retrieval logic, injury status fetching, exclusion rules
-- **models/**: In-memory data structures with pointer relationships, type-safe enums
-- **store/**: PostgreSQL persistence layer using pgx/v5
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              main.go                                     │
+│                    (simple wrapper, orchestration only)                  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+              ┌──────────┐   ┌───────────┐   ┌──────────┐
+              │ fetcher/ │   │ persister/│   │  store/  │
+              └──────────┘   └───────────┘   └──────────┘
+                    │               │               │
+                    ▼               ▼               ▼
+              ┌──────────┐   ┌───────────┐   ┌──────────┐
+              │ client/  │   │  store/   │   │shared/   │
+              │          │   │ fetcher/  │   │models    │
+              └──────────┘   └───────────┘   │(reads)   │
+                                            └──────────┘
+```
+
+**Package Roles:**
+
+- **client/**: Communicates with Sportradar API. Handles HTTP requests, rate limiting, error handling.
+
+- **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly.
+
+- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs and calls store methods.
+
+- **store/**: Communicates with database using pgx/v5. Defines internal structs for WRITE operations (e.g., `PlayStatisticForUpsert`, `GameStatusForUpsert`). May import shared/models for READ operations only.
+
+- **config/**: Environment-based configuration (API keys, database credentials, rate limits, season parameters).
+
+- **main.go**: Simple wrapper that orchestrates fetcher → persister flow. Should contain minimal logic.
+
+### Dependency Rules
+
+**Critical**: These dependency rules ensure clean separation of concerns:
+
+1. **fetcher/** → depends only on `client/` (no models/, no persister/)
+2. **persister/** → depends on `fetcher/` and `store/` (no shared/models)
+3. **store/** → depends on shared/models for READs only; uses internal structs for WRITEs
+4. **main.go** → depends on all packages but contains minimal logic
+
+### Data Flow
+
+**Reference Data:**
+```
+Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transformation) → store/ → PostgreSQL
+```
+
+**Play-by-Play:**
+```
+Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/ (transformation) → store/ → PostgreSQL
+```
 
 ## Critical Design Patterns
 
+### Fault-Intolerant Architecture
+
+**Critical**: This codebase is designed to fail immediately on any unexpected behavior. No warnings, no silent failures.
+
+**Philosophy**:
+- Invalid data → fatal error (script exits with non-zero status)
+- Missing required entities → fatal error (e.g., team not found for game)
+- Unexpected enum values → fatal error (not silently ignored)
+- API errors → fatal error (with full context for debugging)
+- Database errors → fatal error with rollback
+
+**Why**: Data integrity is paramount. Better to fail and fix the issue than silently accept bad data that corrupts the database or causes downstream problems.
+
+**Implementation**:
+- Use `fatal()` function in main.go or return errors that bubble up to main
+- Never log warnings and continue execution when data is suspect
+- If you want to skip certain data, explicitly code the skip condition (not a silent catch-all)
+
+**Exceptions**: Only known, intentional exclusions (via `fetcher/exclusions.go` and `persister/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
+
+### Enum Transformation Pattern
+
+Enums are handled as strings throughout the codebase, with the database performing validation:
+
+1. **API Response**: Sportradar returns strings (e.g., `"Questionable"`, `"quarter"`)
+2. **Fetcher**: Stores raw API strings as-is (no validation)
+3. **Persister**: Transforms API strings to DB enum format (e.g., `"Questionable"` → `"questionable"`)
+4. **Store**: Passes string to database with enum cast (e.g., `$1::individual_status_type`)
+5. **Database**: Validates enum value; returns error if invalid
+
+**Mapping functions** live in `persister/` (e.g., `MapIndividualStatusToDB()`, `MapStatTypeToDB()`). These functions return an error for unexpected values (fault-intolerant).
+
+**Why no Go enum types for writes?**: The database is the source of truth for valid enum values. This avoids maintaining duplicate enum definitions and ensures consistency.
+
+### Transaction Patterns
+
+**Single Transaction** (e.g., play-by-play):
+- All operations succeed together or fail together
+- Use `store.BeginTx()` to start transaction
+- Defer rollback, commit on success
+- Appropriate when data is tightly coupled (e.g., one game's drives, plays, and statistics)
+
+**Multiple Transactions** (e.g., reference data):
+- Each entity upserted independently
+- Partial success is acceptable
+- Appropriate when entities are independent (e.g., different teams can succeed/fail independently)
+
+**Discretionary**: The choice between single vs. multiple transactions is left to the coder based on the use case.
+
+### Foreign Key Lookup Patterns
+
+Two approaches for resolving foreign keys, both acceptable:
+
+**Database Subquery** (inline lookup):
+```sql
+INSERT INTO nfl_play_statistics (individual_id, ...)
+VALUES ((SELECT id FROM individuals WHERE vendor_id = $1), ...)
+```
+- Used when you only have vendor_id
+- Database resolves the FK inline
+- Good for play-by-play where you don't pre-load all entities
+
+**In-Memory Lookup** (pre-resolved):
+```go
+team := dataStore.Teams[vendorID]
+roster.TeamID = team.ID
+```
+- Used when you've already loaded entities into memory
+- Good for reference data where you process hierarchically
+
+**Discretionary**: The choice between subquery vs. in-memory is left to the coder based on what's already available in context.
+
 ### Dual ID System
+
 Every entity has two identifiers:
 - **VendorID** (string): Sportradar UUID, set immediately during API fetch
 - **ID** (int): PostgreSQL auto-increment primary key, set ONLY after database upsert
 
 **Why**: VendorID enables idempotent upserts (`ON CONFLICT (vendor_id) DO UPDATE`). ID is for foreign key relationships in database.
 
-**Implications**:
-- During API fetch: VendorID is populated, ID remains 0
-- After persistence: Both VendorID and ID are populated
-- Never use ID for lookups before database persistence
+### Struct Patterns for Store Operations
 
-### Pointer Relationships
-
-In-memory models maintain full object hierarchy via pointers:
-```
-Team.Division → Division.Conference → Conference.League
-Roster.Team → Team
-Individual.League → League
-```
-
-During persistence, pointers are translated to foreign key IDs:
+**For WRITE operations** (Insert/Update), store defines internal structs:
 ```go
-// Before upsert
-team.Division.ID = 10  // Set from previous upsert
-team.DivisionID = int64(team.Division.ID)  // Translate pointer to FK
-dbStore.UpsertTeam(ctx, team)
+// store/nfl_play_statistics.go
+type PlayStatisticForUpsert struct {
+    VendorPlayerID string  // Looked up via subquery
+    StatType       string  // DB enum as string
+    PassingYards   decimal.Decimal
+    // ... other fields
+}
 ```
 
-### DataStore Keying Strategy
+**For READ operations**, store may use shared/models:
+```go
+// store/teams.go
+func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models.Team, error)
+```
 
-**Critical**: Map keys differ by entity:
-- `Leagues`: keyed by DB ID (int) - set after persistence
-- `Conferences, Divisions, Teams, Individuals, Games`: keyed by vendor_id (string)
-- `Rosters`: keyed by team's vendor_id (NOT team_id which is 0 until persisted)
-- `IndividualStatuses`: keyed by individual's vendor_id (one status per player)
-
-**Why Rosters use team vendor_id**: During API fetch, roster.TeamID is 0. Using roster.Team.VendorID allows proper map storage before database persistence.
-
-**Why IndividualStatuses use individual vendor_id**: Ensures one status per player with upsert behavior in memory before database persistence.
-
-### Persistence Ordering
+### Persistence Ordering (Reference Data)
 
 **Must persist in this exact order** due to foreign key dependencies:
 1. Leagues (no dependencies)
 2. Conferences (requires league ID)
 3. Divisions (requires conference ID)
 4. Teams (requires division ID)
-5. Rosters + Individuals (requires team ID and league ID)
-6. Games (requires team IDs for both contenders)
-7. IndividualStatuses (requires individual ID)
-
-Each step sets the database ID on entities before the next step consumes them.
+5. Individuals (requires league ID)
+6. Rosters (requires team ID and individual IDs)
+7. Games (requires team IDs for both contenders)
+8. IndividualStatuses (requires individual ID)
 
 ### Upsert Requirements
 
@@ -109,42 +205,24 @@ All upserts require UNIQUE constraints:
 - `rosters.team_id` - one roster per team
 - `games.vendor_id` - Sportradar game UUID
 - `individual_statuses.individual_id` - one status per player
+- `game_statuses.game_id` - one status per game
+- `nfl_drives(game_id, vendor_id)` - unique drive per game
+- `nfl_plays(drive_id, vendor_id)` - unique play per drive
 
 Missing constraints cause: `ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification`
 
-### Type-Safe Enums
-
-**IndividualStatusType**: PostgreSQL enum type (`individual_status_type`) with Go type wrapper
-- Values: Active, Day To Day, Doubtful, Out, Out For Season, Questionable
-- Validation: `models.ValidateIndividualStatusType()` returns error if invalid status string
-- Database cast: SQL uses `::individual_status_type` when inserting
-- Fail-fast: Invalid status values cause fatal errors during API parsing
-
 ### Data Exclusion Rules
 
-**fetcher/exclusions.go** centralizes filtering logic:
+Exclusion logic is split between two files based on when filtering occurs:
+
+**fetcher/exclusions.go** - Filters data during fetching (before adding to in-memory data store):
 - `shouldExcludeGame()`: Filters TBD teams (NBA Cup games with undetermined competitors)
-- `shouldExcludeTeam()`: Currently no exclusions (placeholder for future use)
-- `shouldExcludePlayer()`: Currently no exclusions (placeholder for future use)
 
-Excluded entities are silently skipped during API fetch, not persisted to database.
+**persister/exclusions.go** - Filters data during persistence (before writing to database):
+- `shouldPersistDrive()`: Filters "event" type entries (timeouts, end-of-period markers)
+- `shouldPersistPlayStatistic()`: Filters team-level stats and ignoreable stat types
 
-### Fail-Fast Architecture
-
-**Critical**: This codebase is designed to fail immediately on any unexpected behavior. No warnings, only fatal errors.
-
-**Philosophy**:
-- Invalid data → fatal error (script exits with non-zero status)
-- Missing required entities → fatal error (e.g., team not found for game)
-- Invalid enum values → fatal error (e.g., invalid player status)
-- API errors → fatal error (with full context for debugging)
-- Database errors → fatal error
-
-**Why**: Data integrity is paramount. Better to fail loudly and fix the issue than silently accept bad data that corrupts the database or causes downstream problems.
-
-**Implementation**: Use `fatal()` function in main.go or return errors that bubble up to main, which calls fatal(). Never log warnings and continue execution when data is suspect.
-
-**Exceptions**: Only known, intentional exclusions (via `fetcher/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
+Excluded entities are explicitly skipped. These are documented business logic, not error conditions.
 
 ## Database
 
@@ -154,9 +232,16 @@ Excluded entities are silently skipped during API fetch, not persisted to databa
 - Certificate loaded from PG_KEY_PATH environment variable
 
 ### Schema Location
-Database schemas and migrations are in parent directory: `../MigrationScripts/`
+Database schemas and migrations are in the `migrations/` directory (sibling to `scripts/`).
 
-Migration scripts use goose and must be run from the MigrationScripts directory with a full PostgreSQL connection string.
+Migration scripts use goose.
+
+### Enum Types
+PostgreSQL enum types are defined in migrations and auto-generated to Go in `shared/models/gen/`:
+- `individual_status_type`: active, day_to_day, doubtful, out, out_for_season, questionable
+- `game_status`: scheduled, in_progress, halftime, complete, closed, etc.
+- `nfl_period_type`: quarter, overtime
+- `nfl_stat_type`: passing, rushing, receiving, defense, fumble, interception, field_goal, extra_point
 
 ## Configuration
 
@@ -172,10 +257,9 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `NFL_SEASON_YEAR`: NFL season year (default: current year)
 - `NFL_SEASON_TYPE`: Season type - REG, PST, PRE (default: REG)
 - `NFL_WEEK`: Week number for injury data (default: 1)
+- `NFL_GAME_ID`: Specific game ID for play-by-play fetch
 - `NBA_SEASON_YEAR`: NBA season year (default: current year)
 - `NBA_SEASON_TYPE`: Season type - REG, PST (default: REG)
-
-Season type constants defined in `config/config.go`: SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason
 
 ## API Endpoints
 
@@ -192,6 +276,7 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Team Roster: `/nfl/official/trial/v7/en/teams/{teamID}/full_roster.json`
 - Season Schedule: `/nfl/official/trial/v7/en/games/{year}/{seasonType}/schedule.json`
 - Weekly Injuries: `/nfl/official/trial/v7/en/seasons/{year}/{seasonType}/{week}/injuries.json`
+- Play-by-Play: `/nfl/official/trial/v7/en/games/{gameID}/pbp.json`
 
 **Error handling**: 404 errors include full URL in error message for debugging. All API errors include response body and status code.
 
@@ -202,7 +287,5 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Games limited to first 10 printed (too many for full display)
 - Rosters table has only latest roster per team (no historical tracking)
 - Individual statuses table has one status per player (current injury status only)
-- AddRoster() will panic if roster.Team is nil (intentional, fail-fast design)
 - Players not in roster data are silently skipped when fetching injury statuses
 - NBA injuries endpoint returns current injuries only (not date-specific like NFL)
-- Script fails fatally on any invalid data (no warnings, fail-fast approach)

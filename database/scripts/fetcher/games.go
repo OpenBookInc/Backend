@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/openbook/population-scripts/client"
-	"github.com/openbook/shared/models"
 )
 
 // NFLScheduleResponse represents the NFL season schedule API response
@@ -56,7 +55,7 @@ type NBAScheduleResponse struct {
 }
 
 // FetchNFLGames fetches all games from the NFL season schedule
-func FetchNFLGames(apiClient *client.Client, dataStore *models.DataStore, year int, seasonType string) error {
+func FetchNFLGames(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string) error {
 	scheduleData, err := apiClient.GetNFLSeasonSchedule(year, seasonType)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NFL season schedule: %w", err)
@@ -100,12 +99,11 @@ func FetchNFLGames(apiClient *client.Client, dataStore *models.DataStore, year i
 					gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias)
 			}
 
-			game := &models.Game{
+			game := &Game{
 				VendorID:           gameData.ID,
 				ScheduledStartTime: scheduledTime,
-				TeamA:              homeTeam,
-				TeamB:              awayTeam,
-				// ContenderIDA and ContenderIDB will be set during persistence in main.go
+				HomeTeam:           homeTeam,
+				AwayTeam:           awayTeam,
 			}
 
 			dataStore.AddGame(game)
@@ -116,7 +114,7 @@ func FetchNFLGames(apiClient *client.Client, dataStore *models.DataStore, year i
 }
 
 // FetchNBAGames fetches all games from the NBA season schedule
-func FetchNBAGames(apiClient *client.Client, dataStore *models.DataStore, year int, seasonType string) error {
+func FetchNBAGames(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string) error {
 	scheduleData, err := apiClient.GetNBASeasonSchedule(year, seasonType)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NBA season schedule: %w", err)
@@ -159,12 +157,11 @@ func FetchNBAGames(apiClient *client.Client, dataStore *models.DataStore, year i
 				gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias)
 		}
 
-		game := &models.Game{
+		game := &Game{
 			VendorID:           gameData.ID,
 			ScheduledStartTime: scheduledTime,
-			TeamA:              homeTeam,
-			TeamB:              awayTeam,
-			// ContenderIDA and ContenderIDB will be set during persistence in main.go
+			HomeTeam:           homeTeam,
+			AwayTeam:           awayTeam,
 		}
 
 		dataStore.AddGame(game)

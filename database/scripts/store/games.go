@@ -3,14 +3,23 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/openbook/shared/models"
 )
 
+// GameForUpsert contains the data needed to upsert a game
+type GameForUpsert struct {
+	VendorID           string
+	HomeTeamID         int
+	AwayTeamID         int
+	ScheduledStartTime time.Time
+}
+
 // UpsertGame inserts or updates a game in the database
 // Uses vendor_id as the unique identifier (ON CONFLICT)
 // Returns the database ID of the game
-func (s *Store) UpsertGame(ctx context.Context, game *models.Game) (int, error) {
+func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) (int, error) {
 	query := `
 		INSERT INTO games (contender_id_a, contender_id_b, vendor_id, scheduled_start_time)
 		VALUES ($1, $2, $3, $4)
@@ -24,8 +33,8 @@ func (s *Store) UpsertGame(ctx context.Context, game *models.Game) (int, error) 
 
 	var id int
 	err := s.pool.QueryRow(ctx, query,
-		game.ContenderIDA,
-		game.ContenderIDB,
+		game.HomeTeamID,
+		game.AwayTeamID,
 		game.VendorID,
 		game.ScheduledStartTime,
 	).Scan(&id)
