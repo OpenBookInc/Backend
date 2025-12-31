@@ -90,3 +90,56 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 
 	return &game, nil
 }
+
+// GetGameWithTeamsByID retrieves a game by database ID and populates TeamA and TeamB.
+// Uses JOINs to fetch team details for both contenders.
+func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID int) (*models.Game, error) {
+	query := `
+		SELECT
+			g.id, g.contender_id_a, g.contender_id_b, g.vendor_id, g.scheduled_start_time,
+			ta.id, ta.name, ta.market, ta.alias, ta.vendor_id, ta.division_id, ta.venue_name, ta.venue_city, ta.venue_state,
+			tb.id, tb.name, tb.market, tb.alias, tb.vendor_id, tb.division_id, tb.venue_name, tb.venue_city, tb.venue_state
+		FROM games g
+		JOIN teams ta ON g.contender_id_a = ta.id
+		JOIN teams tb ON g.contender_id_b = tb.id
+		WHERE g.id = $1
+	`
+
+	var game models.Game
+	teamA := &models.Team{}
+	teamB := &models.Team{}
+
+	err := s.pool.QueryRow(ctx, query, gameID).Scan(
+		&game.ID,
+		&game.ContenderIDA,
+		&game.ContenderIDB,
+		&game.VendorID,
+		&game.ScheduledStartTime,
+		&teamA.ID,
+		&teamA.Name,
+		&teamA.Market,
+		&teamA.Alias,
+		&teamA.VendorID,
+		&teamA.DivisionID,
+		&teamA.VenueName,
+		&teamA.VenueCity,
+		&teamA.VenueState,
+		&teamB.ID,
+		&teamB.Name,
+		&teamB.Market,
+		&teamB.Alias,
+		&teamB.VendorID,
+		&teamB.DivisionID,
+		&teamB.VenueName,
+		&teamB.VenueCity,
+		&teamB.VenueState,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game with teams for id %d: %w", gameID, err)
+	}
+
+	game.TeamA = teamA
+	game.TeamB = teamB
+
+	return &game, nil
+}

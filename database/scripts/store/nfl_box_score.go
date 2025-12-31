@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/openbook/shared/models"
+	nflmodels "github.com/openbook/shared/models/nfl"
 	"github.com/shopspring/decimal"
 )
 
@@ -119,4 +121,93 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 	}
 
 	return nil
+}
+
+// GetNFLBoxScoresByGameID retrieves all box scores for a game with individual info.
+// Uses JOIN to fetch individual details along with stats.
+// Also joins with rosters to determine team membership.
+// Returns a slice of IndividualBoxScore with player info, stats, and team_id populated.
+func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nflmodels.IndividualBoxScore, error) {
+	query := `
+		SELECT
+			bs.id, bs.game_id, bs.individual_id,
+			bs.completions, bs.incompletions, bs.receptions,
+			bs.interceptions, bs.fumbles, bs.fumbles_lost,
+			bs.sacks, bs.tackles, bs.assists,
+			bs.passing_attempts, bs.rushing_attempts, bs.receiving_targets,
+			bs.passing_yards, bs.rushing_yards, bs.receiving_yards,
+			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
+			bs.interceptions_thrown, bs.sacks_taken,
+			i.id, i.vendor_id, i.display_name, i.abbreviated_name,
+			i.date_of_birth, i.league_id, i.position, i.jersey_number,
+			COALESCE(r.team_id, 0)
+		FROM nfl_box_scores bs
+		JOIN individuals i ON bs.individual_id = i.id
+		LEFT JOIN rosters r ON i.id = ANY(r.individual_ids)
+		WHERE bs.game_id = $1
+		ORDER BY i.display_name
+	`
+
+	rows, err := s.pool.Query(ctx, query, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query box scores for game_id %d: %w", gameID, err)
+	}
+	defer rows.Close()
+
+	var results []*nflmodels.IndividualBoxScore
+	for rows.Next() {
+		stats := &nflmodels.NFLStats{}
+		individual := &models.Individual{}
+		var teamID int
+
+		err := rows.Scan(
+			&stats.ID,
+			&stats.GameID,
+			&stats.IndividualID,
+			&stats.Completions,
+			&stats.Incompletions,
+			&stats.Receptions,
+			&stats.Interceptions,
+			&stats.Fumbles,
+			&stats.FumblesLost,
+			&stats.Sacks,
+			&stats.Tackles,
+			&stats.Assists,
+			&stats.PassingAttempts,
+			&stats.RushingAttempts,
+			&stats.ReceivingTargets,
+			&stats.PassingYards,
+			&stats.RushingYards,
+			&stats.ReceivingYards,
+			&stats.PassingTouchdowns,
+			&stats.RushingTouchdowns,
+			&stats.ReceivingTouchdowns,
+			&stats.InterceptionsThrown,
+			&stats.SacksTaken,
+			&individual.ID,
+			&individual.VendorID,
+			&individual.DisplayName,
+			&individual.AbbreviatedName,
+			&individual.DateOfBirth,
+			&individual.LeagueID,
+			&individual.Position,
+			&individual.JerseyNumber,
+			&teamID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan box score row: %w", err)
+		}
+
+		results = append(results, &nflmodels.IndividualBoxScore{
+			Individual: individual,
+			Stats:      stats,
+			TeamID:     teamID,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating box score rows: %w", err)
+	}
+
+	return results, nil
 }
