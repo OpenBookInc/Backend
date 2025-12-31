@@ -48,8 +48,14 @@ type PlayStatisticForUpsert struct {
 	FumblesLost         decimal.Decimal
 	SacksTaken          decimal.Decimal
 	SacksMade           decimal.Decimal
+	SackAssistsMade     decimal.Decimal
 	TacklesMade         decimal.Decimal
-	AssistsMade         decimal.Decimal
+	TackleAssistsMade   decimal.Decimal
+	FieldGoalAttempts   decimal.Decimal
+	FieldGoalMakes      decimal.Decimal
+	FieldGoalMakeYards  decimal.Decimal
+	ExtraPointAttempts  decimal.Decimal
+	ExtraPointMakes     decimal.Decimal
 	Nullified           bool
 }
 
@@ -82,14 +88,16 @@ func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID 
 			passing_completions, receiving_receptions,
 			interceptions_thrown, interceptions_caught,
 			fumbles_forced, fumbles_lost,
-			sacks_taken, sacks_made, tackles_made, assists_made,
+			sacks_taken, sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
+			field_goal_attempts, field_goal_makes, field_goal_make_yards,
+			extra_point_attempts, extra_point_makes,
 			nullified
 		)
 		VALUES (
 			$1,
 			(SELECT id FROM individuals WHERE vendor_id = $2),
 			$3::nfl_stat_type,
-			$4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+			$4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
 		)
 	`
 
@@ -115,8 +123,14 @@ func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID 
 			stat.FumblesLost,
 			stat.SacksTaken,
 			stat.SacksMade,
+			stat.SackAssistsMade,
 			stat.TacklesMade,
-			stat.AssistsMade,
+			stat.TackleAssistsMade,
+			stat.FieldGoalAttempts,
+			stat.FieldGoalMakes,
+			stat.FieldGoalMakeYards,
+			stat.ExtraPointAttempts,
+			stat.ExtraPointMakes,
 			stat.Nullified,
 		)
 		if err != nil {
@@ -138,7 +152,9 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 		       passing_completions, receiving_receptions,
 		       interceptions_thrown, interceptions_caught,
 		       fumbles_forced, fumbles_lost,
-		       sacks_taken, sacks_made, tackles_made, assists_made,
+		       sacks_taken, sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
+		       field_goal_attempts, field_goal_makes, field_goal_make_yards,
+		       extra_point_attempts, extra_point_makes,
 		       nullified
 		FROM nfl_play_statistics
 		WHERE play_id = $1
@@ -175,8 +191,14 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 			&stat.FumblesLost,
 			&stat.SacksTaken,
 			&stat.SacksMade,
+			&stat.SackAssistsMade,
 			&stat.TacklesMade,
-			&stat.AssistsMade,
+			&stat.TackleAssistsMade,
+			&stat.FieldGoalAttempts,
+			&stat.FieldGoalMakes,
+			&stat.FieldGoalMakeYards,
+			&stat.ExtraPointAttempts,
+			&stat.ExtraPointMakes,
 			&stat.Nullified,
 		)
 		if err != nil {
@@ -204,7 +226,9 @@ func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([
 		       ps.passing_completions, ps.receiving_receptions,
 		       ps.interceptions_thrown, ps.interceptions_caught,
 		       ps.fumbles_forced, ps.fumbles_lost,
-		       ps.sacks_taken, ps.sacks_made, ps.tackles_made, ps.assists_made,
+		       ps.sacks_taken, ps.sacks_made, ps.sack_assists_made, ps.tackles_made, ps.tackle_assists_made,
+		       ps.field_goal_attempts, ps.field_goal_makes, ps.field_goal_make_yards,
+		       ps.extra_point_attempts, ps.extra_point_makes,
 		       ps.nullified
 		FROM nfl_play_statistics ps
 		JOIN nfl_plays p ON ps.play_id = p.id
@@ -243,8 +267,14 @@ func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([
 			&stat.FumblesLost,
 			&stat.SacksTaken,
 			&stat.SacksMade,
+			&stat.SackAssistsMade,
 			&stat.TacklesMade,
-			&stat.AssistsMade,
+			&stat.TackleAssistsMade,
+			&stat.FieldGoalAttempts,
+			&stat.FieldGoalMakes,
+			&stat.FieldGoalMakeYards,
+			&stat.ExtraPointAttempts,
+			&stat.ExtraPointMakes,
 			&stat.Nullified,
 		)
 		if err != nil {

@@ -31,8 +31,14 @@ type playerStatsAccumulator struct {
 	FumblesForced       decimal.Decimal
 	FumblesLost         decimal.Decimal
 	SacksMade           decimal.Decimal
+	SackAssistsMade     decimal.Decimal
 	TacklesMade         decimal.Decimal
-	AssistsMade         decimal.Decimal
+	TackleAssistsMade   decimal.Decimal
+	FieldGoalAttempts   decimal.Decimal
+	FieldGoalMakes      decimal.Decimal
+	FieldGoalMakeYards  decimal.Decimal
+	ExtraPointAttempts  decimal.Decimal
+	ExtraPointMakes     decimal.Decimal
 	PassingAttempts     decimal.Decimal
 	RushingAttempts     decimal.Decimal
 	ReceivingTargets    decimal.Decimal
@@ -57,8 +63,14 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 		FumblesForced:       zero,
 		FumblesLost:         zero,
 		SacksMade:           zero,
+		SackAssistsMade:     zero,
 		TacklesMade:         zero,
-		AssistsMade:         zero,
+		TackleAssistsMade:   zero,
+		FieldGoalAttempts:   zero,
+		FieldGoalMakes:      zero,
+		FieldGoalMakeYards:  zero,
+		ExtraPointAttempts:  zero,
+		ExtraPointMakes:     zero,
 		PassingAttempts:     zero,
 		RushingAttempts:     zero,
 		ReceivingTargets:    zero,
@@ -107,8 +119,14 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		acc.FumblesForced = acc.FumblesForced.Add(stat.FumblesForced)
 		acc.FumblesLost = acc.FumblesLost.Add(stat.FumblesLost)
 		acc.SacksMade = acc.SacksMade.Add(stat.SacksMade)
+		acc.SackAssistsMade = acc.SackAssistsMade.Add(stat.SackAssistsMade)
 		acc.TacklesMade = acc.TacklesMade.Add(stat.TacklesMade)
-		acc.AssistsMade = acc.AssistsMade.Add(stat.AssistsMade)
+		acc.TackleAssistsMade = acc.TackleAssistsMade.Add(stat.TackleAssistsMade)
+		acc.FieldGoalAttempts = acc.FieldGoalAttempts.Add(stat.FieldGoalAttempts)
+		acc.FieldGoalMakes = acc.FieldGoalMakes.Add(stat.FieldGoalMakes)
+		acc.FieldGoalMakeYards = acc.FieldGoalMakeYards.Add(stat.FieldGoalMakeYards)
+		acc.ExtraPointAttempts = acc.ExtraPointAttempts.Add(stat.ExtraPointAttempts)
+		acc.ExtraPointMakes = acc.ExtraPointMakes.Add(stat.ExtraPointMakes)
 		acc.PassingAttempts = acc.PassingAttempts.Add(stat.PassingAttempts)
 		acc.RushingAttempts = acc.RushingAttempts.Add(stat.RushingAttempts)
 		acc.ReceivingTargets = acc.ReceivingTargets.Add(stat.ReceivingTargets)
@@ -151,8 +169,14 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 			FumblesForced:       acc.FumblesForced,
 			FumblesLost:         acc.FumblesLost,
 			SacksMade:           acc.SacksMade,
+			SackAssistsMade:     acc.SackAssistsMade,
 			TacklesMade:         acc.TacklesMade,
-			AssistsMade:         acc.AssistsMade,
+			TackleAssistsMade:   acc.TackleAssistsMade,
+			FieldGoalAttempts:   acc.FieldGoalAttempts,
+			FieldGoalMakes:      acc.FieldGoalMakes,
+			FieldGoalMakeYards:  acc.FieldGoalMakeYards,
+			ExtraPointAttempts:  acc.ExtraPointAttempts,
+			ExtraPointMakes:     acc.ExtraPointMakes,
 			PassingAttempts:     acc.PassingAttempts,
 			RushingAttempts:     acc.RushingAttempts,
 			ReceivingTargets:    acc.ReceivingTargets,

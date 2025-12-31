@@ -22,27 +22,33 @@ import (
 
 // NFLBoxScoreForUpsert contains the data needed to upsert a box score
 type NFLBoxScoreForUpsert struct {
-	GameID              int
-	IndividualID        int
-	PassingCompletions  decimal.Decimal
-	ReceivingReceptions decimal.Decimal
-	InterceptionsCaught decimal.Decimal
-	FumblesForced       decimal.Decimal
-	FumblesLost         decimal.Decimal
-	SacksMade           decimal.Decimal
-	TacklesMade         decimal.Decimal
-	AssistsMade         decimal.Decimal
-	PassingAttempts     decimal.Decimal
-	RushingAttempts     decimal.Decimal
-	ReceivingTargets    decimal.Decimal
-	PassingYards        decimal.Decimal
-	RushingYards        decimal.Decimal
-	ReceivingYards      decimal.Decimal
-	PassingTouchdowns   decimal.Decimal
-	RushingTouchdowns   decimal.Decimal
-	ReceivingTouchdowns decimal.Decimal
-	InterceptionsThrown decimal.Decimal
-	SacksTaken          decimal.Decimal
+	GameID               int
+	IndividualID         int
+	PassingCompletions   decimal.Decimal
+	ReceivingReceptions  decimal.Decimal
+	InterceptionsCaught  decimal.Decimal
+	FumblesForced        decimal.Decimal
+	FumblesLost          decimal.Decimal
+	SacksMade            decimal.Decimal
+	SackAssistsMade      decimal.Decimal
+	TacklesMade          decimal.Decimal
+	TackleAssistsMade    decimal.Decimal
+	FieldGoalAttempts    decimal.Decimal
+	FieldGoalMakes       decimal.Decimal
+	FieldGoalMakeYards   decimal.Decimal
+	ExtraPointAttempts   decimal.Decimal
+	ExtraPointMakes      decimal.Decimal
+	PassingAttempts      decimal.Decimal
+	RushingAttempts      decimal.Decimal
+	ReceivingTargets     decimal.Decimal
+	PassingYards         decimal.Decimal
+	RushingYards         decimal.Decimal
+	ReceivingYards       decimal.Decimal
+	PassingTouchdowns    decimal.Decimal
+	RushingTouchdowns    decimal.Decimal
+	ReceivingTouchdowns  decimal.Decimal
+	InterceptionsThrown  decimal.Decimal
+	SacksTaken           decimal.Decimal
 }
 
 // UpsertNFLBoxScore inserts or updates a box score in the database.
@@ -54,7 +60,9 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 			game_id, individual_id,
 			passing_completions, receiving_receptions,
 			interceptions_caught, fumbles_forced, fumbles_lost,
-			sacks_made, tackles_made, assists_made,
+			sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
+			field_goal_attempts, field_goal_makes, field_goal_make_yards,
+			extra_point_attempts, extra_point_makes,
 			passing_attempts, rushing_attempts, receiving_targets,
 			passing_yards, rushing_yards, receiving_yards,
 			passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
@@ -62,7 +70,7 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
 			NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
@@ -73,8 +81,14 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 			fumbles_forced = EXCLUDED.fumbles_forced,
 			fumbles_lost = EXCLUDED.fumbles_lost,
 			sacks_made = EXCLUDED.sacks_made,
+			sack_assists_made = EXCLUDED.sack_assists_made,
 			tackles_made = EXCLUDED.tackles_made,
-			assists_made = EXCLUDED.assists_made,
+			tackle_assists_made = EXCLUDED.tackle_assists_made,
+			field_goal_attempts = EXCLUDED.field_goal_attempts,
+			field_goal_makes = EXCLUDED.field_goal_makes,
+			field_goal_make_yards = EXCLUDED.field_goal_make_yards,
+			extra_point_attempts = EXCLUDED.extra_point_attempts,
+			extra_point_makes = EXCLUDED.extra_point_makes,
 			passing_attempts = EXCLUDED.passing_attempts,
 			rushing_attempts = EXCLUDED.rushing_attempts,
 			receiving_targets = EXCLUDED.receiving_targets,
@@ -98,8 +112,14 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 		boxScore.FumblesForced,
 		boxScore.FumblesLost,
 		boxScore.SacksMade,
+		boxScore.SackAssistsMade,
 		boxScore.TacklesMade,
-		boxScore.AssistsMade,
+		boxScore.TackleAssistsMade,
+		boxScore.FieldGoalAttempts,
+		boxScore.FieldGoalMakes,
+		boxScore.FieldGoalMakeYards,
+		boxScore.ExtraPointAttempts,
+		boxScore.ExtraPointMakes,
 		boxScore.PassingAttempts,
 		boxScore.RushingAttempts,
 		boxScore.ReceivingTargets,
@@ -130,7 +150,9 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			bs.id, bs.game_id, bs.individual_id,
 			bs.passing_completions, bs.receiving_receptions,
 			bs.interceptions_caught, bs.fumbles_forced, bs.fumbles_lost,
-			bs.sacks_made, bs.tackles_made, bs.assists_made,
+			bs.sacks_made, bs.sack_assists_made, bs.tackles_made, bs.tackle_assists_made,
+			bs.field_goal_attempts, bs.field_goal_makes, bs.field_goal_make_yards,
+			bs.extra_point_attempts, bs.extra_point_makes,
 			bs.passing_attempts, bs.rushing_attempts, bs.receiving_targets,
 			bs.passing_yards, bs.rushing_yards, bs.receiving_yards,
 			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
@@ -167,8 +189,14 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			&stats.FumblesForced,
 			&stats.FumblesLost,
 			&stats.SacksMade,
+			&stats.SackAssistsMade,
 			&stats.TacklesMade,
-			&stats.AssistsMade,
+			&stats.TackleAssistsMade,
+			&stats.FieldGoalAttempts,
+			&stats.FieldGoalMakes,
+			&stats.FieldGoalMakeYards,
+			&stats.ExtraPointAttempts,
+			&stats.ExtraPointMakes,
 			&stats.PassingAttempts,
 			&stats.RushingAttempts,
 			&stats.ReceivingTargets,

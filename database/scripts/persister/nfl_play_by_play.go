@@ -208,8 +208,14 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			FumblesLost:         decimal.NewFromFloat(0),
 			SacksTaken:          decimal.NewFromFloat(0),
 			SacksMade:           decimal.NewFromFloat(0),
+			SackAssistsMade:     decimal.NewFromFloat(stat.AstSack),
 			TacklesMade:         decimal.NewFromFloat(stat.Tackle),
-			AssistsMade:         decimal.NewFromFloat(stat.Assist),
+			TackleAssistsMade:   decimal.NewFromFloat(stat.AstTackle),
+			FieldGoalAttempts:   decimal.NewFromFloat(0),
+			FieldGoalMakes:      decimal.NewFromFloat(0),
+			FieldGoalMakeYards:  decimal.NewFromFloat(0),
+			ExtraPointAttempts:  decimal.NewFromFloat(0),
+			ExtraPointMakes:     decimal.NewFromFloat(0),
 		}
 
 		// Populate stat-type-specific fields based on the stat type
@@ -230,14 +236,21 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			playStatistic.ReceivingTouchdowns = decimal.NewFromFloat(stat.Touchdown)
 		case "defense":
 			playStatistic.SacksMade = decimal.NewFromFloat(stat.Sack)
-			// TacklesMade and AssistsMade already set above
+			// TacklesMade and TackleAssistsMade already set above
 		case "interception":
 			playStatistic.InterceptionsCaught = decimal.NewFromFloat(stat.Interception)
 		case "fumble":
 			// API doesn't provide fumble details at stat level, keeping as 0
 			// playStatistic.FumblesForced and FumblesLost remain 0
-		case "field_goal", "extra_point":
-			// These stat types don't have yards/attempts/touchdowns in our schema
+		case "field_goal":
+			playStatistic.FieldGoalAttempts = decimal.NewFromFloat(stat.Attempt)
+			playStatistic.FieldGoalMakes = decimal.NewFromFloat(stat.Made)
+			if stat.Made > 0 {
+				playStatistic.FieldGoalMakeYards = decimal.NewFromFloat(stat.AttYards)
+			}
+		case "extra_point":
+			playStatistic.ExtraPointAttempts = decimal.NewFromFloat(stat.Attempt)
+			playStatistic.ExtraPointMakes = decimal.NewFromFloat(stat.Made)
 		default:
 			return fmt.Errorf("unexpected stat type after mapping: %s", statType)
 		}

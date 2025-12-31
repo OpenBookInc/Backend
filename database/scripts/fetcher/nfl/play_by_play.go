@@ -478,7 +478,10 @@ type Statistic struct {
 	Reception     float64    `json:"reception"`
 	Target        float64    `json:"target"`
 	Tackle        float64    `json:"tackle"`
-	Assist        float64    `json:"assist"`
+	AstTackle     float64    `json:"ast_tackle"`
+	AstSack       float64    `json:"ast_sack"`
+	Made          float64    `json:"made"`
+	AttYards      float64    `json:"att_yards"`
 	Nullified     bool       `json:"nullified"`
 	Penalty       float64    `json:"penalty"`
 	Player        *PlayerRef `json:"player"`

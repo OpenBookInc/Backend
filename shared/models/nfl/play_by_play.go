@@ -78,8 +78,14 @@ type PlayStatistic struct {
 	FumblesLost         decimal.Decimal // Fumbles lost (offensive stat)
 	SacksTaken          decimal.Decimal // Sacks taken (QB stat)
 	SacksMade           decimal.Decimal // Sacks made (defensive stat, can be 0.5 for split credit)
+	SackAssistsMade     decimal.Decimal // Sack assists (defensive stat)
 	TacklesMade         decimal.Decimal // Tackles made (can be 0.5 for split credit)
-	AssistsMade         decimal.Decimal // Assisted tackles (defensive stat)
+	TackleAssistsMade   decimal.Decimal // Assisted tackles (defensive stat)
+	FieldGoalAttempts   decimal.Decimal // Field goal attempts
+	FieldGoalMakes      decimal.Decimal // Field goals made
+	FieldGoalMakeYards  decimal.Decimal // Yards of successful field goals
+	ExtraPointAttempts  decimal.Decimal // Extra point attempts
+	ExtraPointMakes     decimal.Decimal // Extra points made
 	Nullified           bool            // Whether stat was nullified
 }
 
