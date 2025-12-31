@@ -24,15 +24,14 @@ import (
 type NFLBoxScoreForUpsert struct {
 	GameID              int
 	IndividualID        int
-	Completions         decimal.Decimal
-	Incompletions       decimal.Decimal
-	Receptions          decimal.Decimal
-	Interceptions       decimal.Decimal
-	Fumbles             decimal.Decimal
+	PassingCompletions  decimal.Decimal
+	ReceivingReceptions decimal.Decimal
+	InterceptionsCaught decimal.Decimal
+	FumblesForced       decimal.Decimal
 	FumblesLost         decimal.Decimal
-	Sacks               decimal.Decimal
-	Tackles             decimal.Decimal
-	Assists             decimal.Decimal
+	SacksMade           decimal.Decimal
+	TacklesMade         decimal.Decimal
+	AssistsMade         decimal.Decimal
 	PassingAttempts     decimal.Decimal
 	RushingAttempts     decimal.Decimal
 	ReceivingTargets    decimal.Decimal
@@ -53,9 +52,9 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 	query := `
 		INSERT INTO nfl_box_scores (
 			game_id, individual_id,
-			completions, incompletions, receptions,
-			interceptions, fumbles, fumbles_lost,
-			sacks, tackles, assists,
+			passing_completions, receiving_receptions,
+			interceptions_caught, fumbles_forced, fumbles_lost,
+			sacks_made, tackles_made, assists_made,
 			passing_attempts, rushing_attempts, receiving_targets,
 			passing_yards, rushing_yards, receiving_yards,
 			passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
@@ -63,20 +62,19 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
 			NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
 		DO UPDATE SET
-			completions = EXCLUDED.completions,
-			incompletions = EXCLUDED.incompletions,
-			receptions = EXCLUDED.receptions,
-			interceptions = EXCLUDED.interceptions,
-			fumbles = EXCLUDED.fumbles,
+			passing_completions = EXCLUDED.passing_completions,
+			receiving_receptions = EXCLUDED.receiving_receptions,
+			interceptions_caught = EXCLUDED.interceptions_caught,
+			fumbles_forced = EXCLUDED.fumbles_forced,
 			fumbles_lost = EXCLUDED.fumbles_lost,
-			sacks = EXCLUDED.sacks,
-			tackles = EXCLUDED.tackles,
-			assists = EXCLUDED.assists,
+			sacks_made = EXCLUDED.sacks_made,
+			tackles_made = EXCLUDED.tackles_made,
+			assists_made = EXCLUDED.assists_made,
 			passing_attempts = EXCLUDED.passing_attempts,
 			rushing_attempts = EXCLUDED.rushing_attempts,
 			receiving_targets = EXCLUDED.receiving_targets,
@@ -94,15 +92,14 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 	_, err := tx.Exec(ctx, query,
 		boxScore.GameID,
 		boxScore.IndividualID,
-		boxScore.Completions,
-		boxScore.Incompletions,
-		boxScore.Receptions,
-		boxScore.Interceptions,
-		boxScore.Fumbles,
+		boxScore.PassingCompletions,
+		boxScore.ReceivingReceptions,
+		boxScore.InterceptionsCaught,
+		boxScore.FumblesForced,
 		boxScore.FumblesLost,
-		boxScore.Sacks,
-		boxScore.Tackles,
-		boxScore.Assists,
+		boxScore.SacksMade,
+		boxScore.TacklesMade,
+		boxScore.AssistsMade,
 		boxScore.PassingAttempts,
 		boxScore.RushingAttempts,
 		boxScore.ReceivingTargets,
@@ -131,9 +128,9 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 	query := `
 		SELECT
 			bs.id, bs.game_id, bs.individual_id,
-			bs.completions, bs.incompletions, bs.receptions,
-			bs.interceptions, bs.fumbles, bs.fumbles_lost,
-			bs.sacks, bs.tackles, bs.assists,
+			bs.passing_completions, bs.receiving_receptions,
+			bs.interceptions_caught, bs.fumbles_forced, bs.fumbles_lost,
+			bs.sacks_made, bs.tackles_made, bs.assists_made,
 			bs.passing_attempts, bs.rushing_attempts, bs.receiving_targets,
 			bs.passing_yards, bs.rushing_yards, bs.receiving_yards,
 			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
@@ -164,15 +161,14 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			&stats.ID,
 			&stats.GameID,
 			&stats.IndividualID,
-			&stats.Completions,
-			&stats.Incompletions,
-			&stats.Receptions,
-			&stats.Interceptions,
-			&stats.Fumbles,
+			&stats.PassingCompletions,
+			&stats.ReceivingReceptions,
+			&stats.InterceptionsCaught,
+			&stats.FumblesForced,
 			&stats.FumblesLost,
-			&stats.Sacks,
-			&stats.Tackles,
-			&stats.Assists,
+			&stats.SacksMade,
+			&stats.TacklesMade,
+			&stats.AssistsMade,
 			&stats.PassingAttempts,
 			&stats.RushingAttempts,
 			&stats.ReceivingTargets,

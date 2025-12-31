@@ -20,15 +20,14 @@ type NFLStats struct {
 	ID                  int             // Database ID (auto-increment)
 	GameID              int             // Foreign key to games table
 	IndividualID        int             // Foreign key to individuals table
-	Completions         decimal.Decimal // Pass completions
-	Incompletions       decimal.Decimal // Pass incompletions
-	Receptions          decimal.Decimal // Receptions
-	Interceptions       decimal.Decimal // Interceptions (defensive stat)
-	Fumbles             decimal.Decimal // Fumbles
-	FumblesLost         decimal.Decimal // Fumbles lost
-	Sacks               decimal.Decimal // Sacks (defensive stat)
-	Tackles             decimal.Decimal // Tackles
-	Assists             decimal.Decimal // Assisted tackles
+	PassingCompletions  decimal.Decimal // Pass completions
+	ReceivingReceptions decimal.Decimal // Receptions
+	InterceptionsCaught decimal.Decimal // Interceptions caught (defensive stat)
+	FumblesForced       decimal.Decimal // Fumbles forced (defensive stat)
+	FumblesLost         decimal.Decimal // Fumbles lost (offensive stat)
+	SacksMade           decimal.Decimal // Sacks made (defensive stat)
+	TacklesMade         decimal.Decimal // Tackles made (defensive stat)
+	AssistsMade         decimal.Decimal // Assisted tackles (defensive stat)
 	PassingAttempts     decimal.Decimal // Passing attempts
 	RushingAttempts     decimal.Decimal // Rushing attempts
 	ReceivingTargets    decimal.Decimal // Receiving targets
@@ -61,7 +60,7 @@ func (bs *NFLBoxScore) String() string {
 	var sb strings.Builder
 
 	// Header
-	sb.WriteString(strings.Repeat("=", 280))
+	sb.WriteString(strings.Repeat("=", 560))
 	sb.WriteString("\n")
 
 	// Game info
@@ -80,26 +79,26 @@ func (bs *NFLBoxScore) String() string {
 		sb.WriteString("NFL Box Score: Unknown Game\n")
 	}
 
-	sb.WriteString(strings.Repeat("=", 280))
+	sb.WriteString(strings.Repeat("=", 560))
 	sb.WriteString("\n")
 
 	// Away team section
 	sb.WriteString(fmt.Sprintf("\n%s (Away Team) - %d Players\n", awayTeamName, len(bs.AwayTeamPlayers)))
-	sb.WriteString(strings.Repeat("-", 280))
+	sb.WriteString(strings.Repeat("-", 560))
 	sb.WriteString("\n")
 	writeTableHeader(&sb)
 	writePlayerRows(&sb, bs.AwayTeamPlayers)
 
 	// Home team section
 	sb.WriteString(fmt.Sprintf("\n%s (Home Team) - %d Players\n", homeTeamName, len(bs.HomeTeamPlayers)))
-	sb.WriteString(strings.Repeat("-", 280))
+	sb.WriteString(strings.Repeat("-", 560))
 	sb.WriteString("\n")
 	writeTableHeader(&sb)
 	writePlayerRows(&sb, bs.HomeTeamPlayers)
 
 	// Footer
 	sb.WriteString("\n")
-	sb.WriteString(strings.Repeat("=", 280))
+	sb.WriteString(strings.Repeat("=", 560))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("Total Players: %d (Away: %d, Home: %d)\n",
 		len(bs.AwayTeamPlayers)+len(bs.HomeTeamPlayers),
@@ -116,7 +115,7 @@ func (bs *NFLBoxScore) Csv() string {
 	var sb strings.Builder
 
 	// Header row
-	sb.WriteString("player_name,completions,incompletions,receptions,interceptions,fumbles,fumbles_lost,sacks,tackles,assists,passing_attempts,rushing_attempts,receiving_targets,passing_yards,rushing_yards,receiving_yards,passing_touchdowns,rushing_touchdowns,receiving_touchdowns,interceptions_thrown,sacks_taken\n")
+	sb.WriteString("player_name,passing_completions,receiving_receptions,interceptions_caught,fumbles_forced,fumbles_lost,sacks_made,tackles_made,assists_made,passing_attempts,rushing_attempts,receiving_targets,passing_yards,rushing_yards,receiving_yards,passing_touchdowns,rushing_touchdowns,receiving_touchdowns,interceptions_thrown,sacks_taken\n")
 
 	// Write all players (away team first, then home team)
 	writeCsvRows(&sb, bs.AwayTeamPlayers)
@@ -139,17 +138,16 @@ func writeCsvRows(sb *strings.Builder, players []*IndividualBoxScore) {
 		}
 
 		if player.Stats != nil {
-			sb.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+			sb.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
 				playerName,
-				formatStat(player.Stats.Completions),
-				formatStat(player.Stats.Incompletions),
-				formatStat(player.Stats.Receptions),
-				formatStat(player.Stats.Interceptions),
-				formatStat(player.Stats.Fumbles),
+				formatStat(player.Stats.PassingCompletions),
+				formatStat(player.Stats.ReceivingReceptions),
+				formatStat(player.Stats.InterceptionsCaught),
+				formatStat(player.Stats.FumblesForced),
 				formatStat(player.Stats.FumblesLost),
-				formatStat(player.Stats.Sacks),
-				formatStat(player.Stats.Tackles),
-				formatStat(player.Stats.Assists),
+				formatStat(player.Stats.SacksMade),
+				formatStat(player.Stats.TacklesMade),
+				formatStat(player.Stats.AssistsMade),
 				formatStat(player.Stats.PassingAttempts),
 				formatStat(player.Stats.RushingAttempts),
 				formatStat(player.Stats.ReceivingTargets),
@@ -167,14 +165,14 @@ func writeCsvRows(sb *strings.Builder, players []*IndividualBoxScore) {
 
 // writeTableHeader writes the column headers for the stats table
 func writeTableHeader(sb *strings.Builder) {
-	sb.WriteString(fmt.Sprintf("%-25s | %-4s | %12s | %12s | %16s | %14s | %19s | %20s | %16s | %14s | %19s | %18s | %12s | %16s | %21s | %7s | %9s | %9s | %15s | %9s | %14s | %14s\n",
+	sb.WriteString(fmt.Sprintf("%-25s | %-4s | %19s | %19s | %16s | %14s | %19s | %20s | %16s | %14s | %19s | %18s | %19s | %16s | %21s | %11s | %13s | %13s | %19s | %14s | %14s | %14s\n",
 		"Player Name", "Pos",
-		"Completions", "Incompletions", "Passing Attempts", "Passing Yards", "Passing Touchdowns", "Interceptions Thrown",
+		"Passing Completions", "Receiving Receptions", "Passing Attempts", "Passing Yards", "Passing Touchdowns", "Interceptions Thrown",
 		"Rushing Attempts", "Rushing Yards", "Rushing Touchdowns",
-		"Receiving Targets", "Receptions", "Receiving Yards", "Receiving Touchdowns",
-		"Sacks", "Tackles", "Assists", "Interceptions", "Fumbles", "Fumbles Lost", "Sacks Taken"))
+		"Receiving Targets", "Receiving Receptions", "Receiving Yards", "Receiving Touchdowns",
+		"Sacks Made", "Tackles Made", "Assists Made", "Interceptions Caught", "Fumbles Forced", "Fumbles Lost", "Sacks Taken"))
 
-	sb.WriteString(strings.Repeat("-", 280))
+	sb.WriteString(strings.Repeat("-", 560))
 	sb.WriteString("\n")
 }
 
@@ -194,10 +192,10 @@ func writePlayerRows(sb *strings.Builder, players []*IndividualBoxScore) {
 		}
 
 		if player.Stats != nil {
-			sb.WriteString(fmt.Sprintf("%-25s | %-4s | %12s | %12s | %16s | %14s | %19s | %20s | %16s | %14s | %19s | %18s | %12s | %16s | %21s | %7s | %9s | %9s | %15s | %9s | %14s | %14s\n",
+			sb.WriteString(fmt.Sprintf("%-25s | %-4s | %19s | %19s | %16s | %14s | %19s | %20s | %16s | %14s | %19s | %18s | %19s | %16s | %21s | %11s | %13s | %13s | %19s | %14s | %14s | %14s\n",
 				playerName, position,
-				formatStat(player.Stats.Completions),
-				formatStat(player.Stats.Incompletions),
+				formatStat(player.Stats.PassingCompletions),
+				formatStat(player.Stats.ReceivingReceptions),
 				formatStat(player.Stats.PassingAttempts),
 				formatStat(player.Stats.PassingYards),
 				formatStat(player.Stats.PassingTouchdowns),
@@ -206,14 +204,14 @@ func writePlayerRows(sb *strings.Builder, players []*IndividualBoxScore) {
 				formatStat(player.Stats.RushingYards),
 				formatStat(player.Stats.RushingTouchdowns),
 				formatStat(player.Stats.ReceivingTargets),
-				formatStat(player.Stats.Receptions),
+				formatStat(player.Stats.ReceivingReceptions),
 				formatStat(player.Stats.ReceivingYards),
 				formatStat(player.Stats.ReceivingTouchdowns),
-				formatStat(player.Stats.Sacks),
-				formatStat(player.Stats.Tackles),
-				formatStat(player.Stats.Assists),
-				formatStat(player.Stats.Interceptions),
-				formatStat(player.Stats.Fumbles),
+				formatStat(player.Stats.SacksMade),
+				formatStat(player.Stats.TacklesMade),
+				formatStat(player.Stats.AssistsMade),
+				formatStat(player.Stats.InterceptionsCaught),
+				formatStat(player.Stats.FumblesForced),
 				formatStat(player.Stats.FumblesLost),
 				formatStat(player.Stats.SacksTaken)))
 		}

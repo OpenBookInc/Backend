@@ -70,17 +70,16 @@ type PlayStatistic struct {
 	PassingTouchdowns   decimal.Decimal // Passing touchdowns
 	RushingTouchdowns   decimal.Decimal // Rushing touchdowns
 	ReceivingTouchdowns decimal.Decimal // Receiving touchdowns
-	Completions         decimal.Decimal // Pass completions
-	Incompletions       decimal.Decimal // Pass incompletions
-	Receptions          decimal.Decimal // Receptions
+	PassingCompletions  decimal.Decimal // Pass completions
+	ReceivingReceptions decimal.Decimal // Receptions
 	InterceptionsThrown decimal.Decimal // Interceptions thrown (QB stat)
-	Interceptions       decimal.Decimal // Interceptions (defensive stat)
-	Fumbles             decimal.Decimal // Fumbles
-	FumblesLost         decimal.Decimal // Fumbles lost
+	InterceptionsCaught decimal.Decimal // Interceptions caught (defensive stat)
+	FumblesForced       decimal.Decimal // Fumbles forced (defensive stat)
+	FumblesLost         decimal.Decimal // Fumbles lost (offensive stat)
 	SacksTaken          decimal.Decimal // Sacks taken (QB stat)
-	Sacks               decimal.Decimal // Sacks (defensive stat, can be 0.5 for split credit)
-	Tackles             decimal.Decimal // Tackles (can be 0.5 for split credit)
-	Assists             decimal.Decimal // Assisted tackles
+	SacksMade           decimal.Decimal // Sacks made (defensive stat, can be 0.5 for split credit)
+	TacklesMade         decimal.Decimal // Tackles made (can be 0.5 for split credit)
+	AssistsMade         decimal.Decimal // Assisted tackles (defensive stat)
 	Nullified           bool            // Whether stat was nullified
 }
 

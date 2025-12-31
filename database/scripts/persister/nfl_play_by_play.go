@@ -200,17 +200,16 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			PassingTouchdowns:   decimal.NewFromFloat(0),
 			RushingTouchdowns:   decimal.NewFromFloat(0),
 			ReceivingTouchdowns: decimal.NewFromFloat(0),
-			Completions:         decimal.NewFromFloat(stat.Complete),
-			Incompletions:       decimal.NewFromFloat(stat.Incomplete),
-			Receptions:          decimal.NewFromFloat(stat.Reception),
+			PassingCompletions:  decimal.NewFromFloat(stat.Complete),
+			ReceivingReceptions: decimal.NewFromFloat(stat.Reception),
 			InterceptionsThrown: decimal.NewFromFloat(0),
-			Interceptions:       decimal.NewFromFloat(0),
-			Fumbles:             decimal.NewFromFloat(0),
+			InterceptionsCaught: decimal.NewFromFloat(0),
+			FumblesForced:       decimal.NewFromFloat(0),
 			FumblesLost:         decimal.NewFromFloat(0),
 			SacksTaken:          decimal.NewFromFloat(0),
-			Sacks:               decimal.NewFromFloat(0),
-			Tackles:             decimal.NewFromFloat(stat.Tackle),
-			Assists:             decimal.NewFromFloat(stat.Assist),
+			SacksMade:           decimal.NewFromFloat(0),
+			TacklesMade:         decimal.NewFromFloat(stat.Tackle),
+			AssistsMade:         decimal.NewFromFloat(stat.Assist),
 		}
 
 		// Populate stat-type-specific fields based on the stat type
@@ -230,13 +229,13 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			playStatistic.ReceivingYards = decimal.NewFromFloat(stat.Yards)
 			playStatistic.ReceivingTouchdowns = decimal.NewFromFloat(stat.Touchdown)
 		case "defense":
-			playStatistic.Sacks = decimal.NewFromFloat(stat.Sack)
-			// Tackles and Assists already set above
+			playStatistic.SacksMade = decimal.NewFromFloat(stat.Sack)
+			// TacklesMade and AssistsMade already set above
 		case "interception":
-			playStatistic.Interceptions = decimal.NewFromFloat(stat.Interception)
+			playStatistic.InterceptionsCaught = decimal.NewFromFloat(stat.Interception)
 		case "fumble":
 			// API doesn't provide fumble details at stat level, keeping as 0
-			// playStatistic.Fumbles and FumblesLost remain 0
+			// playStatistic.FumblesForced and FumblesLost remain 0
 		case "field_goal", "extra_point":
 			// These stat types don't have yards/attempts/touchdowns in our schema
 		default:

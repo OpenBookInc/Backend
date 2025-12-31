@@ -25,15 +25,14 @@ import (
 // playerStatsAccumulator holds running totals for a player's statistics
 type playerStatsAccumulator struct {
 	IndividualID        int
-	Completions         decimal.Decimal
-	Incompletions       decimal.Decimal
-	Receptions          decimal.Decimal
-	Interceptions       decimal.Decimal
-	Fumbles             decimal.Decimal
+	PassingCompletions  decimal.Decimal
+	ReceivingReceptions decimal.Decimal
+	InterceptionsCaught decimal.Decimal
+	FumblesForced       decimal.Decimal
 	FumblesLost         decimal.Decimal
-	Sacks               decimal.Decimal
-	Tackles             decimal.Decimal
-	Assists             decimal.Decimal
+	SacksMade           decimal.Decimal
+	TacklesMade         decimal.Decimal
+	AssistsMade         decimal.Decimal
 	PassingAttempts     decimal.Decimal
 	RushingAttempts     decimal.Decimal
 	ReceivingTargets    decimal.Decimal
@@ -52,15 +51,14 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 	zero := decimal.NewFromInt(0)
 	return &playerStatsAccumulator{
 		IndividualID:        individualID,
-		Completions:         zero,
-		Incompletions:       zero,
-		Receptions:          zero,
-		Interceptions:       zero,
-		Fumbles:             zero,
+		PassingCompletions:  zero,
+		ReceivingReceptions: zero,
+		InterceptionsCaught: zero,
+		FumblesForced:       zero,
 		FumblesLost:         zero,
-		Sacks:               zero,
-		Tackles:             zero,
-		Assists:             zero,
+		SacksMade:           zero,
+		TacklesMade:         zero,
+		AssistsMade:         zero,
 		PassingAttempts:     zero,
 		RushingAttempts:     zero,
 		ReceivingTargets:    zero,
@@ -103,15 +101,14 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		}
 
 		// Add statistics to accumulator
-		acc.Completions = acc.Completions.Add(stat.Completions)
-		acc.Incompletions = acc.Incompletions.Add(stat.Incompletions)
-		acc.Receptions = acc.Receptions.Add(stat.Receptions)
-		acc.Interceptions = acc.Interceptions.Add(stat.Interceptions)
-		acc.Fumbles = acc.Fumbles.Add(stat.Fumbles)
+		acc.PassingCompletions = acc.PassingCompletions.Add(stat.PassingCompletions)
+		acc.ReceivingReceptions = acc.ReceivingReceptions.Add(stat.ReceivingReceptions)
+		acc.InterceptionsCaught = acc.InterceptionsCaught.Add(stat.InterceptionsCaught)
+		acc.FumblesForced = acc.FumblesForced.Add(stat.FumblesForced)
 		acc.FumblesLost = acc.FumblesLost.Add(stat.FumblesLost)
-		acc.Sacks = acc.Sacks.Add(stat.Sacks)
-		acc.Tackles = acc.Tackles.Add(stat.Tackles)
-		acc.Assists = acc.Assists.Add(stat.Assists)
+		acc.SacksMade = acc.SacksMade.Add(stat.SacksMade)
+		acc.TacklesMade = acc.TacklesMade.Add(stat.TacklesMade)
+		acc.AssistsMade = acc.AssistsMade.Add(stat.AssistsMade)
 		acc.PassingAttempts = acc.PassingAttempts.Add(stat.PassingAttempts)
 		acc.RushingAttempts = acc.RushingAttempts.Add(stat.RushingAttempts)
 		acc.ReceivingTargets = acc.ReceivingTargets.Add(stat.ReceivingTargets)
@@ -148,15 +145,14 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		boxScore := &store.NFLBoxScoreForUpsert{
 			GameID:              data.GameID,
 			IndividualID:        acc.IndividualID,
-			Completions:         acc.Completions,
-			Incompletions:       acc.Incompletions,
-			Receptions:          acc.Receptions,
-			Interceptions:       acc.Interceptions,
-			Fumbles:             acc.Fumbles,
+			PassingCompletions:  acc.PassingCompletions,
+			ReceivingReceptions: acc.ReceivingReceptions,
+			InterceptionsCaught: acc.InterceptionsCaught,
+			FumblesForced:       acc.FumblesForced,
 			FumblesLost:         acc.FumblesLost,
-			Sacks:               acc.Sacks,
-			Tackles:             acc.Tackles,
-			Assists:             acc.Assists,
+			SacksMade:           acc.SacksMade,
+			TacklesMade:         acc.TacklesMade,
+			AssistsMade:         acc.AssistsMade,
 			PassingAttempts:     acc.PassingAttempts,
 			RushingAttempts:     acc.RushingAttempts,
 			ReceivingTargets:    acc.ReceivingTargets,
