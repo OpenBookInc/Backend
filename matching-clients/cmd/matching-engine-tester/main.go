@@ -35,6 +35,7 @@ type WebClient struct {
 	tradeStream       pb.MatchingServerService_CreateTradeStreamClient
 	tradeSendChan     chan *pb.GatewayMessage
 	tradeStreamActive bool
+	streamGeneration  uint64 // Incremented on each reconnect to invalidate old goroutines
 
 	// Global sequence number shared across all message types
 	globalSequenceNumber uint64
@@ -45,12 +46,26 @@ type WebClient struct {
 	// Pool state tracking
 	poolTracker   *PoolTracker
 	pendingOrders map[uint64]*pb.NewOrder // map[clientOrderId]NewOrder
+
+	// Target mode and connection info
+	targetMode  string // "matching_server" or "gateway"
+	serverHost  string
+	serverPort  string
+	gatewayPort string
 }
 
-func NewWebClient(serverAddr string) (*WebClient, error) {
-	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewWebClient(cfg *Config) (*WebClient, error) {
+	// Default to gateway
+	targetMode := "gateway"
+	targetPort := cfg.GatewayPort
+
+	serverAddr := fmt.Sprintf("%s:%s", cfg.ServerHost, targetPort)
+
+	conn, err := grpc.NewClient(serverAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect: %v", err)
+		return nil, fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
 	}
 
 	wc := &WebClient{
@@ -63,6 +78,10 @@ func NewWebClient(serverAddr string) (*WebClient, error) {
 		globalClientOrderId: 1000, // Start at 1001 (will increment on first use)
 		poolTracker:         NewPoolTracker(),
 		pendingOrders:       make(map[uint64]*pb.NewOrder),
+		targetMode:          targetMode,
+		serverHost:          cfg.ServerHost,
+		serverPort:          cfg.ServerPort,
+		gatewayPort:         cfg.GatewayPort,
 	}
 
 	// Initialize unified trade stream
@@ -217,6 +236,189 @@ func (wc *WebClient) Close() {
 	if wc.conn != nil {
 		wc.conn.Close()
 	}
+}
+
+// SwitchTarget switches the connection to a different target (matching_server or gateway)
+func (wc *WebClient) SwitchTarget(newMode string) error {
+	if newMode != "matching_server" && newMode != "gateway" {
+		return fmt.Errorf("invalid target mode: %s", newMode)
+	}
+
+	wc.mu.Lock()
+	if wc.targetMode == newMode {
+		wc.mu.Unlock()
+		return nil // Already connected to this target
+	}
+
+	// Increment generation to invalidate old goroutines
+	wc.streamGeneration++
+	currentGen := wc.streamGeneration
+
+	// Mark stream as inactive before closing
+	wc.tradeStreamActive = false
+
+	// Capture old resources to close
+	oldSendChan := wc.tradeSendChan
+	oldStream := wc.tradeStream
+	oldConn := wc.conn
+
+	// Clear references before releasing lock
+	wc.tradeSendChan = nil
+	wc.tradeStream = nil
+	wc.conn = nil
+
+	// Determine new port
+	var targetPort string
+	switch newMode {
+	case "gateway":
+		targetPort = wc.gatewayPort
+	default:
+		targetPort = wc.serverPort
+	}
+	serverHost := wc.serverHost
+
+	wc.mu.Unlock()
+
+	// Close old resources outside the lock
+	if oldSendChan != nil {
+		close(oldSendChan)
+	}
+	if oldStream != nil {
+		oldStream.CloseSend()
+	}
+	if oldConn != nil {
+		oldConn.Close()
+	}
+
+	// Give old goroutines a moment to see the closed connection
+	time.Sleep(100 * time.Millisecond)
+
+	// Create new connection (outside lock)
+	serverAddr := fmt.Sprintf("%s:%s", serverHost, targetPort)
+
+	conn, err := grpc.NewClient(serverAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
+	}
+
+	client := pb.NewMatchingServerServiceClient(conn)
+
+	// Create trade stream
+	stream, err := client.CreateTradeStream(context.Background())
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to create trade stream: %v", err)
+	}
+
+	// Now acquire lock to update state
+	wc.mu.Lock()
+	wc.conn = conn
+	wc.client = client
+	wc.targetMode = newMode
+	wc.tradeSendChan = make(chan *pb.GatewayMessage, 10)
+	wc.tradeStream = stream
+	wc.tradeStreamActive = true
+
+	// Clear state
+	wc.requests = make([]string, 0)
+	wc.responses = make([]string, 0)
+	wc.poolTracker = NewPoolTracker()
+	wc.pendingOrders = make(map[uint64]*pb.NewOrder)
+	wc.globalSequenceNumber = 0
+	wc.globalClientOrderId = 1000
+
+	sendChan := wc.tradeSendChan // Capture for goroutine
+	wc.mu.Unlock()
+
+	// Start sender goroutine
+	go func() {
+		for msg := range sendChan {
+			if err := stream.Send(msg); err != nil {
+				log.Printf("Failed to send message: %v", err)
+				wc.mu.Lock()
+				if wc.streamGeneration == currentGen {
+					wc.tradeStreamActive = false
+				}
+				wc.mu.Unlock()
+				return
+			}
+		}
+	}()
+
+	// Start receiver goroutine
+	go func() {
+		marshaler := protojson.MarshalOptions{
+			Multiline:       true,
+			Indent:          "  ",
+			EmitUnpopulated: true,
+		}
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				log.Println("Trade stream closed by server")
+				wc.mu.Lock()
+				if wc.streamGeneration == currentGen {
+					wc.tradeStreamActive = false
+				}
+				wc.mu.Unlock()
+				return
+			}
+			if err != nil {
+				log.Printf("Error receiving response: %v", err)
+				wc.mu.Lock()
+				if wc.streamGeneration == currentGen {
+					wc.tradeStreamActive = false
+				}
+				wc.mu.Unlock()
+				return
+			}
+
+			wc.mu.Lock()
+			if wc.streamGeneration == currentGen {
+				respJSON, _ := marshaler.Marshal(resp)
+				wc.responses = append(wc.responses, string(respJSON))
+				wc.processEngineMessage(resp)
+			}
+			wc.mu.Unlock()
+		}
+	}()
+
+	log.Printf("Switched to target: %s at %s", newMode, serverAddr)
+	return nil
+}
+
+// handleTargetMode handles GET/POST for target mode
+func (wc *WebClient) handleTargetMode(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
+			return
+		}
+
+		newMode := r.FormValue("targetMode")
+		if err := wc.SwitchTarget(newMode); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"targetMode": newMode, "status": "switched"})
+		return
+	}
+
+	// GET: return current target mode
+	wc.mu.RLock()
+	currentMode := wc.targetMode
+	wc.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"targetMode": currentMode})
 }
 
 // Send order handler
@@ -546,8 +748,15 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
     <title>Matching Engine Tester - Entry Pools</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .header { background: #333; color: white; padding: 10px 20px; }
+        .header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
         .header h1 { margin: 0; font-size: 24px; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .target-selector { display: flex; align-items: center; gap: 8px; }
+        .target-selector label { font-size: 14px; }
+        .target-selector select { padding: 5px 10px; border-radius: 3px; border: none; }
+        .target-indicator { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .target-matching { background: #e74c3c; }
+        .target-gateway { background: #3498db; }
         .nav { background: #444; padding: 10px 20px; }
         .nav a { margin-right: 15px; padding: 5px 15px; text-decoration: none; background: #007bff; color: white; border-radius: 3px; display: inline-block; }
         .nav a:hover { background: #0056b3; }
@@ -569,6 +778,16 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 <body>
     <div class="header">
         <h1>Matching Engine Tester</h1>
+        <div class="header-right">
+            <div class="target-selector">
+                <label>Target:</label>
+                <select id="targetModeSelect">
+                    <option value="matching_server">Matching Server (:50051)</option>
+                    <option value="gateway">Gateway (:50052)</option>
+                </select>
+            </div>
+            <span id="targetIndicator" class="target-indicator target-matching">Matching Engine</span>
+        </div>
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>
@@ -723,6 +942,61 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
             }
         }
 
+        // Target mode handling
+        const targetModeSelect = document.getElementById('targetModeSelect');
+        const targetIndicator = document.getElementById('targetIndicator');
+
+        function updateTargetIndicator(mode) {
+            if (mode === 'gateway') {
+                targetIndicator.textContent = 'Gateway';
+                targetIndicator.className = 'target-indicator target-gateway';
+            } else {
+                targetIndicator.textContent = 'Matching Engine';
+                targetIndicator.className = 'target-indicator target-matching';
+            }
+        }
+
+        async function loadTargetMode() {
+            try {
+                const response = await fetch('/target-mode');
+                const data = await response.json();
+                targetModeSelect.value = data.targetMode;
+                updateTargetIndicator(data.targetMode);
+            } catch (err) {
+                console.error('Error fetching target mode:', err);
+            }
+        }
+
+        targetModeSelect.addEventListener('change', async function() {
+            const newMode = this.value;
+            try {
+                const response = await fetch('/target-mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'targetMode=' + newMode
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Failed to switch target: ' + data.error);
+                    loadTargetMode();
+                } else {
+                    updateTargetIndicator(newMode);
+                    // Reset color assignments since pool state was cleared
+                    orderColors.clear();
+                    colorIndex = 0;
+                }
+            } catch (err) {
+                console.error('Error switching target:', err);
+                alert('Network error switching target');
+                loadTargetMode();
+            }
+        });
+
+        // Load target mode on page load
+        loadTargetMode();
+
         // Initial fetch
         fetchPools();
 
@@ -750,8 +1024,15 @@ func renderTradePage(w http.ResponseWriter) {
     <title>Matching Engine Tester - Trade</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #333; color: white; padding: 10px 20px; }
+        .header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
         .header h1 { margin: 0; font-size: 24px; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .target-selector { display: flex; align-items: center; gap: 8px; }
+        .target-selector label { font-size: 14px; }
+        .target-selector select { padding: 5px 10px; border-radius: 3px; border: none; }
+        .target-indicator { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .target-matching { background: #e74c3c; }
+        .target-gateway { background: #3498db; }
         .nav { background: #444; padding: 10px 20px; }
         .nav a { margin-right: 15px; padding: 5px 15px; text-decoration: none; background: #007bff; color: white; border-radius: 3px; display: inline-block; }
         .nav a:hover { background: #0056b3; }
@@ -782,6 +1063,16 @@ func renderTradePage(w http.ResponseWriter) {
 <body>
     <div class="header">
         <h1>Matching Engine Tester</h1>
+        <div class="header-right">
+            <div class="target-selector">
+                <label>Target:</label>
+                <select id="targetModeSelect">
+                    <option value="matching_server">Matching Server (:50051)</option>
+                    <option value="gateway">Gateway (:50052)</option>
+                </select>
+            </div>
+            <span id="targetIndicator" class="target-indicator target-matching">Matching Engine</span>
+        </div>
     </div>
     <div class="nav">
         <a href="/entrypools">Entry Pools</a>
@@ -1048,6 +1339,64 @@ func renderTradePage(w http.ResponseWriter) {
             }
         });
 
+        // Target mode handling
+        const targetModeSelect = document.getElementById('targetModeSelect');
+        const targetIndicator = document.getElementById('targetIndicator');
+
+        function updateTargetIndicator(mode) {
+            if (mode === 'gateway') {
+                targetIndicator.textContent = 'Gateway';
+                targetIndicator.className = 'target-indicator target-gateway';
+            } else {
+                targetIndicator.textContent = 'Matching Engine';
+                targetIndicator.className = 'target-indicator target-matching';
+            }
+        }
+
+        async function loadTargetMode() {
+            try {
+                const response = await fetch('/target-mode');
+                const data = await response.json();
+                targetModeSelect.value = data.targetMode;
+                updateTargetIndicator(data.targetMode);
+            } catch (err) {
+                console.error('Error fetching target mode:', err);
+            }
+        }
+
+        targetModeSelect.addEventListener('change', async function() {
+            const newMode = this.value;
+            try {
+                const response = await fetch('/target-mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'targetMode=' + newMode
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Failed to switch target: ' + data.error);
+                    loadTargetMode(); // Revert select to actual value
+                } else {
+                    updateTargetIndicator(newMode);
+                    // Clear the request/response lists since state was reset
+                    requestList.innerHTML = '<p>No requests yet.</p>';
+                    responseList.innerHTML = '<p>No responses yet.</p>';
+                    // Reload sequence number and client order ID
+                    loadInitialSequenceNumber();
+                    loadInitialClientOrderId();
+                }
+            } catch (err) {
+                console.error('Error switching target:', err);
+                alert('Network error switching target');
+                loadTargetMode();
+            }
+        });
+
+        // Load target mode on page load
+        loadTargetMode();
+
         // Fetch and update both requests and responses every 500ms
         setInterval(async () => {
             try {
@@ -1100,9 +1449,10 @@ func fatal(format string, args ...interface{}) {
 
 // Config holds the configuration for the matching engine tester
 type Config struct {
-	ServerHost string
-	ServerPort string
-	WebPort    string
+	ServerHost  string
+	ServerPort  string
+	GatewayPort string
+	WebPort     string
 }
 
 // loadConfig loads and validates the configuration from .env file
@@ -1125,11 +1475,13 @@ func loadConfig() (*Config, error) {
 
 	// Load optional configuration with defaults
 	webPort := envloader.GetEnvAsStringWithDefault("WEB_PORT", "8080")
+	gatewayPort := envloader.GetEnvAsStringWithDefault("GATEWAY_PORT", "50052")
 
 	return &Config{
-		ServerHost: serverHost,
-		ServerPort: serverPort,
-		WebPort:    webPort,
+		ServerHost:  serverHost,
+		ServerPort:  serverPort,
+		GatewayPort: gatewayPort,
+		WebPort:     webPort,
 	}, nil
 }
 
@@ -1140,11 +1492,9 @@ func main() {
 		fatal("Failed to load configuration: %v\nPlease ensure .env file exists with required fields (SERVER_HOST, SERVER_PORT)", err)
 	}
 
-	// Construct server address
-	serverAddr := fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort)
-	log.Printf("Connecting to matching server at %s", serverAddr)
+	log.Printf("Initial target mode: gateway")
 
-	client, err := NewWebClient(serverAddr)
+	client, err := NewWebClient(cfg)
 	if err != nil {
 		fatal("Failed to create client: %v", err)
 	}
@@ -1161,6 +1511,7 @@ func main() {
 	http.HandleFunc("/responses", client.handleResponses)
 	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
 	http.HandleFunc("/client-order-id", client.handleClientOrderId)
+	http.HandleFunc("/target-mode", client.handleTargetMode)
 
 	webAddr := fmt.Sprintf(":%s", cfg.WebPort)
 	log.Printf("Starting web server on %s", webAddr)
