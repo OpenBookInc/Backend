@@ -205,7 +205,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			InterceptionsThrown: decimal.NewFromFloat(0),
 			InterceptionsCaught: decimal.NewFromFloat(0),
 			FumblesForced:       decimal.NewFromFloat(0),
-			FumblesLost:         decimal.NewFromFloat(0),
+			FumblesCommitted:    decimal.NewFromFloat(0),
 			SacksTaken:          decimal.NewFromFloat(0),
 			SacksMade:           decimal.NewFromFloat(0),
 			SackAssistsMade:     decimal.NewFromFloat(stat.AstSack),
@@ -236,12 +236,12 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			playStatistic.ReceivingTouchdowns = decimal.NewFromFloat(stat.Touchdown)
 		case "defense":
 			playStatistic.SacksMade = decimal.NewFromFloat(stat.Sack)
+			playStatistic.FumblesForced = decimal.NewFromFloat(stat.ForcedFumble)
 			// TacklesMade and TackleAssistsMade already set above
 		case "interception":
 			playStatistic.InterceptionsCaught = decimal.NewFromFloat(stat.Interception)
 		case "fumble":
-			// API doesn't provide fumble details at stat level, keeping as 0
-			// playStatistic.FumblesForced and FumblesLost remain 0
+			playStatistic.FumblesCommitted = decimal.NewFromFloat(stat.Fumble)
 		case "field_goal":
 			playStatistic.FieldGoalAttempts = decimal.NewFromFloat(stat.Attempt)
 			playStatistic.FieldGoalMakes = decimal.NewFromFloat(stat.Made)

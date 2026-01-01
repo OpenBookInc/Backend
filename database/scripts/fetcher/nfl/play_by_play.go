@@ -484,6 +484,10 @@ type Statistic struct {
 	AttYards      float64    `json:"att_yards"`
 	Nullified     bool       `json:"nullified"`
 	Penalty       float64    `json:"penalty"`
+	Fumble        float64    `json:"fumble"`
+	Lost          float64    `json:"lost"`
+	Forced        float64    `json:"forced"`
+	ForcedFumble  float64    `json:"forced_fumble"`
 	Player        *PlayerRef `json:"player"`
 	Team          *TeamRef   `json:"team"`
 }

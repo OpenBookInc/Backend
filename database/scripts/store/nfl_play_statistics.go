@@ -45,7 +45,7 @@ type PlayStatisticForUpsert struct {
 	InterceptionsThrown decimal.Decimal
 	InterceptionsCaught decimal.Decimal
 	FumblesForced       decimal.Decimal
-	FumblesLost         decimal.Decimal
+	FumblesCommitted         decimal.Decimal
 	SacksTaken          decimal.Decimal
 	SacksMade           decimal.Decimal
 	SackAssistsMade     decimal.Decimal
@@ -87,7 +87,7 @@ func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID 
 			passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
 			passing_completions, receiving_receptions,
 			interceptions_thrown, interceptions_caught,
-			fumbles_forced, fumbles_lost,
+			fumbles_forced, fumbles_committed,
 			sacks_taken, sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
 			field_goal_attempts, field_goal_makes, field_goal_make_yards,
 			extra_point_attempts, extra_point_makes,
@@ -120,7 +120,7 @@ func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID 
 			stat.InterceptionsThrown,
 			stat.InterceptionsCaught,
 			stat.FumblesForced,
-			stat.FumblesLost,
+			stat.FumblesCommitted,
 			stat.SacksTaken,
 			stat.SacksMade,
 			stat.SackAssistsMade,
@@ -151,7 +151,7 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 		       passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
 		       passing_completions, receiving_receptions,
 		       interceptions_thrown, interceptions_caught,
-		       fumbles_forced, fumbles_lost,
+		       fumbles_forced, fumbles_committed,
 		       sacks_taken, sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
 		       field_goal_attempts, field_goal_makes, field_goal_make_yards,
 		       extra_point_attempts, extra_point_makes,
@@ -188,7 +188,7 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 			&stat.InterceptionsThrown,
 			&stat.InterceptionsCaught,
 			&stat.FumblesForced,
-			&stat.FumblesLost,
+			&stat.FumblesCommitted,
 			&stat.SacksTaken,
 			&stat.SacksMade,
 			&stat.SackAssistsMade,
@@ -225,7 +225,7 @@ func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([
 		       ps.passing_touchdowns, ps.rushing_touchdowns, ps.receiving_touchdowns,
 		       ps.passing_completions, ps.receiving_receptions,
 		       ps.interceptions_thrown, ps.interceptions_caught,
-		       ps.fumbles_forced, ps.fumbles_lost,
+		       ps.fumbles_forced, ps.fumbles_committed,
 		       ps.sacks_taken, ps.sacks_made, ps.sack_assists_made, ps.tackles_made, ps.tackle_assists_made,
 		       ps.field_goal_attempts, ps.field_goal_makes, ps.field_goal_make_yards,
 		       ps.extra_point_attempts, ps.extra_point_makes,
@@ -264,7 +264,7 @@ func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([
 			&stat.InterceptionsThrown,
 			&stat.InterceptionsCaught,
 			&stat.FumblesForced,
-			&stat.FumblesLost,
+			&stat.FumblesCommitted,
 			&stat.SacksTaken,
 			&stat.SacksMade,
 			&stat.SackAssistsMade,
