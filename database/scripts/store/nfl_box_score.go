@@ -142,8 +142,7 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 
 // GetNFLBoxScoresByGameID retrieves all box scores for a game with individual info.
 // Uses JOIN to fetch individual details along with stats.
-// Also joins with rosters to determine team membership.
-// Returns a slice of IndividualBoxScore with player info, stats, and team_id populated.
+// Returns a slice of IndividualBoxScore with player info and stats populated.
 func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nflmodels.IndividualBoxScore, error) {
 	query := `
 		SELECT
@@ -158,11 +157,9 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
 			bs.interceptions_thrown, bs.sacks_taken,
 			i.id, i.vendor_id, i.display_name, i.abbreviated_name,
-			i.date_of_birth, i.league_id, i.position, i.jersey_number,
-			COALESCE(r.team_id, 0)
+			i.date_of_birth, i.league_id, i.position, i.jersey_number
 		FROM nfl_box_scores bs
 		JOIN individuals i ON bs.individual_id = i.id
-		LEFT JOIN rosters r ON i.id = ANY(r.individual_ids)
 		WHERE bs.game_id = $1
 		ORDER BY i.display_name
 	`
@@ -177,7 +174,6 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 	for rows.Next() {
 		stats := &nflmodels.NFLStats{}
 		individual := &models.Individual{}
-		var teamID int
 
 		err := rows.Scan(
 			&stats.ID,
@@ -216,7 +212,6 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			&individual.LeagueID,
 			&individual.Position,
 			&individual.JerseyNumber,
-			&teamID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan box score row: %w", err)
@@ -225,7 +220,6 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 		results = append(results, &nflmodels.IndividualBoxScore{
 			Individual: individual,
 			Stats:      stats,
-			TeamID:     teamID,
 		})
 	}
 

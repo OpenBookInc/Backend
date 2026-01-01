@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Check if there are any players
-	totalPlayers := len(boxScore.HomeTeamPlayers) + len(boxScore.AwayTeamPlayers)
+	totalPlayers := len(boxScore.Players)
 	if totalPlayers == 0 {
 		fmt.Println("\nNo box score data found for this game.")
 		fmt.Println("Ensure you have run update_box_score_data.sh for this game first.")
@@ -63,9 +63,23 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Read box scores for %d players (Home: %d, Away: %d)\n",
-		totalPlayers, len(boxScore.HomeTeamPlayers), len(boxScore.AwayTeamPlayers))
+	fmt.Printf("Read box scores for %d players\n", totalPlayers)
 
-	// Print the box score
-	fmt.Println("\n" + boxScore.String())
+	// Read rosters for home and away teams
+	fmt.Println("\nReading rosters for home and away teams...")
+	homeRoster, err := reader.ReadRosterByTeamID(ctx, dbStore, boxScore.Game.ContenderIDA)
+	if err != nil {
+		fatal("Failed to read home team roster (team_id %d): %v", boxScore.Game.ContenderIDA, err)
+	}
+
+	awayRoster, err := reader.ReadRosterByTeamID(ctx, dbStore, boxScore.Game.ContenderIDB)
+	if err != nil {
+		fatal("Failed to read away team roster (team_id %d): %v", boxScore.Game.ContenderIDB, err)
+	}
+
+	fmt.Printf("Successfully read rosters (Home: %d players, Away: %d players)\n",
+		len(homeRoster.IndividualIDs), len(awayRoster.IndividualIDs))
+
+	// Print the box score with roster organization
+	fmt.Println("\n" + boxScore.StringWithRosters(awayRoster, homeRoster))
 }

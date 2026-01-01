@@ -51,17 +51,15 @@ type NFLStats struct {
 type IndividualBoxScore struct {
 	Individual *models.Individual
 	Stats      *NFLStats
-	TeamID     int // The team this player belongs to (from roster)
 }
 
 // NFLBoxScore represents a complete box score for an NFL game
 type NFLBoxScore struct {
-	Game                 *models.Game
-	HomeTeamPlayers      []*IndividualBoxScore // Players on home team (ContenderA)
-	AwayTeamPlayers      []*IndividualBoxScore // Players on away team (ContenderB)
+	Game    *models.Game
+	Players []*IndividualBoxScore // All players with stats for this game
 }
 
-// String returns a formatted table representation of the box score organized by team
+// String returns a formatted table representation of the box score with all players in one section
 func (bs *NFLBoxScore) String() string {
 	var sb strings.Builder
 
@@ -88,44 +86,137 @@ func (bs *NFLBoxScore) String() string {
 	sb.WriteString(strings.Repeat("=", 560))
 	sb.WriteString("\n")
 
-	// Away team section
-	sb.WriteString(fmt.Sprintf("\n%s (Away Team) - %d Players\n", awayTeamName, len(bs.AwayTeamPlayers)))
-	sb.WriteString(strings.Repeat("-", 560))
-	sb.WriteString("\n")
-	writeTableHeader(&sb)
-	writePlayerRows(&sb, bs.AwayTeamPlayers)
-
-	// Home team section
-	sb.WriteString(fmt.Sprintf("\n%s (Home Team) - %d Players\n", homeTeamName, len(bs.HomeTeamPlayers)))
-	sb.WriteString(strings.Repeat("-", 560))
-	sb.WriteString("\n")
-	writeTableHeader(&sb)
-	writePlayerRows(&sb, bs.HomeTeamPlayers)
+	// All players section
+	sb.WriteString(bs.stringRosterBoxScore("All Players", bs.Players))
 
 	// Footer
 	sb.WriteString("\n")
 	sb.WriteString(strings.Repeat("=", 560))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Total Players: %d (Away: %d, Home: %d)\n",
-		len(bs.AwayTeamPlayers)+len(bs.HomeTeamPlayers),
-		len(bs.AwayTeamPlayers),
-		len(bs.HomeTeamPlayers)))
+	sb.WriteString(fmt.Sprintf("Total Players: %d\n", len(bs.Players)))
+
+	return sb.String()
+}
+
+// StringWithRosters returns a formatted table representation organized by team rosters.
+// Players are split into away team, home team, and unknown sections based on roster membership.
+func (bs *NFLBoxScore) StringWithRosters(awayRoster, homeRoster *models.Roster) string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(strings.Repeat("=", 560))
+	sb.WriteString("\n")
+
+	// Game info
+	homeTeamName := "Unknown"
+	awayTeamName := "Unknown"
+	if bs.Game != nil {
+		if bs.Game.TeamA != nil {
+			homeTeamName = fmt.Sprintf("%s %s", bs.Game.TeamA.Market, bs.Game.TeamA.Name)
+		}
+		if bs.Game.TeamB != nil {
+			awayTeamName = fmt.Sprintf("%s %s", bs.Game.TeamB.Market, bs.Game.TeamB.Name)
+		}
+		sb.WriteString(fmt.Sprintf("NFL Box Score: %s vs %s\n", awayTeamName, homeTeamName))
+		sb.WriteString(fmt.Sprintf("Game ID: %d | %s\n", bs.Game.ID, bs.Game.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
+	} else {
+		sb.WriteString("NFL Box Score: Unknown Game\n")
+	}
+
+	sb.WriteString(strings.Repeat("=", 560))
+	sb.WriteString("\n")
+
+	// Split players by roster
+	var awayPlayers, homePlayers, unknownPlayers []*IndividualBoxScore
+
+	for _, player := range bs.Players {
+		if player.Individual == nil {
+			unknownPlayers = append(unknownPlayers, player)
+			continue
+		}
+
+		individualID := int64(player.Individual.ID)
+
+		// Check if player is in away roster
+		inAwayRoster := false
+		if awayRoster != nil {
+			for _, rosterID := range awayRoster.IndividualIDs {
+				if rosterID == individualID {
+					inAwayRoster = true
+					break
+				}
+			}
+		}
+
+		// Check if player is in home roster
+		inHomeRoster := false
+		if homeRoster != nil {
+			for _, rosterID := range homeRoster.IndividualIDs {
+				if rosterID == individualID {
+					inHomeRoster = true
+					break
+				}
+			}
+		}
+
+		// Assign to appropriate list
+		if inAwayRoster {
+			awayPlayers = append(awayPlayers, player)
+		} else if inHomeRoster {
+			homePlayers = append(homePlayers, player)
+		} else {
+			unknownPlayers = append(unknownPlayers, player)
+		}
+	}
+
+	// Away team section
+	sb.WriteString(bs.stringRosterBoxScore(fmt.Sprintf("%s (Away Team)", awayTeamName), awayPlayers))
+
+	// Home team section
+	sb.WriteString(bs.stringRosterBoxScore(fmt.Sprintf("%s (Home Team)", homeTeamName), homePlayers))
+
+	// Unknown section (only if there are unknown players)
+	if len(unknownPlayers) > 0 {
+		sb.WriteString(bs.stringRosterBoxScore("Unknown Team", unknownPlayers))
+	}
+
+	// Footer
+	sb.WriteString("\n")
+	sb.WriteString(strings.Repeat("=", 560))
+	sb.WriteString("\n")
+	sb.WriteString(fmt.Sprintf("Total Players: %d (Away: %d, Home: %d, Unknown: %d)\n",
+		len(bs.Players),
+		len(awayPlayers),
+		len(homePlayers),
+		len(unknownPlayers)))
+
+	return sb.String()
+}
+
+// stringRosterBoxScore returns a formatted section for a list of players with a given header
+func (bs *NFLBoxScore) stringRosterBoxScore(header string, players []*IndividualBoxScore) string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("\n%s - %d Players\n", header, len(players)))
+	sb.WriteString(strings.Repeat("-", 560))
+	sb.WriteString("\n")
+	writeTableHeader(&sb)
+	writePlayerRows(&sb, players)
 
 	return sb.String()
 }
 
 // Csv returns a CSV-formatted string of all player stats for the game.
 // Columns: player_name, and all stats in lowercase with underscores.
-// Rows: all players from both teams.
+// Rows: all players in the game.
 func (bs *NFLBoxScore) Csv() string {
 	var sb strings.Builder
 
 	// Header row
 	sb.WriteString("player_name,passing_completions,receiving_receptions,interceptions_caught,fumbles_forced,fumbles_lost,sacks_made,sack_assists_made,tackles_made,tackle_assists_made,passing_attempts,rushing_attempts,receiving_targets,passing_yards,rushing_yards,receiving_yards,passing_touchdowns,rushing_touchdowns,receiving_touchdowns,interceptions_thrown,sacks_taken,field_goal_attempts,field_goal_makes,field_goal_make_yards,extra_point_attempts,extra_point_makes\n")
 
-	// Write all players (away team first, then home team)
-	writeCsvRows(&sb, bs.AwayTeamPlayers)
-	writeCsvRows(&sb, bs.HomeTeamPlayers)
+	// Write all players
+	writeCsvRows(&sb, bs.Players)
 
 	return sb.String()
 }
