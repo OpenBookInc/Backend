@@ -383,7 +383,6 @@ type Event struct {
 	EndSituation   *PlaySituation `json:"end_situation"`
 	Statistics     []Statistic    `json:"statistics"`
 	Details        []Detail       `json:"details"`
-	Players        []Player       `json:"players"`
 }
 
 func (e *Event) String() string {
@@ -594,7 +593,15 @@ func (l *LocationInfo) String() string {
 	return fmt.Sprintf("%s %d yard line", l.Alias, l.Yardline)
 }
 
-// Drive represents a drive in the game
+// Drive represents a drive in the game.
+// Note: The Sportradar API returns different entry types in the pbp array:
+// - type="drive": Regular offensive drives with nested events
+// - type="event": Timeouts, end-of-period markers (no play data)
+// - type="play": Standalone plays like extra points after special teams TDs
+//
+// For type="play" entries (e.g., PATs after punt/kick return TDs), the structure
+// differs from regular drives: they have no offensive_team, but contain play_type,
+// start_situation, and statistics at the drive level instead of nested in events.
 type Drive struct {
 	Type          string        `json:"type"`
 	ID            string        `json:"id"`
@@ -613,6 +620,24 @@ type Drive struct {
 	StartLocation *LocationInfo `json:"start_location"`
 	EndLocation   *LocationInfo `json:"end_location"`
 	Events        []Event       `json:"events"`
+
+	// Fields for standalone play entries (type="play"), such as extra points
+	// after special teams touchdowns. These are populated when the entry
+	// represents a single play rather than a multi-play drive.
+	// The API returns these entries with Event-like fields at the drive level.
+	PlayType       string         `json:"play_type"`
+	Clock          string         `json:"clock"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
+	WallClock      string         `json:"wall_clock"`
+	Description    string         `json:"description"`
+	HomePoints     int            `json:"home_points"`
+	AwayPoints     int            `json:"away_points"`
+	Official       bool           `json:"official"`
+	StartSituation *PlaySituation `json:"start_situation"`
+	EndSituation   *PlaySituation `json:"end_situation"`
+	Statistics     []Statistic    `json:"statistics"`
+	Details        []Detail       `json:"details"`
 }
 
 // DriveTeam represents minimal team info in a drive (only ID and points)
@@ -665,6 +690,34 @@ func (d *Drive) String() string {
 	}
 
 	return sb.String()
+}
+
+// AsEvent converts a standalone play Drive entry (type="play") to an Event struct.
+// This is used for standalone plays like extra points after special teams TDs,
+// where the API returns Event-like fields at the drive level instead of nested
+// in the events array. The Drive's ID, Sequence, and other fields are mapped
+// to their Event equivalents.
+func (d *Drive) AsEvent() *Event {
+	return &Event{
+		ID:             d.ID,
+		Type:           d.Type,
+		PlayType:       d.PlayType,
+		Sequence:       d.Sequence,
+		Clock:          d.Clock,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
+		WallClock:      d.WallClock,
+		Description:    d.Description,
+		HomePoints:     d.HomePoints,
+		AwayPoints:     d.AwayPoints,
+		Official:       d.Official,
+		StartSituation: d.StartSituation,
+		EndSituation:   d.EndSituation,
+		Statistics:     d.Statistics,
+		Details:        d.Details,
+		// Fields not available in standalone play entries - use zero values
+		AltDescription: "",
+	}
 }
 
 // TeamRef represents a team reference
@@ -747,29 +800,6 @@ func (d *DetailPlayer) String() string {
 		role = "player"
 	}
 	return fmt.Sprintf("#%s %s (%s) - %s", d.Jersey, d.Name, d.Position, role)
-}
-
-// Player represents a player involved in an event
-type Player struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Jersey   string   `json:"jersey"`
-	Position string   `json:"position"`
-	Role     string   `json:"role"`
-	SRId     string   `json:"sr_id"`
-	Team     *TeamRef `json:"team"`
-}
-
-func (p *Player) String() string {
-	role := p.Role
-	if role == "" {
-		role = "player"
-	}
-	team := ""
-	if p.Team != nil {
-		team = fmt.Sprintf(" [%s]", p.Team.Alias)
-	}
-	return fmt.Sprintf("      #%s %s (%s) - %s%s\n", p.Jersey, p.Name, p.Position, role, team)
 }
 
 // FetchNFLPlayByPlay fetches play-by-play data for a specific NFL game

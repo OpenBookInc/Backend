@@ -16,6 +16,21 @@ func shouldPersistDrive(drive *nfl.Drive) bool {
 	return true
 }
 
+// shouldPersistPlay determines whether a play (event) should be persisted to the database.
+// Returns false for non-play events (timeouts, end-of-period markers, etc.) and unofficial plays.
+// Returns true only for official, confirmed plays.
+func shouldPersistPlay(event *nfl.Event) bool {
+	if event.Type != "play" {
+		return false
+	}
+
+	if !event.Official {
+		return false
+	}
+
+	return true
+}
+
 // shouldPersistPlayStatistic determines whether a play statistic should be persisted to the database.
 func shouldPersistPlayStatistic(stat *nfl.Statistic) bool {
 	// Skip statistics without a player (team-level stats)

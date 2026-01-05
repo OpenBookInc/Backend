@@ -81,7 +81,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 }
 
 // persistDrive upserts a drive and all its plays within the transaction.
-// Only processes drives with type "drive" (skips "event" entries like timeouts).
+// Only processes drives with type "drive" or "play" (skips "event" entries like timeouts).
 // Foreign keys are resolved via subqueries in the store layer.
 func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, period *nfl.Period, drive *nfl.Drive) error {
 	// Skip non-drive entries (e.g., type "event" for timeouts, end-of-period markers)
@@ -89,8 +89,25 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		return nil
 	}
 
-	// Validate that drive has offensive team information.
-	if drive.OffensiveTeam == nil {
+	// Determine the possession team vendor ID.
+	// For regular drives (type="drive"), use the offensive_team field.
+	// For standalone PAT plays (type="play", play_type="extra_point"), the offensive_team
+	// is nil because the API structures these differently - they occur after special teams
+	// touchdowns (punt/kick returns) where there's no traditional "offensive drive".
+	// In this case, we use start_situation.possession which indicates the team attempting
+	// the extra point (the team that scored the touchdown).
+	var vendorOffensiveTeamID string
+	if drive.OffensiveTeam != nil {
+		vendorOffensiveTeamID = drive.OffensiveTeam.ID
+	} else if drive.Type == "play" && drive.PlayType == "extra_point" {
+		// Standalone PAT after a special teams touchdown (e.g., punt return TD).
+		// The offensive_team is nil because this isn't a traditional drive, but the
+		// team attempting the PAT is available in start_situation.possession.
+		if drive.StartSituation == nil || drive.StartSituation.Possession == nil {
+			return fmt.Errorf("PAT drive missing start_situation.possession information")
+		}
+		vendorOffensiveTeamID = drive.StartSituation.Possession.ID
+	} else {
 		return fmt.Errorf("drive missing offensive team information")
 	}
 
@@ -101,21 +118,33 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		gameID,
 		drive.ID,
 		decimal.NewFromFloat(drive.Sequence),
-		drive.OffensiveTeam.ID, // This is the vendor_id, not db id
+		vendorOffensiveTeamID,
 	)
 	if err != nil {
 		return err
 	}
 
-	// Process each event in the drive
-	for _, event := range drive.Events {
-		// Only persist events that are official, confirmed plays
-		// - Type == "play": Filters out timeouts, end-of-period markers, etc.
-		// - Official == true: Filters out tentative plays that may be reversed
-		if event.Type != "play" || !event.Official {
-			continue
+	// For standalone play entries (type="play", e.g., extra points after special teams TDs),
+	// the play data and statistics are at the drive level, not nested in events.
+	// Convert the drive to an Event and persist it using the standard flow.
+	if drive.Type == "play" && drive.PlayType == "extra_point" {
+		event := drive.AsEvent()
+		if err := persistPlay(ctx, dbStore, tx, driveID, period, event); err != nil {
+			return fmt.Errorf("failed to persist standalone PAT play (vendor_id: %s): %w", drive.ID, err)
 		}
+		return nil
+	}
 
+	// Defensive assertion: For non-standalone-play drives, statistics should be
+	// nested in events, not at the drive level. If we find drive-level statistics
+	// on a regular drive, it indicates an unexpected API structure that we should
+	// investigate rather than silently ignore.
+	if len(drive.Statistics) > 0 {
+		return fmt.Errorf("unexpected drive-level statistics on non-standalone-play drive (id: %s, type: %s, play_type: %s)", drive.ID, drive.Type, drive.PlayType)
+	}
+
+	// Process each event in the drive (for regular drives with nested events)
+	for _, event := range drive.Events {
 		if err := persistPlay(ctx, dbStore, tx, driveID, period, &event); err != nil {
 			return fmt.Errorf("failed to persist play (vendor_id: %s): %w", event.ID, err)
 		}
@@ -127,6 +156,10 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 // persistPlay upserts a play and all its statistics within the transaction.
 // Foreign keys are resolved via subqueries in the store layer.
 func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID int, period *nfl.Period, event *nfl.Event) error {
+	if !shouldPersistPlay(event) {
+		return nil
+	}
+
 	// Parse timestamps
 	createdAt, err := parseTimestamp(event.CreatedAt)
 	if err != nil {
