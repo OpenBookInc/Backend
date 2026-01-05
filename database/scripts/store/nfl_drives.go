@@ -16,7 +16,7 @@ import (
 func (s *Store) UpsertNFLDrive(ctx context.Context, tx pgx.Tx, gameID int, vendorDriveID string, sequence interface{}, vendorTeamID string) (int, error) {
 	query := `
 		INSERT INTO nfl_drives (
-			game_id, vendor_id, sequence, possession_team_id,
+			game_id, vendor_id, vendor_sequence, possession_team_id,
 			created_at, updated_at
 		)
 		VALUES (
@@ -29,7 +29,7 @@ func (s *Store) UpsertNFLDrive(ctx context.Context, tx pgx.Tx, gameID int, vendo
 		)
 		ON CONFLICT (game_id, vendor_id)
 		DO UPDATE SET
-			sequence = EXCLUDED.sequence,
+			vendor_sequence = EXCLUDED.vendor_sequence,
 			possession_team_id = EXCLUDED.possession_team_id,
 			updated_at = NOW()
 		RETURNING id
@@ -52,7 +52,7 @@ func (s *Store) UpsertNFLDrive(ctx context.Context, tx pgx.Tx, gameID int, vendo
 // GetNFLDriveByVendorID retrieves an NFL drive by game_id and vendor_id
 func (s *Store) GetNFLDriveByVendorID(ctx context.Context, gameID int, vendorID string) (*nflmodels.Drive, error) {
 	query := `
-		SELECT id, game_id, vendor_id, sequence, possession_team_id,
+		SELECT id, game_id, vendor_id, vendor_sequence, possession_team_id,
 		       created_at, updated_at
 		FROM nfl_drives
 		WHERE game_id = $1 AND vendor_id = $2
@@ -63,7 +63,7 @@ func (s *Store) GetNFLDriveByVendorID(ctx context.Context, gameID int, vendorID 
 		&drive.ID,
 		&drive.GameID,
 		&drive.VendorID,
-		&drive.Sequence,
+		&drive.VendorSequence,
 		&drive.PossessionTeamID,
 		&drive.CreatedAt,
 		&drive.UpdatedAt,

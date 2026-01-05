@@ -189,7 +189,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	play := &store.NFLPlayForUpsert{
 		DriveID:         driveID,
 		VendorID:        event.ID,
-		Sequence:        decimal.NewFromFloat(event.Sequence),
+		VendorSequence:  decimal.NewFromFloat(event.Sequence),
 		PeriodType:      periodType,
 		PeriodNumber:    period.Number,
 		Description:     event.Description,

@@ -50,9 +50,9 @@ go mod download
 
 - **client/**: Communicates with Sportradar API. Handles HTTP requests, rate limiting, error handling.
 
-- **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly.
+- **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly. **CRITICAL**: Field names in fetcher structs MUST match the JSON field names from the API exactly (e.g., `Sequence`, not `VendorSequence`), even if the database uses different column names. The fetcher is a pure representation of the API response.
 
-- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs and calls store methods.
+- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs and calls store methods. This is where the mapping from API field names to database column names happens.
 
 - **store/**: Communicates with database using pgx/v5. Defines internal structs for WRITE operations (e.g., `PlayStatisticForUpsert`, `GameStatusForUpsert`). May import shared/models for READ operations only.
 

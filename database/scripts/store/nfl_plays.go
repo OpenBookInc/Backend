@@ -14,7 +14,7 @@ import (
 type NFLPlayForUpsert struct {
 	DriveID         int
 	VendorID        string
-	Sequence        decimal.Decimal
+	VendorSequence  decimal.Decimal
 	PeriodType      string // DB enum value as string (e.g., "quarter", "overtime")
 	PeriodNumber    int
 	Description     string
@@ -30,7 +30,7 @@ type NFLPlayForUpsert struct {
 func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nfl_plays (
-			drive_id, vendor_id, sequence,
+			drive_id, vendor_id, vendor_sequence,
 			period_type, period_number,
 			description, nullified,
 			vendor_created_at, vendor_updated_at, created_at, updated_at
@@ -38,7 +38,7 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 		VALUES ($1, $2, $3, $4::nfl_period_type, $5, $6, $7, $8, $9, NOW(), NOW())
 		ON CONFLICT (drive_id, vendor_id)
 		DO UPDATE SET
-			sequence = EXCLUDED.sequence,
+			vendor_sequence = EXCLUDED.vendor_sequence,
 			period_type = EXCLUDED.period_type,
 			period_number = EXCLUDED.period_number,
 			description = EXCLUDED.description,
@@ -53,7 +53,7 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 	err := tx.QueryRow(ctx, query,
 		play.DriveID,
 		play.VendorID,
-		play.Sequence,
+		play.VendorSequence,
 		play.PeriodType,
 		play.PeriodNumber,
 		play.Description,
@@ -71,7 +71,7 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 // GetNFLPlayByVendorID retrieves an NFL play by drive_id and vendor_id
 func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID string) (*nflmodels.Play, error) {
 	query := `
-		SELECT id, drive_id, vendor_id, sequence,
+		SELECT id, drive_id, vendor_id, vendor_sequence,
 		       period_type, period_number,
 		       description, nullified,
 		       vendor_created_at, vendor_updated_at, created_at, updated_at
@@ -84,7 +84,7 @@ func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID 
 		&play.ID,
 		&play.DriveID,
 		&play.VendorID,
-		&play.Sequence,
+		&play.VendorSequence,
 		&play.PeriodType,
 		&play.PeriodNumber,
 		&play.Description,

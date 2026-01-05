@@ -32,7 +32,7 @@ type Drive struct {
 	ID               int             // Database ID (auto-increment)
 	GameID           int             // Foreign key to games table
 	VendorID         string          // Sportradar drive UUID
-	Sequence         decimal.Decimal // Drive sequence for ordering
+	VendorSequence   decimal.Decimal // Drive sequence for ordering
 	PossessionTeamID int             // Foreign key to teams table
 	CreatedAt        time.Time       // Record creation time
 	UpdatedAt        time.Time       // Record update time
@@ -43,7 +43,7 @@ type Play struct {
 	ID                     int             // Database ID (auto-increment)
 	DriveID                int             // Foreign key to nfl_drives table
 	VendorID               string          // Sportradar event UUID
-	Sequence               decimal.Decimal // Play sequence for ordering
+	VendorSequence         decimal.Decimal // Play sequence for ordering
 	PeriodType   PeriodType // quarter or overtime
 	PeriodNumber int        // 1-4 for quarters, 5+ for overtime
 	Description  string     // Play description
