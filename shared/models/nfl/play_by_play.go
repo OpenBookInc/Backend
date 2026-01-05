@@ -44,11 +44,10 @@ type Play struct {
 	DriveID                int             // Foreign key to nfl_drives table
 	VendorID               string          // Sportradar event UUID
 	Sequence               decimal.Decimal // Play sequence for ordering
-	PeriodType             PeriodType      // quarter or overtime
-	PeriodNumber           int             // 1-4 for quarters, 5+ for overtime
-	Description            string          // Play description
-	AlternativeDescription string          // Alternative description
-	Nullified              bool            // Whether play was nullified by penalty
+	PeriodType   PeriodType // quarter or overtime
+	PeriodNumber int        // 1-4 for quarters, 5+ for overtime
+	Description  string     // Play description
+	Nullified    bool       // Whether play was nullified by penalty
 	VendorCreatedAt        time.Time       // Sportradar creation timestamp
 	VendorUpdatedAt        time.Time       // Sportradar update timestamp
 	CreatedAt              time.Time       // Record creation time

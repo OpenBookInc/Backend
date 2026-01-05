@@ -371,7 +371,6 @@ type Event struct {
 	WallClock      string         `json:"wall_clock"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	AltDescription string         `json:"alt_description"`
 	Description    string         `json:"description"`
 	HomePoints     int            `json:"home_points"`
 	AwayPoints     int            `json:"away_points"`
@@ -398,9 +397,6 @@ func (e *Event) String() string {
 	sb.WriteString(fmt.Sprintf("      Created At:  %s\n", e.CreatedAt))
 	sb.WriteString(fmt.Sprintf("      Updated At:  %s\n", e.UpdatedAt))
 	sb.WriteString(fmt.Sprintf("      Description: %s\n", e.Description))
-	if e.AltDescription != "" {
-		sb.WriteString(fmt.Sprintf("      Alt Desc:    %s\n", e.AltDescription))
-	}
 	sb.WriteString(fmt.Sprintf("      Score:       Home %d - Away %d\n", e.HomePoints, e.AwayPoints))
 	sb.WriteString(fmt.Sprintf("      Official:    %t\n", e.Official))
 
@@ -715,8 +711,6 @@ func (d *Drive) AsEvent() *Event {
 		EndSituation:   d.EndSituation,
 		Statistics:     d.Statistics,
 		Details:        d.Details,
-		// Fields not available in standalone play entries - use zero values
-		AltDescription: "",
 	}
 }
 

@@ -12,16 +12,15 @@ import (
 
 // NFLPlayForUpsert contains the data needed to upsert an NFL play
 type NFLPlayForUpsert struct {
-	DriveID                int
-	VendorID               string
-	Sequence               decimal.Decimal
-	PeriodType             string // DB enum value as string (e.g., "quarter", "overtime")
-	PeriodNumber           int
-	Description            string
-	AlternativeDescription string
-	Nullified              bool
-	VendorCreatedAt        time.Time
-	VendorUpdatedAt        time.Time
+	DriveID         int
+	VendorID        string
+	Sequence        decimal.Decimal
+	PeriodType      string // DB enum value as string (e.g., "quarter", "overtime")
+	PeriodNumber    int
+	Description     string
+	Nullified       bool
+	VendorCreatedAt time.Time
+	VendorUpdatedAt time.Time
 }
 
 // UpsertNFLPlay inserts or updates an NFL play in the database.
@@ -33,17 +32,16 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 		INSERT INTO nfl_plays (
 			drive_id, vendor_id, sequence,
 			period_type, period_number,
-			description, alternative_description, nullified,
+			description, nullified,
 			vendor_created_at, vendor_updated_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4::nfl_period_type, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+		VALUES ($1, $2, $3, $4::nfl_period_type, $5, $6, $7, $8, $9, NOW(), NOW())
 		ON CONFLICT (drive_id, vendor_id)
 		DO UPDATE SET
 			sequence = EXCLUDED.sequence,
 			period_type = EXCLUDED.period_type,
 			period_number = EXCLUDED.period_number,
 			description = EXCLUDED.description,
-			alternative_description = EXCLUDED.alternative_description,
 			nullified = EXCLUDED.nullified,
 			vendor_created_at = EXCLUDED.vendor_created_at,
 			vendor_updated_at = EXCLUDED.vendor_updated_at,
@@ -59,7 +57,6 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 		play.PeriodType,
 		play.PeriodNumber,
 		play.Description,
-		play.AlternativeDescription,
 		play.Nullified,
 		play.VendorCreatedAt,
 		play.VendorUpdatedAt,
@@ -76,7 +73,7 @@ func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID 
 	query := `
 		SELECT id, drive_id, vendor_id, sequence,
 		       period_type, period_number,
-		       description, alternative_description, nullified,
+		       description, nullified,
 		       vendor_created_at, vendor_updated_at, created_at, updated_at
 		FROM nfl_plays
 		WHERE drive_id = $1 AND vendor_id = $2
@@ -91,7 +88,6 @@ func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID 
 		&play.PeriodType,
 		&play.PeriodNumber,
 		&play.Description,
-		&play.AlternativeDescription,
 		&play.Nullified,
 		&play.VendorCreatedAt,
 		&play.VendorUpdatedAt,

@@ -187,16 +187,15 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 
 	// Upsert the play
 	play := &store.NFLPlayForUpsert{
-		DriveID:                driveID,
-		VendorID:               event.ID,
-		Sequence:               decimal.NewFromFloat(event.Sequence),
-		PeriodType:             periodType,
-		PeriodNumber:           period.Number,
-		Description:            event.Description,
-		AlternativeDescription: event.AltDescription,
-		Nullified:              nullified,
-		VendorCreatedAt:        createdAt,
-		VendorUpdatedAt:        updatedAt,
+		DriveID:         driveID,
+		VendorID:        event.ID,
+		Sequence:        decimal.NewFromFloat(event.Sequence),
+		PeriodType:      periodType,
+		PeriodNumber:    period.Number,
+		Description:     event.Description,
+		Nullified:       nullified,
+		VendorCreatedAt: createdAt,
+		VendorUpdatedAt: updatedAt,
 	}
 
 	playID, err := dbStore.UpsertNFLPlay(ctx, tx, play)
