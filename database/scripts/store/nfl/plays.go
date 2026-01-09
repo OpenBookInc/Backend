@@ -36,7 +36,7 @@ func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlay
 			description, nullified,
 			vendor_created_at, vendor_updated_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4::nfl_period_type, $5, $6, $7, $8, $9, NOW(), NOW())
+		VALUES ($1, $2, $3, $4::period_type, $5, $6, $7, $8, $9, NOW(), NOW())
 		ON CONFLICT (drive_id, vendor_id)
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,

@@ -14,12 +14,14 @@ import (
 // These models represent the database entities for NFL play-by-play data.
 // They are separate from the Sportradar API response structs in fetcher/nfl/.
 //
-// Enum types are auto-generated from the database schema in gen/nfl/enums.go
-// and gen/enums.go. Do not manually define enum types here.
+// Enum types are auto-generated from the database schema.
+// Period is in gen/enums.go (shared between NFL and NBA).
+// NFL-specific enums are in gen/nfl/enums.go.
+// Do not manually define enum types here.
 // =============================================================================
 
 // Type aliases for generated enum types (for backwards compatibility)
-type PeriodType = genNfl.Period
+type PeriodType = genEnums.Period
 type StatType = genNfl.Stat
 type GameStatusType = genEnums.GameStatus
 
@@ -59,7 +61,7 @@ type PlayStatistic struct {
 	ID                  int             // Database ID (auto-increment)
 	PlayID              int             // Foreign key to nfl_plays table
 	IndividualID        int             // Foreign key to individuals table
-	StatType            genNfl.Stat     // Type of statistic
+	StatType            StatType        // Type of statistic
 	PassingAttempts     decimal.Decimal // Passing attempts
 	RushingAttempts     decimal.Decimal // Rushing attempts
 	ReceivingTargets    decimal.Decimal // Receiving targets

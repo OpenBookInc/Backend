@@ -3,14 +3,6 @@
 
 package nfl
 
-// Period represents the nfl_period_type database enum
-type Period string
-
-const (
-	PeriodQuarter Period = "quarter"
-	PeriodOvertime Period = "overtime"
-)
-
 // Stat represents the nfl_stat_type database enum
 type Stat string
 
