@@ -51,6 +51,7 @@ type PlayByPlayConfig struct {
 
 	// Game Configuration
 	NFLGameID int // Database game ID (not vendor UUID)
+	NBAGameID int // Database game ID (not vendor UUID)
 }
 
 // BoxScoreConfig holds configuration for the box score generation script
@@ -59,6 +60,7 @@ type BoxScoreConfig struct {
 
 	// Game Configuration
 	NFLGameID int // Database game ID (not vendor UUID)
+	NBAGameID int // Database game ID (not vendor UUID)
 }
 
 // loadBaseConfig reads common configuration from environment variables
@@ -188,7 +190,7 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 }
 
 // LoadPlayByPlayConfig reads play-by-play configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID
+// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
 // Optional fields (with defaults):
 //   - RATE_LIMIT_DELAY_MS (default: 1000)
 //
@@ -197,6 +199,7 @@ func LoadPlayByPlayConfig() *PlayByPlayConfig {
 	return &PlayByPlayConfig{
 		BaseConfig: loadBaseConfig(),
 		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
+		NBAGameID:  envloader.GetEnvAsIntWithDefault("NBA_GAME_ID", 0),
 	}
 }
 
@@ -207,9 +210,9 @@ func (c *PlayByPlayConfig) Validate() error {
 		return err
 	}
 
-	// Play-by-play specific validation
-	if c.NFLGameID == 0 {
-		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID (must be a positive integer database ID)")
+	// Play-by-play specific validation - at least one game ID must be set
+	if c.NFLGameID == 0 && c.NBAGameID == 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a positive integer database ID)")
 	}
 
 	return nil
@@ -246,7 +249,7 @@ func LoadBoxScoreConfigFromFile(envFile string) (*BoxScoreConfig, error) {
 }
 
 // LoadBoxScoreConfig reads box score configuration from environment variables
-// Required fields (no defaults): PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID
+// Required fields (no defaults): PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
 // Note: SPORTRADAR_API_KEY is not required for box score generation (no API calls)
 // Optional fields (with defaults):
 //   - RATE_LIMIT_DELAY_MS (default: 1000) - not used but inherited from BaseConfig
@@ -256,6 +259,7 @@ func LoadBoxScoreConfig() *BoxScoreConfig {
 	return &BoxScoreConfig{
 		BaseConfig: loadBaseConfig(),
 		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
+		NBAGameID:  envloader.GetEnvAsIntWithDefault("NBA_GAME_ID", 0),
 	}
 }
 
@@ -281,9 +285,9 @@ func (c *BoxScoreConfig) Validate() error {
 		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
 	}
 
-	// Box score specific validation
-	if c.NFLGameID == 0 {
-		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID (must be a positive integer database ID)")
+	// Box score specific validation - at least one game ID must be set
+	if c.NFLGameID == 0 && c.NBAGameID == 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a positive integer database ID)")
 	}
 
 	return nil

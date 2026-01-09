@@ -269,3 +269,21 @@ func (c *Client) GetNFLPlayByPlay(gameID string) ([]byte, error) {
 
 	return resp.Body(), nil
 }
+
+// GetNBAPlayByPlay retrieves play-by-play data for a specific NBA game
+func (c *Client) GetNBAPlayByPlay(gameID string) ([]byte, error) {
+	url := fmt.Sprintf("%s/games/%s/pbp.json", NBABasePath, gameID)
+	resp, err := c.httpClient.R().
+		SetQueryParam("api_key", c.apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NBA play-by-play: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
