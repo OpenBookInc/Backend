@@ -1,6 +1,6 @@
-package persister
+package nfl
 
-import "github.com/openbook/population-scripts/fetcher/nfl"
+import fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 
 // Exclusion rules for filtering data during persistence.
 // These exclusions prevent data from being written to the database.
@@ -9,7 +9,7 @@ import "github.com/openbook/population-scripts/fetcher/nfl"
 // shouldPersistDrive determines whether a drive should be persisted to the database.
 // Returns false for "event" type entries (timeouts, end-of-period markers, etc.).
 // Returns true for "drive" type entries.
-func shouldPersistDrive(drive *nfl.Drive) bool {
+func shouldPersistDrive(drive *fetcher_nfl.Drive) bool {
 	if drive.Type == "event" {
 		return false
 	}
@@ -19,7 +19,7 @@ func shouldPersistDrive(drive *nfl.Drive) bool {
 // shouldPersistPlay determines whether a play (event) should be persisted to the database.
 // Returns false for non-play events (timeouts, end-of-period markers, etc.) and unofficial plays.
 // Returns true only for official, confirmed plays.
-func shouldPersistPlay(event *nfl.Event) bool {
+func shouldPersistPlay(event *fetcher_nfl.Event) bool {
 	if event.Type != "play" {
 		return false
 	}
@@ -32,7 +32,7 @@ func shouldPersistPlay(event *nfl.Event) bool {
 }
 
 // shouldPersistPlayStatistic determines whether a play statistic should be persisted to the database.
-func shouldPersistPlayStatistic(stat *nfl.Statistic) bool {
+func shouldPersistPlayStatistic(stat *fetcher_nfl.Statistic) bool {
 	// Skip statistics without a player (team-level stats)
 	if stat.Player == nil {
 		return false

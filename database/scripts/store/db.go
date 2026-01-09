@@ -69,6 +69,11 @@ func (s *Store) Close() {
 	s.pool.Close()
 }
 
+// Pool returns the underlying connection pool for use by extension packages
+func (s *Store) Pool() *pgxpool.Pool {
+	return s.pool
+}
+
 // BeginTx starts a new database transaction
 func (s *Store) BeginTx(ctx context.Context) (pgx.Tx, error) {
 	return s.pool.Begin(ctx)

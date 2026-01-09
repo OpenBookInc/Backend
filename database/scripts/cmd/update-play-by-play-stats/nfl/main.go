@@ -9,8 +9,8 @@ import (
 
 	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/population-scripts/config"
-	"github.com/openbook/population-scripts/fetcher/nfl"
-	"github.com/openbook/population-scripts/persister"
+	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
+	persister_nfl "github.com/openbook/population-scripts/persister/nfl"
 	"github.com/openbook/population-scripts/store"
 )
 
@@ -61,7 +61,7 @@ func main() {
 
 	// Fetch play-by-play data
 	fmt.Println("\nFetching play-by-play data from Sportradar API...")
-	playByPlay, err := nfl.FetchNFLPlayByPlay(apiClient, game.VendorID)
+	playByPlay, err := fetcher_nfl.FetchNFLPlayByPlay(apiClient, game.VendorID)
 	if err != nil {
 		fatal("Failed to fetch play-by-play data: %v", err)
 	}
@@ -74,7 +74,7 @@ func main() {
 
 	// Persist play-by-play data to database
 	fmt.Println("\nPersisting play-by-play data to database...")
-	if err := persister.PersistNFLPlayByPlay(ctx, dbStore, cfg.NFLGameID, playByPlay); err != nil {
+	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, cfg.NFLGameID, playByPlay); err != nil {
 		fatal("Failed to persist play-by-play data: %v", err)
 	}
 	fmt.Println("Successfully persisted play-by-play data!")

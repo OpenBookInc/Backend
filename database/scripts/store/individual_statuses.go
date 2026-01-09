@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openbook/shared/models"
+	models "github.com/openbook/shared/models"
 )
 
 // IndividualStatusForUpsert contains the data needed to upsert an individual status

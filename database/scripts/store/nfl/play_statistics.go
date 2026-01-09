@@ -1,11 +1,12 @@
-package store
+package nfl
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
 )
 
@@ -65,7 +66,7 @@ type PlayStatisticForUpsert struct {
 // on the nfl_play_statistics table (a player can have multiple stat entries per play).
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
 // The VendorPlayerID in each stat is looked up via subquery to get the individual_id.
-func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID int, stats []*PlayStatisticForUpsert) error {
+func ReplaceNFLPlayStatistics(s *store.Store, ctx context.Context, tx pgx.Tx, playID int, stats []*PlayStatisticForUpsert) error {
 	// Step 1: Delete all existing statistics for this play
 	deleteQuery := `DELETE FROM nfl_play_statistics WHERE play_id = $1`
 	_, err := tx.Exec(ctx, deleteQuery, playID)
@@ -143,7 +144,7 @@ func (s *Store) ReplaceNFLPlayStatistics(ctx context.Context, tx pgx.Tx, playID 
 }
 
 // GetNFLPlayStatisticsByPlayID retrieves all statistics for a given play
-func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([]*nflmodels.PlayStatistic, error) {
+func GetNFLPlayStatisticsByPlayID(s *store.Store, ctx context.Context, playID int) ([]*models_nfl.PlayStatistic, error) {
 	query := `
 		SELECT id, play_id, individual_id, stat_type,
 		       passing_attempts, rushing_attempts, receiving_targets,
@@ -160,15 +161,15 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 		WHERE play_id = $1
 	`
 
-	rows, err := s.pool.Query(ctx, query, playID)
+	rows, err := s.Pool().Query(ctx, query, playID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query statistics for play_id %d: %w", playID, err)
 	}
 	defer rows.Close()
 
-	var stats []*nflmodels.PlayStatistic
+	var stats []*models_nfl.PlayStatistic
 	for rows.Next() {
-		var stat nflmodels.PlayStatistic
+		var stat models_nfl.PlayStatistic
 		err := rows.Scan(
 			&stat.ID,
 			&stat.PlayID,
@@ -217,7 +218,7 @@ func (s *Store) GetNFLPlayStatisticsByPlayID(ctx context.Context, playID int) ([
 // GetNFLPlayStatisticsByGameID retrieves all statistics for a given game.
 // Joins through nfl_plays -> nfl_drives to filter by game_id.
 // Returns all PlayStatistic records associated with plays in the specified game.
-func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([]*nflmodels.PlayStatistic, error) {
+func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.PlayStatistic, error) {
 	query := `
 		SELECT ps.id, ps.play_id, ps.individual_id, ps.stat_type,
 		       ps.passing_attempts, ps.rushing_attempts, ps.receiving_targets,
@@ -236,15 +237,15 @@ func (s *Store) GetNFLPlayStatisticsByGameID(ctx context.Context, gameID int) ([
 		WHERE d.game_id = $1
 	`
 
-	rows, err := s.pool.Query(ctx, query, gameID)
+	rows, err := s.Pool().Query(ctx, query, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query statistics for game_id %d: %w", gameID, err)
 	}
 	defer rows.Close()
 
-	var stats []*nflmodels.PlayStatistic
+	var stats []*models_nfl.PlayStatistic
 	for rows.Next() {
-		var stat nflmodels.PlayStatistic
+		var stat models_nfl.PlayStatistic
 		err := rows.Scan(
 			&stat.ID,
 			&stat.PlayID,

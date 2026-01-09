@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openbook/shared/models"
+	models "github.com/openbook/shared/models"
 )
 
 // GameForUpsert contains the data needed to upsert a game

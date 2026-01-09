@@ -1,11 +1,12 @@
-package reader
+package nfl
 
 import (
 	"context"
 	"fmt"
 
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 )
 
 // =============================================================================
@@ -23,14 +24,14 @@ import (
 // NFLPlayByPlayData holds all play statistics for a game
 type NFLPlayByPlayData struct {
 	GameID     int
-	Statistics []*nflmodels.PlayStatistic
+	Statistics []*models_nfl.PlayStatistic
 }
 
 // ReadNFLPlayByPlay reads all play statistics for a game from the database.
 // Returns all PlayStatistic records associated with the given game_id.
 // The game_id is the database integer ID, not the vendor UUID.
 func ReadNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int) (*NFLPlayByPlayData, error) {
-	stats, err := dbStore.GetNFLPlayStatisticsByGameID(ctx, gameID)
+	stats, err := store_nfl.GetNFLPlayStatisticsByGameID(dbStore, ctx, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read play-by-play statistics for game_id %d: %w", gameID, err)
 	}

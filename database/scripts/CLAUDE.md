@@ -15,8 +15,8 @@ go build ./...
 # Run reference data update
 ./update_reference_data.sh
 
-# Run play-by-play update
-./update_play_by_play_stats.sh
+# Run NFL play-by-play update
+./update_nfl_play_by_play_stats.sh
 
 # Download dependencies
 go mod download
@@ -51,10 +51,17 @@ go mod download
 - **client/**: Communicates with Sportradar API. Handles HTTP requests, rate limiting, error handling.
 
 - **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly. **CRITICAL**: Field names in fetcher structs MUST match the JSON field names from the API exactly (e.g., `Sequence`, not `VendorSequence`), even if the database uses different column names. The fetcher is a pure representation of the API response.
+  - Sport-specific code organized in subdirectories (e.g., `fetcher/nfl/`)
 
 - **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs and calls store methods. This is where the mapping from API field names to database column names happens.
+  - Sport-specific code organized in subdirectories (e.g., `persister/nfl/`)
+
+- **reader/**: Reads data from the database for display and comparison. Returns shared/models types.
+  - Sport-specific code organized in subdirectories (e.g., `reader/nfl/`)
 
 - **store/**: Communicates with database using pgx/v5. Defines internal structs for WRITE operations (e.g., `PlayStatisticForUpsert`, `GameStatusForUpsert`). May import shared/models for READ operations only.
+  - Sport-specific code organized in subdirectories (e.g., `store/nfl/`)
+  - Methods in sport subdirectories use `*store.Store` receiver to extend the Store type
 
 - **config/**: Environment-based configuration (API keys, database credentials, rate limits, season parameters).
 
@@ -69,6 +76,33 @@ go mod download
 3. **store/** → depends on shared/models for READs only; uses internal structs for WRITEs
 4. **main.go** → depends on all packages but contains minimal logic
 
+### Import Naming Conventions
+
+**Standard practice**: All imports use explicit aliases for clarity and consistency.
+
+**Base packages** (shared/models):
+```go
+import models "github.com/openbook/shared/models"
+```
+
+**Sport-specific packages** (use underscore separator):
+```go
+import (
+    models_nfl "github.com/openbook/shared/models/nfl"
+    fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
+    persister_nfl "github.com/openbook/population-scripts/persister/nfl"
+    reader_nfl "github.com/openbook/population-scripts/reader/nfl"
+    store_nfl "github.com/openbook/population-scripts/store/nfl"
+)
+```
+
+**Why explicit aliases?**:
+- Prevents naming conflicts between parent and child packages
+- Makes code more readable (clear which package types/functions come from)
+- Consistent pattern across the codebase
+
+**Package naming in subdirectories**: Sport-specific subdirectories use the sport name as the package name (e.g., files in `store/nfl/` use `package nfl`).
+
 ### Data Flow
 
 **Reference Data:**
@@ -78,7 +112,7 @@ Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transf
 
 **Play-by-Play:**
 ```
-Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/ (transformation) → store/ → PostgreSQL
+Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/nfl/ (transformation) → store/nfl/ → PostgreSQL
 ```
 
 ## Critical Design Patterns
@@ -101,7 +135,7 @@ Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/ (tr
 - Never log warnings and continue execution when data is suspect
 - If you want to skip certain data, explicitly code the skip condition (not a silent catch-all)
 
-**Exceptions**: Only known, intentional exclusions (via `fetcher/exclusions.go` and `persister/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
+**Exceptions**: Only known, intentional exclusions (via `fetcher/exclusions.go` and sport-specific files like `persister/nfl/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
 
 ### Enum Transformation Pattern
 
@@ -113,7 +147,7 @@ Enums are handled as strings throughout the codebase, with the database performi
 4. **Store**: Passes string to database with enum cast (e.g., `$1::individual_status_type`)
 5. **Database**: Validates enum value; returns error if invalid
 
-**Mapping functions** live in `persister/` (e.g., `MapIndividualStatusToDB()`, `MapStatTypeToDB()`). These functions return an error for unexpected values (fault-intolerant).
+**Mapping functions** live in sport-specific persister packages (e.g., `persister/nfl/enum_mapping.go` contains `MapIndividualStatusToDB()`, `MapStatTypeToDB()`). These functions return an error for unexpected values (fault-intolerant).
 
 **Why no Go enum types for writes?**: The database is the source of truth for valid enum values. This avoids maintaining duplicate enum definitions and ensures consistency.
 
@@ -165,15 +199,20 @@ Every entity has two identifiers:
 
 ### Struct Patterns for Store Operations
 
-**For WRITE operations** (Insert/Update), store defines internal structs:
+**For WRITE operations** (Insert/Update), sport-specific store packages define internal structs:
 ```go
-// store/nfl_play_statistics.go
+// store/nfl/play_statistics.go
+package nfl
+
 type PlayStatisticForUpsert struct {
     VendorPlayerID string  // Looked up via subquery
     StatType       string  // DB enum as string
     PassingYards   decimal.Decimal
     // ... other fields
 }
+
+// Methods use *store.Store receiver to extend the Store type
+func (s *store.Store) ReplaceNFLPlayStatistics(ctx context.Context, ...) error
 ```
 
 **For READ operations**, store may use shared/models:
@@ -218,8 +257,9 @@ Exclusion logic is split between two files based on when filtering occurs:
 **fetcher/exclusions.go** - Filters data during fetching (before adding to in-memory data store):
 - `shouldExcludeGame()`: Filters TBD teams (NBA Cup games with undetermined competitors)
 
-**persister/exclusions.go** - Filters data during persistence (before writing to database):
+**persister/nfl/exclusions.go** - Filters NFL data during persistence (before writing to database):
 - `shouldPersistDrive()`: Filters "event" type entries (timeouts, end-of-period markers)
+- `shouldPersistPlay()`: Filters non-play events and unofficial plays
 - `shouldPersistPlayStatistic()`: Filters team-level stats and ignoreable stat types
 
 Excluded entities are explicitly skipped. These are documented business logic, not error conditions.

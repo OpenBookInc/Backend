@@ -1,12 +1,13 @@
-package store
+package nfl
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/openbook/shared/models"
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models "github.com/openbook/shared/models"
+	models_nfl "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
 )
 
@@ -54,7 +55,7 @@ type NFLBoxScoreForUpsert struct {
 // UpsertNFLBoxScore inserts or updates a box score in the database.
 // Uses (game_id, individual_id) as the unique constraint for ON CONFLICT.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLBoxScoreForUpsert) error {
+func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore *NFLBoxScoreForUpsert) error {
 	query := `
 		INSERT INTO nfl_box_scores (
 			game_id, individual_id,
@@ -143,7 +144,7 @@ func (s *Store) UpsertNFLBoxScore(ctx context.Context, tx pgx.Tx, boxScore *NFLB
 // GetNFLBoxScoresByGameID retrieves all box scores for a game with individual info.
 // Uses JOIN to fetch individual details along with stats.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
-func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nflmodels.IndividualBoxScore, error) {
+func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.IndividualBoxScore, error) {
 	query := `
 		SELECT
 			bs.id, bs.game_id, bs.individual_id,
@@ -164,15 +165,15 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 		ORDER BY i.display_name
 	`
 
-	rows, err := s.pool.Query(ctx, query, gameID)
+	rows, err := s.Pool().Query(ctx, query, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query box scores for game_id %d: %w", gameID, err)
 	}
 	defer rows.Close()
 
-	var results []*nflmodels.IndividualBoxScore
+	var results []*models_nfl.IndividualBoxScore
 	for rows.Next() {
-		stats := &nflmodels.NFLStats{}
+		stats := &models_nfl.NFLStats{}
 		individual := &models.Individual{}
 
 		err := rows.Scan(
@@ -217,7 +218,7 @@ func (s *Store) GetNFLBoxScoresByGameID(ctx context.Context, gameID int) ([]*nfl
 			return nil, fmt.Errorf("failed to scan box score row: %w", err)
 		}
 
-		results = append(results, &nflmodels.IndividualBoxScore{
+		results = append(results, &models_nfl.IndividualBoxScore{
 			Individual: individual,
 			Stats:      stats,
 		})

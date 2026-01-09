@@ -9,6 +9,7 @@ import (
 
 	"github.com/openbook/population-scripts/config"
 	"github.com/openbook/population-scripts/reader"
+	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
 )
 
@@ -49,7 +50,7 @@ func main() {
 
 	// Read box score data from database
 	fmt.Println("\nReading box score data from database...")
-	boxScore, err := reader.ReadNFLBoxScore(ctx, dbStore, cfg.NFLGameID)
+	boxScore, err := reader_nfl.ReadNFLBoxScore(ctx, dbStore, cfg.NFLGameID)
 	if err != nil {
 		fatal("Failed to read box score data: %v", err)
 	}

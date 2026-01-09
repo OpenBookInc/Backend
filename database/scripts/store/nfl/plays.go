@@ -1,4 +1,4 @@
-package store
+package nfl
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
 )
 
@@ -27,7 +28,7 @@ type NFLPlayForUpsert struct {
 // Uses (drive_id, vendor_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the play for use as a foreign key in statistics.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUpsert) (int, error) {
+func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nfl_plays (
 			drive_id, vendor_id, vendor_sequence,
@@ -69,7 +70,7 @@ func (s *Store) UpsertNFLPlay(ctx context.Context, tx pgx.Tx, play *NFLPlayForUp
 }
 
 // GetNFLPlayByVendorID retrieves an NFL play by drive_id and vendor_id
-func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID string) (*nflmodels.Play, error) {
+func GetNFLPlayByVendorID(s *store.Store, ctx context.Context, driveID int, vendorID string) (*models_nfl.Play, error) {
 	query := `
 		SELECT id, drive_id, vendor_id, vendor_sequence,
 		       period_type, period_number,
@@ -79,8 +80,8 @@ func (s *Store) GetNFLPlayByVendorID(ctx context.Context, driveID int, vendorID 
 		WHERE drive_id = $1 AND vendor_id = $2
 	`
 
-	var play nflmodels.Play
-	err := s.pool.QueryRow(ctx, query, driveID, vendorID).Scan(
+	var play models_nfl.Play
+	err := s.Pool().QueryRow(ctx, query, driveID, vendorID).Scan(
 		&play.ID,
 		&play.DriveID,
 		&play.VendorID,

@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/openbook/population-scripts/config"
-	"github.com/openbook/population-scripts/persister"
-	"github.com/openbook/population-scripts/reader"
+	persister_nfl "github.com/openbook/population-scripts/persister/nfl"
+	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
 )
 
@@ -49,7 +49,7 @@ func main() {
 
 	// Read play-by-play data from database
 	fmt.Println("\nReading play-by-play data from database...")
-	pbpData, err := reader.ReadNFLPlayByPlay(ctx, dbStore, cfg.NFLGameID)
+	pbpData, err := reader_nfl.ReadNFLPlayByPlay(ctx, dbStore, cfg.NFLGameID)
 	if err != nil {
 		fatal("Failed to read play-by-play data: %v", err)
 	}
@@ -65,12 +65,12 @@ func main() {
 	}
 
 	// Calculate how many box scores will be generated
-	boxScoreCount := persister.GetBoxScoreCount(pbpData)
+	boxScoreCount := persister_nfl.GetBoxScoreCount(pbpData)
 	fmt.Printf("Will generate box scores for %d players\n", boxScoreCount)
 
 	// Persist box scores to database
 	fmt.Println("\nPersisting box scores to database...")
-	if err := persister.PersistNFLBoxScores(ctx, dbStore, pbpData); err != nil {
+	if err := persister_nfl.PersistNFLBoxScores(ctx, dbStore, pbpData); err != nil {
 		fatal("Failed to persist box scores: %v", err)
 	}
 	fmt.Printf("Successfully persisted %d box scores!\n", boxScoreCount)

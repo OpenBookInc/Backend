@@ -1,11 +1,12 @@
-package persister
+package nfl
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/openbook/population-scripts/reader"
+	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 	"github.com/shopspring/decimal"
 )
 
@@ -95,7 +96,7 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 //
 // All box scores for the game are upserted atomically - if any fails,
 // the entire transaction is rolled back.
-func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader.NFLPlayByPlayData) error {
+func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader_nfl.NFLPlayByPlayData) error {
 	// Step 1: Aggregate statistics by player
 	accumulators := make(map[int]*playerStatsAccumulator)
 
@@ -160,7 +161,7 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 
 	// Step 3: Convert accumulators to box scores and upsert
 	for _, acc := range accumulators {
-		boxScore := &store.NFLBoxScoreForUpsert{
+		boxScore := &store_nfl.NFLBoxScoreForUpsert{
 			GameID:              data.GameID,
 			IndividualID:        acc.IndividualID,
 			PassingCompletions:  acc.PassingCompletions,
@@ -190,7 +191,7 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 			SacksTaken:          acc.SacksTaken,
 		}
 
-		if err := dbStore.UpsertNFLBoxScore(ctx, tx, boxScore); err != nil {
+		if err := store_nfl.UpsertNFLBoxScore(dbStore, ctx, tx, boxScore); err != nil {
 			return fmt.Errorf("failed to upsert box score for individual_id %d: %w", acc.IndividualID, err)
 		}
 	}
@@ -208,7 +209,7 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 
 // GetBoxScoreCount returns the number of box scores that would be generated
 // This is useful for printing summaries
-func GetBoxScoreCount(data *reader.NFLPlayByPlayData) int {
+func GetBoxScoreCount(data *reader_nfl.NFLPlayByPlayData) int {
 	players := make(map[int]bool)
 	for _, stat := range data.Statistics {
 		if !stat.Nullified {

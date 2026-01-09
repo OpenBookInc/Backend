@@ -1,11 +1,12 @@
-package reader
+package nfl
 
 import (
 	"context"
 	"fmt"
 
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 )
 
 // =============================================================================
@@ -25,7 +26,7 @@ import (
 // Fetches game info (with team details) and all player box scores.
 // The gameID is the database integer ID, not the vendor UUID.
 // Returns all players in a flat list without roster validation.
-func ReadNFLBoxScore(ctx context.Context, dbStore *store.Store, gameID int) (*nflmodels.NFLBoxScore, error) {
+func ReadNFLBoxScore(ctx context.Context, dbStore *store.Store, gameID int) (*models_nfl.NFLBoxScore, error) {
 	// Step 1: Get game with team information
 	game, err := dbStore.GetGameWithTeamsByID(ctx, gameID)
 	if err != nil {
@@ -33,12 +34,12 @@ func ReadNFLBoxScore(ctx context.Context, dbStore *store.Store, gameID int) (*nf
 	}
 
 	// Step 2: Get all box scores for the game (with individual info)
-	players, err := dbStore.GetNFLBoxScoresByGameID(ctx, gameID)
+	players, err := store_nfl.GetNFLBoxScoresByGameID(dbStore, ctx, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read box scores for game_id %d: %w", gameID, err)
 	}
 
-	return &nflmodels.NFLBoxScore{
+	return &models_nfl.NFLBoxScore{
 		Game:    game,
 		Players: players,
 	}, nil

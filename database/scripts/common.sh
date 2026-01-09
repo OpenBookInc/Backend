@@ -34,6 +34,10 @@ run_go_script() {
     echo "Running ${display_name} Script..."
     echo "Output file: ${output_file}"
 
+    # Create parent directory for output file if it doesn't exist
+    local output_dir=$(dirname "$output_file")
+    mkdir -p "$output_dir"
+
     if go run "scripts/cmd/${cmd_name}/main.go" > "$output_file" 2>&1; then
         echo "${display_name} Script completed successfully"
     else

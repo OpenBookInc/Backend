@@ -1,4 +1,4 @@
-package persister
+package nfl
 
 import (
 	"context"
@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/openbook/population-scripts/fetcher/nfl"
+	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 	"github.com/shopspring/decimal"
 )
 
@@ -32,7 +33,7 @@ import (
 // All foreign key lookups (teams, players) are done via database subqueries.
 // All enum validations are done by the database.
 // If any operation fails, the entire transaction is rolled back.
-func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int, pbp *nfl.PlayByPlayResponse) error {
+func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
 	// Step 1: Start transaction for all write operations
 	tx, err := dbStore.BeginTx(ctx)
 	if err != nil {
@@ -83,7 +84,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 // persistDrive upserts a drive and all its plays within the transaction.
 // Only processes drives with type "drive" or "play" (skips "event" entries like timeouts).
 // Foreign keys are resolved via subqueries in the store layer.
-func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, period *nfl.Period, drive *nfl.Drive) error {
+func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, period *fetcher_nfl.Period, drive *fetcher_nfl.Drive) error {
 	// Skip non-drive entries (e.g., type "event" for timeouts, end-of-period markers)
 	if !shouldPersistDrive(drive) {
 		return nil
@@ -112,7 +113,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 	}
 
 	// Upsert the drive - team lookup done via subquery
-	driveID, err := dbStore.UpsertNFLDrive(
+	driveID, err := store_nfl.UpsertNFLDrive(dbStore, 
 		ctx,
 		tx,
 		gameID,
@@ -155,7 +156,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 
 // persistPlay upserts a play and all its statistics within the transaction.
 // Foreign keys are resolved via subqueries in the store layer.
-func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID int, period *nfl.Period, event *nfl.Event) error {
+func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID int, period *fetcher_nfl.Period, event *fetcher_nfl.Event) error {
 	if !shouldPersistPlay(event) {
 		return nil
 	}
@@ -186,7 +187,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	}
 
 	// Upsert the play
-	play := &store.NFLPlayForUpsert{
+	play := &store_nfl.NFLPlayForUpsert{
 		DriveID:         driveID,
 		VendorID:        event.ID,
 		VendorSequence:  decimal.NewFromFloat(event.Sequence),
@@ -198,13 +199,13 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 		VendorUpdatedAt: updatedAt,
 	}
 
-	playID, err := dbStore.UpsertNFLPlay(ctx, tx, play)
+	playID, err := store_nfl.UpsertNFLPlay(dbStore, ctx, tx, play)
 	if err != nil {
 		return err
 	}
 
 	// Prepare statistics for upsert
-	var stats []*store.PlayStatisticForUpsert
+	var stats []*store_nfl.PlayStatisticForUpsert
 	for _, stat := range event.Statistics {
 		// Skip statistics without a player (team-level stats)
 		if !shouldPersistPlayStatistic(&stat) {
@@ -218,7 +219,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 		}
 
 		// Create the base statistic struct
-		playStatistic := &store.PlayStatisticForUpsert{
+		playStatistic := &store_nfl.PlayStatisticForUpsert{
 			VendorPlayerID: stat.Player.ID, // This is vendor_id, not db id
 			StatType:       statType,
 			Nullified:      stat.Nullified,
@@ -291,7 +292,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	}
 
 	// Replace all statistics for this play - player lookups done via subqueries
-	if err := dbStore.ReplaceNFLPlayStatistics(ctx, tx, playID, stats); err != nil {
+	if err := store_nfl.ReplaceNFLPlayStatistics(dbStore, ctx, tx, playID, stats); err != nil {
 		return fmt.Errorf("failed to replace statistics: %w", err)
 	}
 

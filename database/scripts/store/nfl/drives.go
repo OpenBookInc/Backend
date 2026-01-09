@@ -1,11 +1,12 @@
-package store
+package nfl
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/population-scripts/store"
 )
 
 // UpsertNFLDrive inserts or updates an NFL drive in the database.
@@ -13,7 +14,7 @@ import (
 // Returns the database ID of the drive for use as a foreign key in plays.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
 // The vendorTeamID is looked up via subquery to get the possession_team_id.
-func (s *Store) UpsertNFLDrive(ctx context.Context, tx pgx.Tx, gameID int, vendorDriveID string, sequence interface{}, vendorTeamID string) (int, error) {
+func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, vendorDriveID string, sequence interface{}, vendorTeamID string) (int, error) {
 	query := `
 		INSERT INTO nfl_drives (
 			game_id, vendor_id, vendor_sequence, possession_team_id,
@@ -50,7 +51,7 @@ func (s *Store) UpsertNFLDrive(ctx context.Context, tx pgx.Tx, gameID int, vendo
 }
 
 // GetNFLDriveByVendorID retrieves an NFL drive by game_id and vendor_id
-func (s *Store) GetNFLDriveByVendorID(ctx context.Context, gameID int, vendorID string) (*nflmodels.Drive, error) {
+func GetNFLDriveByVendorID(s *store.Store, ctx context.Context, gameID int, vendorID string) (*models_nfl.Drive, error) {
 	query := `
 		SELECT id, game_id, vendor_id, vendor_sequence, possession_team_id,
 		       created_at, updated_at
@@ -58,8 +59,8 @@ func (s *Store) GetNFLDriveByVendorID(ctx context.Context, gameID int, vendorID 
 		WHERE game_id = $1 AND vendor_id = $2
 	`
 
-	var drive nflmodels.Drive
-	err := s.pool.QueryRow(ctx, query, gameID, vendorID).Scan(
+	var drive models_nfl.Drive
+	err := s.Pool().QueryRow(ctx, query, gameID, vendorID).Scan(
 		&drive.ID,
 		&drive.GameID,
 		&drive.VendorID,

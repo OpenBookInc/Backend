@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	nflmodels "github.com/openbook/shared/models/nfl"
+	models_nfl "github.com/openbook/shared/models/nfl"
 )
 
 // GameStatusForUpsert contains the data needed to upsert a game status
@@ -39,14 +39,14 @@ func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *GameSta
 }
 
 // GetGameStatusByGameID retrieves a game's status by game_id
-func (s *Store) GetGameStatusByGameID(ctx context.Context, gameID int) (*nflmodels.GameStatus, error) {
+func (s *Store) GetGameStatusByGameID(ctx context.Context, gameID int) (*models_nfl.GameStatus, error) {
 	query := `
 		SELECT game_id, status, updated_at
 		FROM game_statuses
 		WHERE game_id = $1
 	`
 
-	var status nflmodels.GameStatus
+	var status models_nfl.GameStatus
 	err := s.pool.QueryRow(ctx, query, gameID).Scan(
 		&status.GameID,
 		&status.Status,

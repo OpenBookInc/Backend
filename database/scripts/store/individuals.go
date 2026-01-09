@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openbook/shared/models"
+	models "github.com/openbook/shared/models"
 )
 
 // IndividualForUpsert contains the data needed to upsert an individual

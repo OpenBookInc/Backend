@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openbook/population-scripts/store"
-	"github.com/openbook/shared/models"
+	models "github.com/openbook/shared/models"
 )
 
 // =============================================================================

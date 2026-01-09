@@ -10,6 +10,8 @@ import (
 	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/population-scripts/config"
 	"github.com/openbook/population-scripts/fetcher"
+	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
+	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	"github.com/openbook/population-scripts/persister"
 	"github.com/openbook/population-scripts/store"
 )
@@ -56,7 +58,7 @@ func main() {
 
 	// Fetch NFL data
 	fmt.Println("\nFetching NFL data from Sportradar API...")
-	if err := fetcher.FetchNFLData(apiClient, dataStore); err != nil {
+	if err := fetcher_nfl.FetchNFLHierarchyData(apiClient, dataStore); err != nil {
 		fatal("Failed to fetch NFL data: %v", err)
 	}
 	fmt.Printf("Successfully fetched NFL data\n")
@@ -67,7 +69,7 @@ func main() {
 
 	// Fetch NBA data
 	fmt.Println("\nFetching NBA data from Sportradar API...")
-	if err := fetcher.FetchNBAData(apiClient, dataStore); err != nil {
+	if err := fetcher_nba.FetchNBAHierarchyData(apiClient, dataStore); err != nil {
 		fatal("Failed to fetch NBA data: %v", err)
 	}
 	fmt.Printf("Successfully fetched NBA data\n")
