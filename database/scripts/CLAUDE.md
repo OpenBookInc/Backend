@@ -24,6 +24,12 @@ go build ./...
 # Run NBA box score generation (from play-by-play data)
 ./update_nba_box_score_data.sh
 
+# View NFL box score data from database
+./compare_nfl_box_score_data.sh
+
+# View NBA box score data from database
+./compare_nba_box_score_data.sh
+
 # Download dependencies
 go mod download
 ```
