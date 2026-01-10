@@ -76,20 +76,6 @@ const (
 	IndividualStatusQuestionable IndividualStatus = "questionable"
 )
 
-// NbaStat represents the nba_stat_type database enum
-type NbaStat string
-
-const (
-	NbaStatFieldGoal NbaStat = "field_goal"
-	NbaStatFreeThrow NbaStat = "free_throw"
-	NbaStatAssist NbaStat = "assist"
-	NbaStatRebound NbaStat = "rebound"
-	NbaStatSteal NbaStat = "steal"
-	NbaStatBlock NbaStat = "block"
-	NbaStatTurnover NbaStat = "turnover"
-	NbaStatPersonalFoul NbaStat = "personal_foul"
-)
-
 // OrderStatusEnum represents the order_status_enum database enum
 type OrderStatusEnum string
 
