@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/population-scripts/config"
@@ -56,8 +57,13 @@ func main() {
 	}
 	fmt.Printf("Found game with vendor_id: %s\n", game.VendorID)
 
-	// Create API client with configured rate limit
-	apiClient := client.NewClientWithDelay(cfg.SportradarAPIKey, cfg.RateLimitDelayMilliseconds)
+	// Create API client with configured rate limit and access level
+	clientConfig := &client.ClientConfig{
+		AccessLevel:    cfg.SportradarAccessLevel,
+		RateLimitDelay: time.Duration(cfg.RateLimitDelayMilliseconds) * time.Millisecond,
+		Timeout:        30 * time.Second,
+	}
+	apiClient := client.NewClientWithConfig(cfg.SportradarAPIKey, clientConfig)
 
 	// Fetch play-by-play data
 	fmt.Println("\nFetching play-by-play data from Sportradar API...")

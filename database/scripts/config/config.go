@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/shared/envloader"
 )
 
@@ -19,7 +20,8 @@ const (
 // BaseConfig holds common configuration shared across all scripts
 type BaseConfig struct {
 	// API Configuration
-	SportradarAPIKey string
+	SportradarAPIKey   string
+	SportradarAccessLevel client.AccessLevel
 
 	// Rate Limiting Configuration
 	RateLimitDelayMilliseconds int
@@ -65,8 +67,11 @@ type BoxScoreConfig struct {
 
 // loadBaseConfig reads common configuration from environment variables
 func loadBaseConfig() BaseConfig {
+	accessLevel := client.AccessLevel(strings.ToLower(os.Getenv("SPORTRADAR_ACCESS_LEVEL")))
+
 	return BaseConfig{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
+		SportradarAccessLevel:      accessLevel,
 		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("RATE_LIMIT_DELAY_MS", 1000),
 		PGHost:                     os.Getenv("PG_HOST"),
 		PGPort:                     os.Getenv("PG_PORT"),
@@ -81,6 +86,14 @@ func loadBaseConfig() BaseConfig {
 func (c *BaseConfig) Validate() error {
 	if c.SportradarAPIKey == "" {
 		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEY")
+	}
+
+	// Validate access level
+	if c.SportradarAccessLevel == "" {
+		return fmt.Errorf("missing required environment variable: SPORTRADAR_ACCESS_LEVEL")
+	}
+	if err := c.SportradarAccessLevel.Validate(); err != nil {
+		return fmt.Errorf("invalid SPORTRADAR_ACCESS_LEVEL: %w", err)
 	}
 
 	// Database configuration validation
@@ -126,7 +139,7 @@ func LoadReferenceDataConfigFromFile(envFile string) (*ReferenceDataConfig, erro
 }
 
 // LoadReferenceDataConfig reads reference data configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
 // Optional fields (with defaults):
 //   - RATE_LIMIT_DELAY_MS (default: 1000)
 //   - NFL_SEASON_YEAR (default: current year)
@@ -190,7 +203,7 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 }
 
 // LoadPlayByPlayConfig reads play-by-play configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
+// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
 // Optional fields (with defaults):
 //   - RATE_LIMIT_DELAY_MS (default: 1000)
 //

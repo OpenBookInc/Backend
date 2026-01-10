@@ -10,26 +10,16 @@ import (
 const (
 	// BaseURL is the Sportradar API base URL
 	BaseURL = "https://api.sportradar.com"
-
-	// API version paths
-	NBABasePath = "/nba/trial/v8/en"
-	NFLBasePath = "/nfl/official/trial/v7/en"
 )
 
 // ClientConfig holds configuration for the API client
 type ClientConfig struct {
+	// AccessLevel is the Sportradar API access level (trial or production)
+	AccessLevel AccessLevel
 	// RateLimitDelay is the delay between API requests to respect rate limits
 	RateLimitDelay time.Duration
 	// Timeout is the HTTP request timeout
 	Timeout time.Duration
-}
-
-// DefaultConfig returns the default client configuration
-func DefaultConfig() *ClientConfig {
-	return &ClientConfig{
-		RateLimitDelay: 2 * time.Second, // Conservative default to avoid 429 errors
-		Timeout:        30 * time.Second,
-	}
 }
 
 // Client is the Sportradar API client
@@ -39,16 +29,14 @@ type Client struct {
 	config     *ClientConfig
 }
 
-// NewClient creates a new Sportradar API client with default configuration
-func NewClient(apiKey string) *Client {
-	return NewClientWithConfig(apiKey, DefaultConfig())
+// getNBABasePath returns the NBA API base path for the configured access level
+func (c *Client) getNBABasePath() string {
+	return fmt.Sprintf("/nba/%s/v8/en", c.config.AccessLevel)
 }
 
-// NewClientWithDelay creates a new Sportradar API client with custom rate limit delay
-func NewClientWithDelay(apiKey string, rateLimitDelayMs int) *Client {
-	config := DefaultConfig()
-	config.RateLimitDelay = time.Duration(rateLimitDelayMs) * time.Millisecond
-	return NewClientWithConfig(apiKey, config)
+// getNFLBasePath returns the NFL API base path for the configured access level
+func (c *Client) getNFLBasePath() string {
+	return fmt.Sprintf("/nfl/official/%s/v7/en", c.config.AccessLevel)
 }
 
 // NewClientWithConfig creates a new Sportradar API client with custom configuration
@@ -92,7 +80,7 @@ func formatAPIError(statusCode int, url string, body string) error {
 
 // GetNBATeams retrieves all NBA teams
 func (c *Client) GetNBATeams() ([]byte, error) {
-	url := fmt.Sprintf("%s/league/hierarchy.json", NBABasePath)
+	url := fmt.Sprintf("%s/league/hierarchy.json", c.getNBABasePath())
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -110,7 +98,7 @@ func (c *Client) GetNBATeams() ([]byte, error) {
 
 // GetNBATeamRoster retrieves roster for a specific NBA team
 func (c *Client) GetNBATeamRoster(teamID string) ([]byte, error) {
-	url := fmt.Sprintf("%s/teams/%s/profile.json", NBABasePath, teamID)
+	url := fmt.Sprintf("%s/teams/%s/profile.json", c.getNBABasePath(), teamID)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -128,7 +116,7 @@ func (c *Client) GetNBATeamRoster(teamID string) ([]byte, error) {
 
 // GetNFLTeams retrieves all NFL teams
 func (c *Client) GetNFLTeams() ([]byte, error) {
-	url := fmt.Sprintf("%s/league/hierarchy.json", NFLBasePath)
+	url := fmt.Sprintf("%s/league/hierarchy.json", c.getNFLBasePath())
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -146,7 +134,7 @@ func (c *Client) GetNFLTeams() ([]byte, error) {
 
 // GetNFLTeamRoster retrieves roster for a specific NFL team
 func (c *Client) GetNFLTeamRoster(teamID string) ([]byte, error) {
-	url := fmt.Sprintf("%s/teams/%s/full_roster.json", NFLBasePath, teamID)
+	url := fmt.Sprintf("%s/teams/%s/full_roster.json", c.getNFLBasePath(), teamID)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -164,7 +152,7 @@ func (c *Client) GetNFLTeamRoster(teamID string) ([]byte, error) {
 
 // GetNFLSeasonSchedule retrieves the schedule for the current NFL season
 func (c *Client) GetNFLSeasonSchedule(year int, seasonType string) ([]byte, error) {
-	url := fmt.Sprintf("%s/games/%d/%s/schedule.json", NFLBasePath, year, seasonType)
+	url := fmt.Sprintf("%s/games/%d/%s/schedule.json", c.getNFLBasePath(), year, seasonType)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -182,7 +170,7 @@ func (c *Client) GetNFLSeasonSchedule(year int, seasonType string) ([]byte, erro
 
 // GetNFLWeeklyInjuries retrieves injury reports for a specific NFL week
 func (c *Client) GetNFLWeeklyInjuries(year int, seasonType string, week int) ([]byte, error) {
-	url := fmt.Sprintf("%s/seasons/%d/%s/%d/injuries.json", NFLBasePath, year, seasonType, week)
+	url := fmt.Sprintf("%s/seasons/%d/%s/%d/injuries.json", c.getNFLBasePath(), year, seasonType, week)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -198,27 +186,9 @@ func (c *Client) GetNFLWeeklyInjuries(year int, seasonType string, week int) ([]
 	return resp.Body(), nil
 }
 
-// GetNBADailySchedule retrieves the NBA schedule for a specific date
-func (c *Client) GetNBADailySchedule(year int, month int, day int) ([]byte, error) {
-	url := fmt.Sprintf("%s/games/%d/%02d/%02d/schedule.json", NBABasePath, year, month, day)
-	resp, err := c.httpClient.R().
-		SetQueryParam("api_key", c.apiKey).
-		Get(url)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get NBA daily schedule: %w", err)
-	}
-
-	if resp.StatusCode() != 200 {
-		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
-	}
-
-	return resp.Body(), nil
-}
-
 // GetNBASeasonSchedule retrieves the full NBA season schedule
 func (c *Client) GetNBASeasonSchedule(year int, seasonType string) ([]byte, error) {
-	url := fmt.Sprintf("%s/games/%d/%s/schedule.json", NBABasePath, year, seasonType)
+	url := fmt.Sprintf("%s/games/%d/%s/schedule.json", c.getNBABasePath(), year, seasonType)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -236,7 +206,7 @@ func (c *Client) GetNBASeasonSchedule(year int, seasonType string) ([]byte, erro
 
 // GetNBAInjuries retrieves current NBA injury reports for all teams
 func (c *Client) GetNBAInjuries() ([]byte, error) {
-	url := fmt.Sprintf("%s/league/injuries.json", NBABasePath)
+	url := fmt.Sprintf("%s/league/injuries.json", c.getNBABasePath())
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -254,7 +224,7 @@ func (c *Client) GetNBAInjuries() ([]byte, error) {
 
 // GetNFLPlayByPlay retrieves play-by-play data for a specific NFL game
 func (c *Client) GetNFLPlayByPlay(gameID string) ([]byte, error) {
-	url := fmt.Sprintf("%s/games/%s/pbp.json", NFLBasePath, gameID)
+	url := fmt.Sprintf("%s/games/%s/pbp.json", c.getNFLBasePath(), gameID)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
@@ -272,7 +242,7 @@ func (c *Client) GetNFLPlayByPlay(gameID string) ([]byte, error) {
 
 // GetNBAPlayByPlay retrieves play-by-play data for a specific NBA game
 func (c *Client) GetNBAPlayByPlay(gameID string) ([]byte, error) {
-	url := fmt.Sprintf("%s/games/%s/pbp.json", NBABasePath, gameID)
+	url := fmt.Sprintf("%s/games/%s/pbp.json", c.getNBABasePath(), gameID)
 	resp, err := c.httpClient.R().
 		SetQueryParam("api_key", c.apiKey).
 		Get(url)
