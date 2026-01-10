@@ -18,6 +18,12 @@ go build ./...
 # Run NFL play-by-play update
 ./update_nfl_play_by_play_stats.sh
 
+# Run NFL box score generation (from play-by-play data)
+./update_nfl_box_score_data.sh
+
+# Run NBA box score generation (from play-by-play data)
+./update_nba_box_score_data.sh
+
 # Download dependencies
 go mod download
 ```
@@ -113,6 +119,11 @@ Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transf
 **Play-by-Play:**
 ```
 Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/nfl/ (transformation) → store/nfl/ → PostgreSQL
+```
+
+**Box Scores (aggregated from play-by-play):**
+```
+PostgreSQL → reader/nfl/ or reader/nba/ (read play stats) → persister/nfl/ or persister/nba/ (aggregation) → store/nfl/ or store/nba/ → PostgreSQL
 ```
 
 ## Critical Design Patterns
@@ -248,6 +259,8 @@ All upserts require UNIQUE constraints:
 - `nfl_drives(game_id, vendor_id)` - unique drive per game
 - `nfl_plays(drive_id, vendor_id)` - unique play per drive
 - `nba_plays(game_id, vendor_id)` - unique play per game
+- `nfl_box_scores(game_id, individual_id)` - one box score per player per game
+- `nba_box_scores(game_id, individual_id)` - one box score per player per game
 
 Missing constraints cause: `ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification`
 
