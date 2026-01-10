@@ -25,11 +25,22 @@ mkdir -p "$OUT_DIR"
 # run_go_script runs a Go command and outputs to a timestamped file
 # Usage: run_go_script <cmd-name> <display-name>
 # Example: run_go_script "update-reference-data" "Update Reference Data"
+# Example: run_go_script "compare-box-score-data/nba" "Compare NBA Box Score Data"
 run_go_script() {
     local cmd_name="$1"
     local display_name="$2"
     local timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
-    local output_file="$OUT_DIR/${cmd_name}_${timestamp}_$$.txt"
+
+    # Check if cmd_name contains a slash (sport-specific script)
+    if [[ "$cmd_name" == */* ]]; then
+        # Split into base directory and sport subdirectory
+        local base_dir="${cmd_name%/*}"  # Everything before last slash
+        local sport_dir="${cmd_name##*/}"  # Everything after last slash
+        local output_file="$OUT_DIR/${base_dir}/${sport_dir}/${timestamp}_$$.txt"
+    else
+        # No subdirectory needed
+        local output_file="$OUT_DIR/${cmd_name}/${timestamp}_$$.txt"
+    fi
 
     echo "Running ${display_name} Script..."
     echo "Output file: ${output_file}"
