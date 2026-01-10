@@ -247,6 +247,7 @@ All upserts require UNIQUE constraints:
 - `game_statuses.game_id` - one status per game
 - `nfl_drives(game_id, vendor_id)` - unique drive per game
 - `nfl_plays(drive_id, vendor_id)` - unique play per drive
+- `nba_plays(game_id, vendor_id)` - unique play per game
 
 Missing constraints cause: `ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification`
 
@@ -261,6 +262,10 @@ Exclusion logic is split between two files based on when filtering occurs:
 - `shouldPersistDrive()`: Filters "event" type entries (timeouts, end-of-period markers)
 - `shouldPersistPlay()`: Filters non-play events and unofficial plays
 - `shouldPersistPlayStatistic()`: Filters team-level stats and ignoreable stat types
+
+**persister/nba/exclusions.go** - Filters NBA data during persistence (before writing to database):
+- `shouldPersistPlay()`: Filters game management events (jumpball, teamtimeout, lineupchange, etc.) and events with zero persistable statistics
+- `shouldPersistPlayStatistic()`: Filters team-level stats and excluded stat types (fouldrawn, technicalfoul, attemptblocked)
 
 Excluded entities are explicitly skipped. These are documented business logic, not error conditions.
 
@@ -280,8 +285,9 @@ Migration scripts use goose.
 PostgreSQL enum types are defined in migrations and auto-generated to Go in `shared/models/gen/`:
 - `individual_status_type`: active, day_to_day, doubtful, out, out_for_season, questionable
 - `game_status`: scheduled, in_progress, halftime, complete, closed, etc.
-- `nfl_period_type`: quarter, overtime
+- `period_type`: quarter, overtime (shared by NFL and NBA)
 - `nfl_stat_type`: passing, rushing, receiving, defense, fumble, interception, field_goal, extra_point
+- `nba_stat_type`: field_goal, free_throw, assist, rebound, steal, block, turnover, personal_foul
 
 ## Configuration
 
@@ -297,9 +303,10 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `NFL_SEASON_YEAR`: NFL season year (default: current year)
 - `NFL_SEASON_TYPE`: Season type - REG, PST, PRE (default: REG)
 - `NFL_WEEK`: Week number for injury data (default: 1)
-- `NFL_GAME_ID`: Specific game ID for play-by-play fetch
+- `NFL_GAME_ID`: Specific game ID for NFL play-by-play fetch
 - `NBA_SEASON_YEAR`: NBA season year (default: current year)
 - `NBA_SEASON_TYPE`: Season type - REG, PST (default: REG)
+- `NBA_GAME_ID`: Specific game ID for NBA play-by-play fetch
 
 ## API Endpoints
 
@@ -310,6 +317,7 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Team Profile: `/nba/trial/v8/en/teams/{teamID}/profile.json`
 - Season Schedule: `/nba/trial/v8/en/games/{year}/{seasonType}/schedule.json`
 - Injuries: `/nba/trial/v8/en/league/injuries.json` (current, no date parameter)
+- Play-by-Play: `/nba/trial/v8/en/games/{gameID}/pbp.json`
 
 **NFL:**
 - Hierarchy: `/nfl/official/trial/v7/en/league/hierarchy.json`

@@ -10,6 +10,7 @@ import (
 	"github.com/openbook/population-scripts/client"
 	"github.com/openbook/population-scripts/config"
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
+	persister_nba "github.com/openbook/population-scripts/persister/nba"
 	"github.com/openbook/population-scripts/store"
 )
 
@@ -92,11 +93,14 @@ func main() {
 	}
 	fmt.Println(jsonOutput)
 
-	// NOTE: Persistence not yet implemented for NBA play-by-play
-	// When ready, add: persister_nba.PersistNBAPlayByPlay(ctx, dbStore, cfg.NBAGameID, playByPlay)
+	// Persist play-by-play data to database
+	fmt.Println("\nPersisting play-by-play data to database...")
+	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, cfg.NBAGameID, playByPlay); err != nil {
+		fatal("Failed to persist play-by-play data: %v", err)
+	}
+	fmt.Println("Successfully persisted play-by-play data!")
 
 	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("Play-by-play data fetch completed successfully!")
-	fmt.Println("Note: Data was NOT persisted to database (persistence not yet implemented)")
+	fmt.Println("Play-by-play data fetch and persistence completed successfully!")
 	fmt.Println(strings.Repeat("=", 72))
 }

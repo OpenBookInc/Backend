@@ -3,8 +3,8 @@
 # =============================================================================
 # Update NBA Play-by-Play Stats Script
 # =============================================================================
-# Fetches NBA play-by-play data from Sportradar API and prints it.
-# Uses the shared .env file in the database/ directory.
+# Fetches NBA play-by-play data from Sportradar API and persists it to the
+# database. Uses the shared .env file in the database/ directory.
 #
 # Usage: ./update_nba_play_by_play_stats.sh
 # =============================================================================
