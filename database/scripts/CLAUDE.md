@@ -319,11 +319,11 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 
 **Optional (with defaults):**
 - `RATE_LIMIT_DELAY_MS`: Milliseconds between API requests (default: 1000)
-- `NFL_SEASON_YEAR`: NFL season year (default: current year)
+- `NFL_SEASON_START_YEAR`: NFL season start year (default: current year)
 - `NFL_SEASON_TYPE`: Season type - REG, PST, PRE (default: REG)
 - `NFL_WEEK`: Week number for injury data (default: 1)
 - `NFL_GAME_ID`: Specific game ID for NFL play-by-play fetch
-- `NBA_SEASON_YEAR`: NBA season year (default: current year)
+- `NBA_SEASON_START_YEAR`: NBA season start year (default: current year)
 - `NBA_SEASON_TYPE`: Season type - REG, PST (default: REG)
 - `NBA_GAME_ID`: Specific game ID for NBA play-by-play fetch
 

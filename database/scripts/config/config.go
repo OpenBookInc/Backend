@@ -40,11 +40,11 @@ type ReferenceDataConfig struct {
 	BaseConfig
 
 	// Season Configuration
-	NFLSeasonYear int    // Year for NFL season (default: current year)
-	NFLSeasonType string // Type of NFL season: SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason (default: SeasonTypeRegular)
-	NFLWeek       int    // NFL week for injury data (default: 1)
-	NBASeasonYear int    // Year for NBA season (default: current year)
-	NBASeasonType string // Type of NBA season: SeasonTypeRegular, SeasonTypePostSeason (default: SeasonTypeRegular)
+	NFLSeasonStartYear int    // Start year for NFL season (default: current year)
+	NFLSeasonType      string // Type of NFL season: SeasonTypeRegular, SeasonTypePostSeason, SeasonTypePreSeason (default: SeasonTypeRegular)
+	NFLWeek            int    // NFL week for injury data (default: 1)
+	NBASeasonStartYear int    // Start year for NBA season (default: current year)
+	NBASeasonType      string // Type of NBA season: SeasonTypeRegular, SeasonTypePostSeason (default: SeasonTypeRegular)
 }
 
 // PlayByPlayConfig holds configuration for the play-by-play stats script
@@ -142,10 +142,10 @@ func LoadReferenceDataConfigFromFile(envFile string) (*ReferenceDataConfig, erro
 // Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
 // Optional fields (with defaults):
 //   - RATE_LIMIT_DELAY_MS (default: 1000)
-//   - NFL_SEASON_YEAR (default: current year)
+//   - NFL_SEASON_START_YEAR (default: current year)
 //   - NFL_SEASON_TYPE (default: "REG")
 //   - NFL_WEEK (default: 1)
-//   - NBA_SEASON_YEAR (default: current year)
+//   - NBA_SEASON_START_YEAR (default: current year)
 //   - NBA_SEASON_TYPE (default: "REG")
 //
 // This does not load any .env files - use LoadReferenceDataConfigFromFile for that
@@ -153,12 +153,12 @@ func LoadReferenceDataConfig() *ReferenceDataConfig {
 	currentYear := time.Now().Year()
 
 	return &ReferenceDataConfig{
-		BaseConfig:    loadBaseConfig(),
-		NFLSeasonYear: envloader.GetEnvAsIntWithDefault("NFL_SEASON_YEAR", currentYear),
-		NFLSeasonType: strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
-		NFLWeek:       envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
-		NBASeasonYear: envloader.GetEnvAsIntWithDefault("NBA_SEASON_YEAR", currentYear),
-		NBASeasonType: strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
+		BaseConfig:         loadBaseConfig(),
+		NFLSeasonStartYear: envloader.GetEnvAsIntWithDefault("NFL_SEASON_START_YEAR", currentYear),
+		NFLSeasonType:      strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
+		NFLWeek:            envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
+		NBASeasonStartYear: envloader.GetEnvAsIntWithDefault("NBA_SEASON_START_YEAR", currentYear),
+		NBASeasonType:      strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
 	}
 }
 

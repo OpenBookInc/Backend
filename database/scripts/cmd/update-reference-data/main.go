@@ -83,7 +83,7 @@ func main() {
 	// Fetch NFL game schedules
 	fmt.Println("\nFetching NFL game schedules...")
 	apiClient.RateLimitWait()
-	if err := fetcher.FetchNFLGames(apiClient, dataStore, cfg.NFLSeasonYear, cfg.NFLSeasonType); err != nil {
+	if err := fetcher.FetchNFLGames(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType); err != nil {
 		fatal("Failed to fetch NFL games: %v", err)
 	}
 	fmt.Printf("Successfully fetched NFL games\n")
@@ -91,7 +91,7 @@ func main() {
 	// Fetch NBA game schedules
 	fmt.Println("\nFetching NBA game schedules...")
 	apiClient.RateLimitWait()
-	if err := fetcher.FetchNBAGames(apiClient, dataStore, cfg.NBASeasonYear, cfg.NBASeasonType); err != nil {
+	if err := fetcher.FetchNBAGames(apiClient, dataStore, cfg.NBASeasonStartYear, cfg.NBASeasonType); err != nil {
 		fatal("Failed to fetch NBA games: %v", err)
 	}
 	fmt.Printf("Successfully fetched NBA games\n")
@@ -99,7 +99,7 @@ func main() {
 	// Fetch NFL player statuses (injuries)
 	fmt.Println("\nFetching NFL player statuses...")
 	apiClient.RateLimitWait()
-	if err := fetcher.FetchNFLPlayerStatuses(apiClient, dataStore, cfg.NFLSeasonYear, cfg.NFLSeasonType, cfg.NFLWeek); err != nil {
+	if err := fetcher.FetchNFLPlayerStatuses(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType, cfg.NFLWeek); err != nil {
 		fatal("Failed to fetch NFL player statuses: %v", err)
 	}
 	fmt.Printf("Successfully fetched NFL player statuses\n")
