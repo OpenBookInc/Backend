@@ -48,7 +48,7 @@ func MapPeriodTypeToDB(apiPeriodType string) (string, error) {
 
 // MapStatTypeToDB maps Sportradar NBA API statistic type values to database enum values.
 // Returns an error if the value is not recognized.
-// Note: Some stat types (fouldrawn, technicalfoul, attemptblocked) are excluded
+// Note: Some stat types (fouldrawn, technicalfoul, attemptblocked, offensivefoul) are excluded
 // in exclusions.go and should not reach this function.
 func MapStatTypeToDB(apiStatType string) (string, error) {
 	switch apiStatType {
@@ -66,7 +66,7 @@ func MapStatTypeToDB(apiStatType string) (string, error) {
 		return "block", nil
 	case "turnover":
 		return "turnover", nil
-	case "personalfoul", "offensivefoul":
+	case "personalfoul":
 		return "personal_foul", nil
 	default:
 		return "", fmt.Errorf("unexpected stat type value from Sportradar NBA API: %q", apiStatType)

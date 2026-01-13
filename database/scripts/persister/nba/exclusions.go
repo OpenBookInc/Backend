@@ -20,11 +20,16 @@ var excludedEventTypes = map[string]bool{
 }
 
 // excludedStatTypes lists statistic types that should not be persisted.
+// These are excluded to avoid duplicate counting or because they don't represent
+// distinct statistical events.
 var excludedStatTypes = map[string]bool{
 	"fouldrawn":                       true,
 	"technicalfoul":                   true,
 	"technicalfoulnonunsportsmanlike": true,
 	"attemptblocked":                  true,
+	// Offensive fouls are excluded because Sportradar already creates a "personalfoul"
+	// statistic for the same event. Including both would double-count the foul.
+	"offensivefoul": true,
 }
 
 // shouldPersistPlay determines whether a play (event) should be persisted to the database.
