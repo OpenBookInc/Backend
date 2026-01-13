@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 )
 
 // PlayByPlayResponse represents the complete NBA play-by-play API response
@@ -316,7 +316,7 @@ type Qualifier struct {
 }
 
 // FetchNBAPlayByPlay fetches play-by-play data for a specific NBA game
-func FetchNBAPlayByPlay(apiClient *client.Client, gameID string) (*PlayByPlayResponse, error) {
+func FetchNBAPlayByPlay(apiClient *sportradar.Client, gameID string) (*PlayByPlayResponse, error) {
 	data, err := apiClient.GetNBAPlayByPlay(gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch NBA play-by-play data: %w", err)

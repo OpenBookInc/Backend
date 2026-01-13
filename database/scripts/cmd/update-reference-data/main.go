@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/config"
 	"github.com/openbook/population-scripts/fetcher"
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
@@ -47,12 +47,12 @@ func main() {
 	fmt.Println("Successfully connected to database")
 
 	// Create API client with configured rate limit and access level
-	clientConfig := &client.ClientConfig{
+	clientConfig := &sportradar.ClientConfig{
 		AccessLevel:    cfg.SportradarAccessLevel,
 		RateLimitDelay: time.Duration(cfg.RateLimitDelayMilliseconds) * time.Millisecond,
 		Timeout:        30 * time.Second,
 	}
-	apiClient := client.NewClientWithConfig(cfg.SportradarAPIKey, clientConfig)
+	apiClient := sportradar.NewClientWithConfig(cfg.SportradarAPIKey, clientConfig)
 
 	// Create in-memory data store and add leagues
 	dataStore := fetcher.NewReferenceData()

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 )
 
 // NFLInjuriesResponse represents the NFL weekly injuries API response
@@ -49,7 +49,7 @@ type NBAInjuriesResponse struct {
 }
 
 // FetchNFLPlayerStatuses fetches player injury statuses from NFL weekly injuries endpoint
-func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string, week int) error {
+func FetchNFLPlayerStatuses(apiClient *sportradar.Client, dataStore *ReferenceData, year int, seasonType string, week int) error {
 	injuriesData, err := apiClient.GetNFLWeeklyInjuries(year, seasonType, week)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NFL weekly injuries: %w", err)
@@ -91,7 +91,7 @@ func FetchNFLPlayerStatuses(apiClient *client.Client, dataStore *ReferenceData, 
 }
 
 // FetchNBAPlayerStatuses fetches player injury statuses from NBA injuries endpoint
-func FetchNBAPlayerStatuses(apiClient *client.Client, dataStore *ReferenceData) error {
+func FetchNBAPlayerStatuses(apiClient *sportradar.Client, dataStore *ReferenceData) error {
 	injuriesData, err := apiClient.GetNBAInjuries()
 	if err != nil {
 		return fmt.Errorf("failed to fetch NBA injuries: %w", err)

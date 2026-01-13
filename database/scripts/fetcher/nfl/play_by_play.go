@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 )
 
 // PlayByPlayResponse represents the complete NFL play-by-play API response
@@ -797,7 +797,7 @@ func (d *DetailPlayer) String() string {
 }
 
 // FetchNFLPlayByPlay fetches play-by-play data for a specific NFL game
-func FetchNFLPlayByPlay(apiClient *client.Client, gameID string) (*PlayByPlayResponse, error) {
+func FetchNFLPlayByPlay(apiClient *sportradar.Client, gameID string) (*PlayByPlayResponse, error) {
 	data, err := apiClient.GetNFLPlayByPlay(gameID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch NFL play-by-play data: %w", err)

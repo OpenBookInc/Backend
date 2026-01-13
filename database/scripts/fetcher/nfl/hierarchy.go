@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/fetcher"
 )
 
@@ -36,7 +36,7 @@ type NFLHierarchyResponse struct {
 }
 
 // FetchNFLHierarchyData fetches all NFL teams and rosters
-func FetchNFLHierarchyData(apiClient *client.Client, dataStore *fetcher.ReferenceData) error {
+func FetchNFLHierarchyData(apiClient *sportradar.Client, dataStore *fetcher.ReferenceData) error {
 	// Fetch teams
 	teamsData, err := apiClient.GetNFLTeams()
 	if err != nil {

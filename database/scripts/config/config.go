@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/shared/envloader"
 )
 
@@ -21,7 +21,7 @@ const (
 type BaseConfig struct {
 	// API Configuration
 	SportradarAPIKey   string
-	SportradarAccessLevel client.AccessLevel
+	SportradarAccessLevel sportradar.AccessLevel
 
 	// Rate Limiting Configuration
 	RateLimitDelayMilliseconds int
@@ -67,7 +67,7 @@ type BoxScoreConfig struct {
 
 // loadBaseConfig reads common configuration from environment variables
 func loadBaseConfig() BaseConfig {
-	accessLevel := client.AccessLevel(strings.ToLower(os.Getenv("SPORTRADAR_ACCESS_LEVEL")))
+	accessLevel := sportradar.AccessLevel(strings.ToLower(os.Getenv("SPORTRADAR_ACCESS_LEVEL")))
 
 	return BaseConfig{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/fetcher"
 )
 
@@ -31,7 +31,7 @@ type NBATeamProfileResponse struct {
 }
 
 // FetchNBATeamRoster fetches roster data for a single NBA team
-func FetchNBATeamRoster(apiClient *client.Client, dataStore *fetcher.ReferenceData, teamVendorID string, league *fetcher.League) error {
+func FetchNBATeamRoster(apiClient *sportradar.Client, dataStore *fetcher.ReferenceData, teamVendorID string, league *fetcher.League) error {
 	rosterData, err := apiClient.GetNBATeamRoster(teamVendorID)
 	if err != nil {
 		return err

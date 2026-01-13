@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openbook/population-scripts/client"
+	"github.com/openbook/population-scripts/client/sportradar"
 )
 
 // NFLScheduleResponse represents the NFL season schedule API response
@@ -55,7 +55,7 @@ type NBAScheduleResponse struct {
 }
 
 // FetchNFLGames fetches all games from the NFL season schedule
-func FetchNFLGames(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string) error {
+func FetchNFLGames(apiClient *sportradar.Client, dataStore *ReferenceData, year int, seasonType string) error {
 	scheduleData, err := apiClient.GetNFLSeasonSchedule(year, seasonType)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NFL season schedule: %w", err)
@@ -114,7 +114,7 @@ func FetchNFLGames(apiClient *client.Client, dataStore *ReferenceData, year int,
 }
 
 // FetchNBAGames fetches all games from the NBA season schedule
-func FetchNBAGames(apiClient *client.Client, dataStore *ReferenceData, year int, seasonType string) error {
+func FetchNBAGames(apiClient *sportradar.Client, dataStore *ReferenceData, year int, seasonType string) error {
 	scheduleData, err := apiClient.GetNBASeasonSchedule(year, seasonType)
 	if err != nil {
 		return fmt.Errorf("failed to fetch NBA season schedule: %w", err)
