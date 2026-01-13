@@ -288,6 +288,47 @@ Exclusion logic is split between two files based on when filtering occurs:
 
 Excluded entities are explicitly skipped. These are documented business logic, not error conditions.
 
+### Code Commenting Philosophy
+
+**Principle**: When commenting code, focus on **what** is being called, not **how** it works internally.
+
+**Never comment on implementation details** of functions or methods that the code calls. Those implementation details belong in the called function's own documentation or code, not in the caller's comments.
+
+**If a comment is worthwhile**, discuss only the high-level API contract:
+- What the function does (its purpose)
+- What it returns
+- Why we're calling it in this context
+
+**Examples:**
+
+❌ **Bad** (commenting implementation details):
+```go
+// Loops through all statistics and filters out team-level stats and excluded types
+if shouldPersistPlayStatistic(&stat) {
+    // ...
+}
+```
+
+✅ **Good** (commenting the API contract or context):
+```go
+// Filter out non-persistable statistics (team-level and excluded types)
+if shouldPersistPlayStatistic(&stat) {
+    // ...
+}
+```
+
+✅ **Better** (no comment when function name is self-documenting):
+```go
+if shouldPersistPlayStatistic(&stat) {
+    // ...
+}
+```
+
+**Why**:
+- Implementation details create maintenance burden (comments go stale when implementation changes)
+- Well-named functions should be self-documenting
+- Comments should explain *why* code exists, not *what* it does (which should be obvious from reading the code)
+
 ## Database
 
 ### Connection
