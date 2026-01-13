@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/openbook/population-scripts/client/sportradar"
+	compare_nfl "github.com/openbook/population-scripts/cmd/compare-box-score-data/compare/nfl"
+	"github.com/openbook/population-scripts/cmd/compare-box-score-data/fetcher"
+	"github.com/openbook/population-scripts/cmd/compare-box-score-data/translator"
 	"github.com/openbook/population-scripts/config"
-	"github.com/openbook/population-scripts/reader"
 	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -25,16 +30,16 @@ func main() {
 	flag.Parse()
 
 	// Load configuration from environment file and variables
-	// Reuse BoxScoreConfig since it has the same requirements (NFL_GAME_ID)
-	cfg, err := config.LoadBoxScoreConfigFromFile(*envFile)
+	cfg, err := config.LoadCompareBoxScoreConfigFromFile(*envFile)
 	if err != nil {
-		fatal("Failed to load configuration: %v\nPlease ensure NFL_GAME_ID is set as a database integer ID in .env file or as an environment variable", err)
+		fatal("Failed to load configuration: %v", err)
 	}
 
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Println("NFL Box Score Viewer")
+	fmt.Println("NFL Box Score Comparison Tool (Sportradar)")
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Printf("Game ID (database): %d\n", cfg.NFLGameID)
+	fmt.Printf("Date Range: %s to %s\n", cfg.NFLGameDateStartInclusive.Format("2006-01-02"), cfg.NFLGameDateEndInclusive.Format("2006-01-02"))
+	fmt.Printf("Sportradar Rate Limit: %dms\n", cfg.SportradarRateLimitDelayMilliseconds)
 	fmt.Println(strings.Repeat("=", 72))
 
 	ctx := context.Background()
@@ -48,39 +53,82 @@ func main() {
 	defer dbStore.Close()
 	fmt.Println("Connected to database successfully!")
 
-	// Read box score data from database
-	fmt.Println("\nReading box score data from database...")
-	boxScore, err := reader_nfl.ReadNFLBoxScore(ctx, dbStore, cfg.NFLGameID)
+	// Create Sportradar client
+	sportradarClient := sportradar.NewClientWithConfig(&sportradar.ClientConfig{
+		AccessLevel:    cfg.SportradarAccessLevel,
+		RateLimitDelay: time.Duration(cfg.SportradarRateLimitDelayMilliseconds) * time.Millisecond,
+		Timeout:        30 * time.Second,
+		ApiKeys:        cfg.SportradarAPIKeys,
+	})
+
+	// Get all games with box scores from database within date range
+	fmt.Println("\nQuerying games with box scores from database...")
+	gameIDs, err := store_nfl.GetAllNFLGamesWithBoxScores(dbStore, ctx, cfg.NFLGameDateStartInclusive, cfg.NFLGameDateEndInclusive)
 	if err != nil {
-		fatal("Failed to read box score data: %v", err)
+		fatal("Failed to get games with box scores: %v", err)
 	}
 
-	// Check if there are any players
-	totalPlayers := len(boxScore.Players)
-	if totalPlayers == 0 {
-		fmt.Println("\nNo box score data found for this game.")
-		fmt.Println("Ensure you have run update_box_score_data.sh for this game first.")
+	if len(gameIDs) == 0 {
+		fmt.Println("\nNo NFL games with box scores found in database.")
+		fmt.Println("Run update_nfl_box_score_data.sh first to generate box scores.")
 		fmt.Println(strings.Repeat("=", 72))
 		return
 	}
 
-	fmt.Printf("Read box scores for %d players\n", totalPlayers)
+	fmt.Printf("Found %d games with box scores to compare\n", len(gameIDs))
 
-	// Read rosters for home and away teams
-	fmt.Println("\nReading rosters for home and away teams...")
-	homeRoster, err := reader.ReadRosterByTeamID(ctx, dbStore, boxScore.Game.ContenderIDA)
-	if err != nil {
-		fatal("Failed to read home team roster (team_id %d): %v", boxScore.Game.ContenderIDA, err)
+	// Compare each game
+	fmt.Println("\n" + strings.Repeat("-", 72))
+	fmt.Println("Starting comparison...")
+	fmt.Println(strings.Repeat("-", 72))
+
+	for i, gameID := range gameIDs {
+		fmt.Printf("\n[%d/%d] Comparing game ID %d...\n", i+1, len(gameIDs), gameID)
+
+		// Read database box score
+		dbBoxScore, err := reader_nfl.ReadNFLBoxScore(ctx, dbStore, gameID)
+		if err != nil {
+			fatal("Failed to read database box score for game %d: %v", gameID, err)
+		}
+
+		if dbBoxScore.Game == nil || dbBoxScore.Game.TeamA == nil || dbBoxScore.Game.TeamB == nil {
+			fatal("Game %d is missing team information", gameID)
+		}
+
+		game := dbBoxScore.Game
+		homeTeam := game.TeamA.Alias
+		awayTeam := game.TeamB.Alias
+		gameVendorID := game.VendorID
+		gameDate := game.ScheduledStartTime
+
+		fmt.Printf("  Game: %s @ %s on %s\n", awayTeam, homeTeam, gameDate.Format("2006-01-02"))
+		fmt.Printf("  Vendor ID: %s\n", gameVendorID)
+
+		// Fetch Sportradar game statistics
+		sportradarClient.RateLimitWait()
+		stats, err := fetcher.FetchNFLGameStatistics(sportradarClient, gameVendorID)
+		if err != nil {
+			fatal("Failed to fetch Sportradar game statistics for game %s: %v", gameVendorID, err)
+		}
+
+		// Translate Sportradar response to NFLBoxScore model
+		sportradarBoxScore, err := translator.TranslateNFLBoxScore(ctx, game, stats, dbStore)
+		if err != nil {
+			fatal("Failed to translate Sportradar box score for game %s: %v", gameVendorID, err)
+		}
+
+		fmt.Printf("  Database players: %d, Sportradar players: %d\n", len(dbBoxScore.Players), len(sportradarBoxScore.Players))
+
+		// Compare box scores
+		if err := compare_nfl.CompareNFLBoxScores(gameID, gameVendorID, dbBoxScore, sportradarBoxScore); err != nil {
+			fatal("%v", err)
+		}
+
+		fmt.Println("  All stats match!")
 	}
 
-	awayRoster, err := reader.ReadRosterByTeamID(ctx, dbStore, boxScore.Game.ContenderIDB)
-	if err != nil {
-		fatal("Failed to read away team roster (team_id %d): %v", boxScore.Game.ContenderIDB, err)
-	}
-
-	fmt.Printf("Successfully read rosters (Home: %d players, Away: %d players)\n",
-		len(homeRoster.IndividualIDs), len(awayRoster.IndividualIDs))
-
-	// Print the box score with roster organization
-	fmt.Println("\n" + boxScore.StringWithRosters(awayRoster, homeRoster))
+	// Success summary
+	fmt.Println("\n" + strings.Repeat("=", 72))
+	fmt.Printf("SUCCESS: All %d NFL games validated successfully!\n", len(gameIDs))
+	fmt.Println(strings.Repeat("=", 72))
 }

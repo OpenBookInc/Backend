@@ -3,6 +3,7 @@ package nfl
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	models_nfl "github.com/openbook/shared/models/nfl"
@@ -219,4 +220,39 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 	}
 
 	return results, nil
+}
+
+// GetAllNFLGamesWithBoxScores returns all game IDs that have NFL box score entries
+// within the specified date range (inclusive).
+// Filters by scheduled_start_time.
+// Returns game IDs ordered by game_id ascending.
+func GetAllNFLGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]int, error) {
+	query := `
+		SELECT DISTINCT bs.game_id
+		FROM nfl_box_scores bs
+		JOIN games g ON bs.game_id = g.id
+		WHERE g.scheduled_start_time >= $1 AND DATE(g.scheduled_start_time) <= DATE($2)
+		ORDER BY bs.game_id
+	`
+
+	rows, err := s.Pool().Query(ctx, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query games with NFL box scores: %w", err)
+	}
+	defer rows.Close()
+
+	var gameIDs []int
+	for rows.Next() {
+		var gameID int
+		if err := rows.Scan(&gameID); err != nil {
+			return nil, fmt.Errorf("failed to scan game_id: %w", err)
+		}
+		gameIDs = append(gameIDs, gameID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating game IDs: %w", err)
+	}
+
+	return gameIDs, nil
 }

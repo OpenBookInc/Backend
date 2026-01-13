@@ -26,10 +26,8 @@ go build ./...
 # Run batch play-by-play and box score update for games in a date range
 ./update_batch_play_by_play_and_box_scores.sh
 
-# View NFL box score data from database
+# Compare box score data against Sportradar (validates all games with box scores)
 ./compare_nfl_box_score_data.sh
-
-# View NBA box score data from database
 ./compare_nba_box_score_data.sh
 
 # Download dependencies
@@ -142,6 +140,13 @@ Sportradar API → client/ → fetcher/ (raw API structs) → decorator/ (enrich
 **Box Scores (aggregated from play-by-play):**
 ```
 PostgreSQL → reader/nfl/ or reader/nba/ (read play stats) → persister/nfl/ or persister/nba/ (aggregation) → store/nfl/ or store/nba/ → PostgreSQL
+```
+
+**Box Score Comparison (validates database against Sportradar):**
+```
+Database Box Score: PostgreSQL → reader/ → models_nfl.NFLBoxScore / models_nba.NBABoxScore
+Sportradar Box Score: Sportradar API → client/sportradar/ → cmd/compare-box-score-data/fetcher/ → cmd/compare-box-score-data/translator/ → models
+Comparison: cmd/compare-box-score-data/compare/ → success or discrepancy report
 ```
 
 ## Critical Design Patterns
@@ -390,6 +395,13 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
   - `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
   - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
 
+**Required (compare_*_box_score_data):**
+- `SPORTRADAR_API_KEYS`: Sportradar API keys (same as other Sportradar scripts)
+- `SPORTRADAR_ACCESS_LEVEL`: API access level (trial, production)
+- `SPORTRADAR_RATE_LIMIT_DELAY_MS`: Milliseconds between Sportradar API requests
+- `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
+- `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
+
 ## API Endpoints
 
 Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
@@ -401,6 +413,7 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Season Schedule: `/nba/trial/v8/en/games/{year}/{seasonType}/schedule.json`
 - Injuries: `/nba/trial/v8/en/league/injuries.json` (current, no date parameter)
 - Play-by-Play: `/nba/trial/v8/en/games/{gameID}/pbp.json`
+- Game Summary: `/nba/trial/v8/en/games/{gameID}/summary.json` (box score comparison)
 
 **NFL:**
 - Hierarchy: `/nfl/official/trial/v7/en/league/hierarchy.json`
@@ -409,6 +422,7 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Season Schedule: `/nfl/official/trial/v7/en/games/{year}/{seasonType}/schedule.json`
 - Weekly Injuries: `/nfl/official/trial/v7/en/seasons/{year}/{seasonType}/{week}/injuries.json`
 - Play-by-Play: `/nfl/official/trial/v7/en/games/{gameID}/pbp.json`
+- Game Statistics: `/nfl/official/trial/v7/en/games/{gameID}/statistics.json` (box score comparison)
 
 **Error handling**: 404 errors include full URL in error message for debugging. All API errors include response body and status code.
 

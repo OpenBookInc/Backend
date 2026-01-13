@@ -413,3 +413,49 @@ func (c *Client) GetNBAPlayerProfile(playerID string) ([]byte, error) {
 
 	return resp.Body(), nil
 }
+
+// GetNFLGameStatistics retrieves game statistics for a specific NFL game
+func (c *Client) GetNFLGameStatistics(gameID string) ([]byte, error) {
+	apiKey, err := c.keyRotation.getKeyAndIncrement()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NFL game statistics: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/games/%s/statistics.json", c.getNFLBasePath(), gameID)
+	resp, err := c.httpClient.R().
+		SetQueryParam("api_key", apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NFL game statistics: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
+// GetNBAGameSummary retrieves game summary for a specific NBA game
+func (c *Client) GetNBAGameSummary(gameID string) ([]byte, error) {
+	apiKey, err := c.keyRotation.getKeyAndIncrement()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NBA game summary: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/games/%s/summary.json", c.getNBABasePath(), gameID)
+	resp, err := c.httpClient.R().
+		SetQueryParam("api_key", apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NBA game summary: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}

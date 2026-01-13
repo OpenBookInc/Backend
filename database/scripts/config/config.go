@@ -66,6 +66,30 @@ type BoxScoreConfig struct {
 	NBAGameID int // Database game ID (not vendor UUID)
 }
 
+// CompareBoxScoreConfig holds configuration for the box score comparison tool
+type CompareBoxScoreConfig struct {
+	// Database Configuration
+	PGHost     string
+	PGPort     string
+	PGDatabase string
+	PGUser     string
+	PGPassword string
+	PGKeyPath  string
+
+	// Sportradar API Configuration
+	SportradarAPIKeys                    []sportradar.ApiKeyParameters
+	SportradarAccessLevel                sportradar.AccessLevel
+	SportradarRateLimitDelayMilliseconds int
+
+	// NFL Date Range (inclusive)
+	NFLGameDateStartInclusive time.Time
+	NFLGameDateEndInclusive   time.Time
+
+	// NBA Date Range (inclusive)
+	NBAGameDateStartInclusive time.Time
+	NBAGameDateEndInclusive   time.Time
+}
+
 // BatchUpdateConfig holds configuration for the batch update script
 type BatchUpdateConfig struct {
 	BaseConfig
@@ -388,6 +412,123 @@ func (c *BoxScoreConfig) Validate() error {
 	// Box score specific validation - at least one game ID must be set
 	if c.NFLGameID == 0 && c.NBAGameID == 0 {
 		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a positive integer database ID)")
+	}
+
+	return nil
+}
+
+// LoadCompareBoxScoreConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadCompareBoxScoreConfigFromFile(envFile string) (*CompareBoxScoreConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadCompareBoxScoreConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadCompareBoxScoreConfig reads compare box score configuration from environment variables
+// Required fields (no defaults): PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH,
+//
+//	SPORTRADAR_API_KEYS, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS
+//
+// Date ranges (format: YYYY-MM-DD):
+//
+//	NFL: NFL_GAME_DATE_START_INCLUSIVE, NFL_GAME_DATE_END_INCLUSIVE
+//	NBA: NBA_GAME_DATE_START_INCLUSIVE, NBA_GAME_DATE_END_INCLUSIVE
+//
+// This does not load any .env files - use LoadCompareBoxScoreConfigFromFile for that
+func LoadCompareBoxScoreConfig() *CompareBoxScoreConfig {
+	accessLevel := sportradar.AccessLevel(strings.ToLower(os.Getenv("SPORTRADAR_ACCESS_LEVEL")))
+	apiKeys, _ := parseApiKeys(os.Getenv("SPORTRADAR_API_KEYS"))
+
+	return &CompareBoxScoreConfig{
+		PGHost:                               os.Getenv("PG_HOST"),
+		PGPort:                               os.Getenv("PG_PORT"),
+		PGDatabase:                           os.Getenv("PG_DATABASE"),
+		PGUser:                               os.Getenv("PG_USER"),
+		PGPassword:                           os.Getenv("PG_PASSWORD"),
+		PGKeyPath:                            os.Getenv("PG_KEY_PATH"),
+		SportradarAPIKeys:                    apiKeys,
+		SportradarAccessLevel:                accessLevel,
+		SportradarRateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("SPORTRADAR_RATE_LIMIT_DELAY_MS", 0),
+		NFLGameDateStartInclusive:            parseDate(os.Getenv("NFL_GAME_DATE_START_INCLUSIVE")),
+		NFLGameDateEndInclusive:              parseDate(os.Getenv("NFL_GAME_DATE_END_INCLUSIVE")),
+		NBAGameDateStartInclusive:            parseDate(os.Getenv("NBA_GAME_DATE_START_INCLUSIVE")),
+		NBAGameDateEndInclusive:              parseDate(os.Getenv("NBA_GAME_DATE_END_INCLUSIVE")),
+	}
+}
+
+// Validate checks that all required compare box score configuration fields are set
+func (c *CompareBoxScoreConfig) Validate() error {
+	// Database configuration validation
+	if c.PGHost == "" {
+		return fmt.Errorf("missing required environment variable: PG_HOST")
+	}
+	if c.PGPort == "" {
+		return fmt.Errorf("missing required environment variable: PG_PORT")
+	}
+	if c.PGDatabase == "" {
+		return fmt.Errorf("missing required environment variable: PG_DATABASE")
+	}
+	if c.PGUser == "" {
+		return fmt.Errorf("missing required environment variable: PG_USER")
+	}
+	if c.PGPassword == "" {
+		return fmt.Errorf("missing required environment variable: PG_PASSWORD")
+	}
+	if c.PGKeyPath == "" {
+		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
+	}
+
+	// Sportradar API configuration validation
+	apiKeysEnv := os.Getenv("SPORTRADAR_API_KEYS")
+	if apiKeysEnv == "" {
+		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEYS (format: key1:limit1,key2:limit2)")
+	}
+	apiKeys, err := parseApiKeys(apiKeysEnv)
+	if err != nil {
+		return fmt.Errorf("invalid SPORTRADAR_API_KEYS: %w", err)
+	}
+	if len(apiKeys) == 0 {
+		return fmt.Errorf("SPORTRADAR_API_KEYS must contain at least one key:limit pair")
+	}
+	c.SportradarAPIKeys = apiKeys
+
+	if c.SportradarAccessLevel == "" {
+		return fmt.Errorf("missing required environment variable: SPORTRADAR_ACCESS_LEVEL")
+	}
+	if err := c.SportradarAccessLevel.Validate(); err != nil {
+		return fmt.Errorf("invalid SPORTRADAR_ACCESS_LEVEL: %w", err)
+	}
+
+	if c.SportradarRateLimitDelayMilliseconds <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: SPORTRADAR_RATE_LIMIT_DELAY_MS (must be a positive integer)")
+	}
+
+	// Validate NFL date range
+	if c.NFLGameDateStartInclusive.IsZero() || c.NFLGameDateEndInclusive.IsZero() {
+		return fmt.Errorf("missing required environment variables: NFL_GAME_DATE_START_INCLUSIVE and NFL_GAME_DATE_END_INCLUSIVE (format: YYYY-MM-DD)")
+	}
+	if c.NFLGameDateStartInclusive.After(c.NFLGameDateEndInclusive) {
+		return fmt.Errorf("NFL_GAME_DATE_START_INCLUSIVE must be before or equal to NFL_GAME_DATE_END_INCLUSIVE")
+	}
+
+	// Validate NBA date range
+	if c.NBAGameDateStartInclusive.IsZero() || c.NBAGameDateEndInclusive.IsZero() {
+		return fmt.Errorf("missing required environment variables: NBA_GAME_DATE_START_INCLUSIVE and NBA_GAME_DATE_END_INCLUSIVE (format: YYYY-MM-DD)")
+	}
+	if c.NBAGameDateStartInclusive.After(c.NBAGameDateEndInclusive) {
+		return fmt.Errorf("NBA_GAME_DATE_START_INCLUSIVE must be before or equal to NBA_GAME_DATE_END_INCLUSIVE")
 	}
 
 	return nil
