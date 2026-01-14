@@ -37,7 +37,6 @@ type playerStatsAccumulator struct {
 	TackleAssistsMade   decimal.Decimal
 	FieldGoalAttempts   decimal.Decimal
 	FieldGoalMakes      decimal.Decimal
-	FieldGoalMakeYards  decimal.Decimal
 	ExtraPointAttempts  decimal.Decimal
 	ExtraPointMakes     decimal.Decimal
 	PassingAttempts     decimal.Decimal
@@ -69,7 +68,6 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 		TackleAssistsMade:   zero,
 		FieldGoalAttempts:   zero,
 		FieldGoalMakes:      zero,
-		FieldGoalMakeYards:  zero,
 		ExtraPointAttempts:  zero,
 		ExtraPointMakes:     zero,
 		PassingAttempts:     zero,
@@ -125,7 +123,6 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		acc.TackleAssistsMade = acc.TackleAssistsMade.Add(stat.TackleAssistsMade)
 		acc.FieldGoalAttempts = acc.FieldGoalAttempts.Add(stat.FieldGoalAttempts)
 		acc.FieldGoalMakes = acc.FieldGoalMakes.Add(stat.FieldGoalMakes)
-		acc.FieldGoalMakeYards = acc.FieldGoalMakeYards.Add(stat.FieldGoalMakeYards)
 		acc.ExtraPointAttempts = acc.ExtraPointAttempts.Add(stat.ExtraPointAttempts)
 		acc.ExtraPointMakes = acc.ExtraPointMakes.Add(stat.ExtraPointMakes)
 		acc.PassingAttempts = acc.PassingAttempts.Add(stat.PassingAttempts)
@@ -175,7 +172,6 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 			TackleAssistsMade:   acc.TackleAssistsMade,
 			FieldGoalAttempts:   acc.FieldGoalAttempts,
 			FieldGoalMakes:      acc.FieldGoalMakes,
-			FieldGoalMakeYards:  acc.FieldGoalMakeYards,
 			ExtraPointAttempts:  acc.ExtraPointAttempts,
 			ExtraPointMakes:     acc.ExtraPointMakes,
 			PassingAttempts:     acc.PassingAttempts,

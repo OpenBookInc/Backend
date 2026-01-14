@@ -36,7 +36,6 @@ type NFLBoxScoreForUpsert struct {
 	TackleAssistsMade    decimal.Decimal
 	FieldGoalAttempts    decimal.Decimal
 	FieldGoalMakes       decimal.Decimal
-	FieldGoalMakeYards   decimal.Decimal
 	ExtraPointAttempts   decimal.Decimal
 	ExtraPointMakes      decimal.Decimal
 	PassingAttempts      decimal.Decimal
@@ -62,7 +61,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			passing_completions, receiving_receptions,
 			interceptions_caught, fumbles_forced, fumbles_committed,
 			sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
-			field_goal_attempts, field_goal_makes, field_goal_make_yards,
+			field_goal_attempts, field_goal_makes,
 			extra_point_attempts, extra_point_makes,
 			passing_attempts, rushing_attempts, receiving_targets,
 			passing_yards, rushing_yards, receiving_yards,
@@ -71,7 +70,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
 			NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
@@ -87,7 +86,6 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			tackle_assists_made = EXCLUDED.tackle_assists_made,
 			field_goal_attempts = EXCLUDED.field_goal_attempts,
 			field_goal_makes = EXCLUDED.field_goal_makes,
-			field_goal_make_yards = EXCLUDED.field_goal_make_yards,
 			extra_point_attempts = EXCLUDED.extra_point_attempts,
 			extra_point_makes = EXCLUDED.extra_point_makes,
 			passing_attempts = EXCLUDED.passing_attempts,
@@ -118,7 +116,6 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 		boxScore.TackleAssistsMade,
 		boxScore.FieldGoalAttempts,
 		boxScore.FieldGoalMakes,
-		boxScore.FieldGoalMakeYards,
 		boxScore.ExtraPointAttempts,
 		boxScore.ExtraPointMakes,
 		boxScore.PassingAttempts,
@@ -151,7 +148,7 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			bs.passing_completions, bs.receiving_receptions,
 			bs.interceptions_caught, bs.fumbles_forced, bs.fumbles_committed,
 			bs.sacks_made, bs.sack_assists_made, bs.tackles_made, bs.tackle_assists_made,
-			bs.field_goal_attempts, bs.field_goal_makes, bs.field_goal_make_yards,
+			bs.field_goal_attempts, bs.field_goal_makes,
 			bs.extra_point_attempts, bs.extra_point_makes,
 			bs.passing_attempts, bs.rushing_attempts, bs.receiving_targets,
 			bs.passing_yards, bs.rushing_yards, bs.receiving_yards,
@@ -191,7 +188,6 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			&stats.TackleAssistsMade,
 			&stats.FieldGoalAttempts,
 			&stats.FieldGoalMakes,
-			&stats.FieldGoalMakeYards,
 			&stats.ExtraPointAttempts,
 			&stats.ExtraPointMakes,
 			&stats.PassingAttempts,

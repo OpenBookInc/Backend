@@ -84,7 +84,6 @@ type PlayStatistic struct {
 	TackleAssistsMade   decimal.Decimal // Assisted tackles (defensive stat)
 	FieldGoalAttempts   decimal.Decimal // Field goal attempts
 	FieldGoalMakes      decimal.Decimal // Field goals made
-	FieldGoalMakeYards  decimal.Decimal // Yards of successful field goals
 	ExtraPointAttempts  decimal.Decimal // Extra point attempts
 	ExtraPointMakes     decimal.Decimal // Extra points made
 	Nullified           bool            // Whether stat was nullified

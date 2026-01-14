@@ -246,7 +246,6 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			TackleAssistsMade:   decimal.NewFromFloat(stat.AstTackle),
 			FieldGoalAttempts:   decimal.NewFromFloat(0),
 			FieldGoalMakes:      decimal.NewFromFloat(0),
-			FieldGoalMakeYards:  decimal.NewFromFloat(0),
 			ExtraPointAttempts:  decimal.NewFromFloat(0),
 			ExtraPointMakes:     decimal.NewFromFloat(0),
 		}
@@ -278,9 +277,6 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 		case "field_goal":
 			playStatistic.FieldGoalAttempts = decimal.NewFromFloat(stat.Attempt)
 			playStatistic.FieldGoalMakes = decimal.NewFromFloat(stat.Made)
-			if stat.Made > 0 {
-				playStatistic.FieldGoalMakeYards = decimal.NewFromFloat(stat.AttYards)
-			}
 		case "extra_point":
 			playStatistic.ExtraPointAttempts = decimal.NewFromFloat(stat.Attempt)
 			playStatistic.ExtraPointMakes = decimal.NewFromFloat(stat.Made)
