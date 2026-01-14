@@ -28,6 +28,8 @@ func MapIndividualStatusToDB(apiStatus string) (string, error) {
 		return "out_for_season", nil
 	case "Questionable":
 		return "questionable", nil
+	case "Unknown":
+		return "unknown", nil
 	default:
 		return "", fmt.Errorf("unexpected individual status value from Sportradar API: %q", apiStatus)
 	}

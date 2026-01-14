@@ -74,6 +74,7 @@ const (
 	IndividualStatusOut IndividualStatus = "out"
 	IndividualStatusOutForSeason IndividualStatus = "out_for_season"
 	IndividualStatusQuestionable IndividualStatus = "questionable"
+	IndividualStatusUnknown IndividualStatus = "unknown"
 )
 
 // OrderStatusEnum represents the order_status_enum database enum
