@@ -195,6 +195,10 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID in
 			return fmt.Errorf("unexpected stat type after mapping: %s", statType)
 		}
 
+		if !shouldPersistPlayStatisticForUpsert(playStatistic) {
+			continue
+		}
+
 		stats = append(stats, playStatistic)
 	}
 

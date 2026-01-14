@@ -1,6 +1,12 @@
 package nfl
 
-import fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
+import (
+	"reflect"
+
+	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
+	"github.com/shopspring/decimal"
+)
 
 // Exclusion rules for filtering data during persistence.
 // These exclusions prevent data from being written to the database.
@@ -47,4 +53,24 @@ func shouldPersistPlayStatistic(stat *fetcher_nfl.Statistic) bool {
 	}
 
 	return true
+}
+
+// shouldPersistPlayStatisticForUpsert determines whether a parsed play statistic should be persisted.
+// Returns false if all decimal.Decimal fields are zero (no meaningful data to persist).
+// Uses reflection to automatically include any new decimal fields added in the future.
+func shouldPersistPlayStatisticForUpsert(stat *store_nfl.PlayStatisticForUpsert) bool {
+	v := reflect.ValueOf(*stat)
+	decimalType := reflect.TypeOf(decimal.Decimal{})
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Type() == decimalType {
+			d := field.Interface().(decimal.Decimal)
+			if !d.IsZero() {
+				return true
+			}
+		}
+	}
+
+	return false
 }
