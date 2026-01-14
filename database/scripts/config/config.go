@@ -20,7 +20,7 @@ const (
 // BaseConfig holds common configuration shared across all scripts
 type BaseConfig struct {
 	// API Configuration
-	SportradarAPIKey   string
+	SportradarAPIKey      string
 	SportradarAccessLevel sportradar.AccessLevel
 
 	// Rate Limiting Configuration
@@ -63,6 +63,19 @@ type BoxScoreConfig struct {
 	// Game Configuration
 	NFLGameID int // Database game ID (not vendor UUID)
 	NBAGameID int // Database game ID (not vendor UUID)
+}
+
+// BatchUpdateConfig holds configuration for the batch update script
+type BatchUpdateConfig struct {
+	BaseConfig
+
+	// NFL Date Range (inclusive)
+	NFLGameDateStartInclusive time.Time
+	NFLGameDateEndInclusive   time.Time
+
+	// NBA Date Range (inclusive)
+	NBAGameDateStartInclusive time.Time
+	NBAGameDateEndInclusive   time.Time
 }
 
 // loadBaseConfig reads common configuration from environment variables
@@ -304,4 +317,99 @@ func (c *BoxScoreConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// LoadBatchUpdateConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadBatchUpdateConfigFromFile(envFile string) (*BatchUpdateConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadBatchUpdateConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadBatchUpdateConfig reads batch update configuration from environment variables
+// Required fields: SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+// At least one date range must be set (NFL or NBA)
+// Date format: YYYY-MM-DD
+//
+// This does not load any .env files - use LoadBatchUpdateConfigFromFile for that
+func LoadBatchUpdateConfig() *BatchUpdateConfig {
+	return &BatchUpdateConfig{
+		BaseConfig:                loadBaseConfig(),
+		NFLGameDateStartInclusive: parseDate(os.Getenv("NFL_GAME_DATE_START_INCLUSIVE")),
+		NFLGameDateEndInclusive:   parseDate(os.Getenv("NFL_GAME_DATE_END_INCLUSIVE")),
+		NBAGameDateStartInclusive: parseDate(os.Getenv("NBA_GAME_DATE_START_INCLUSIVE")),
+		NBAGameDateEndInclusive:   parseDate(os.Getenv("NBA_GAME_DATE_END_INCLUSIVE")),
+	}
+}
+
+// parseDate parses a date string in YYYY-MM-DD format, returns zero time if empty or invalid
+func parseDate(dateStr string) time.Time {
+	if dateStr == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// Validate checks that all required batch update configuration fields are set
+func (c *BatchUpdateConfig) Validate() error {
+	// Validate base config first
+	if err := c.BaseConfig.Validate(); err != nil {
+		return err
+	}
+
+	// At least one complete date range must be set
+	nflRangeSet := !c.NFLGameDateStartInclusive.IsZero() && !c.NFLGameDateEndInclusive.IsZero()
+	nbaRangeSet := !c.NBAGameDateStartInclusive.IsZero() && !c.NBAGameDateEndInclusive.IsZero()
+
+	if !nflRangeSet && !nbaRangeSet {
+		return fmt.Errorf("at least one complete date range must be set: NFL_GAME_DATE_START_INCLUSIVE/NFL_GAME_DATE_END_INCLUSIVE or NBA_GAME_DATE_START_INCLUSIVE/NBA_GAME_DATE_END_INCLUSIVE")
+	}
+
+	// Validate partial NFL range
+	if (!c.NFLGameDateStartInclusive.IsZero() && c.NFLGameDateEndInclusive.IsZero()) ||
+		(c.NFLGameDateStartInclusive.IsZero() && !c.NFLGameDateEndInclusive.IsZero()) {
+		return fmt.Errorf("NFL date range incomplete: both NFL_GAME_DATE_START_INCLUSIVE and NFL_GAME_DATE_END_INCLUSIVE must be set together")
+	}
+
+	// Validate partial NBA range
+	if (!c.NBAGameDateStartInclusive.IsZero() && c.NBAGameDateEndInclusive.IsZero()) ||
+		(c.NBAGameDateStartInclusive.IsZero() && !c.NBAGameDateEndInclusive.IsZero()) {
+		return fmt.Errorf("NBA date range incomplete: both NBA_GAME_DATE_START_INCLUSIVE and NBA_GAME_DATE_END_INCLUSIVE must be set together")
+	}
+
+	// Validate date order
+	if nflRangeSet && c.NFLGameDateStartInclusive.After(c.NFLGameDateEndInclusive) {
+		return fmt.Errorf("NFL_GAME_DATE_START_INCLUSIVE must be before or equal to NFL_GAME_DATE_END_INCLUSIVE")
+	}
+	if nbaRangeSet && c.NBAGameDateStartInclusive.After(c.NBAGameDateEndInclusive) {
+		return fmt.Errorf("NBA_GAME_DATE_START_INCLUSIVE must be before or equal to NBA_GAME_DATE_END_INCLUSIVE")
+	}
+
+	return nil
+}
+
+// HasNFLDateRange returns true if a complete NFL date range is configured
+func (c *BatchUpdateConfig) HasNFLDateRange() bool {
+	return !c.NFLGameDateStartInclusive.IsZero() && !c.NFLGameDateEndInclusive.IsZero()
+}
+
+// HasNBADateRange returns true if a complete NBA date range is configured
+func (c *BatchUpdateConfig) HasNBADateRange() bool {
+	return !c.NBAGameDateStartInclusive.IsZero() && !c.NBAGameDateEndInclusive.IsZero()
 }

@@ -143,3 +143,51 @@ func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID int) (*models.G
 
 	return &game, nil
 }
+
+// GetGamesByLeagueAndDateRange retrieves games for a league within a date range (inclusive).
+// Returns games ordered by scheduled_start_time ascending.
+func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName string, startDate, endDate time.Time) ([]*models.Game, error) {
+	query := `
+		SELECT g.id, g.contender_id_a, g.contender_id_b, g.vendor_id, g.scheduled_start_time
+		FROM games g
+		JOIN teams t ON g.contender_id_a = t.id
+		JOIN divisions d ON t.division_id = d.id
+		JOIN conferences c ON d.conference_id = c.id
+		JOIN leagues l ON c.league_id = l.id
+		WHERE l.name = $1
+		  AND g.scheduled_start_time >= $2
+		  AND g.scheduled_start_time < $3
+		ORDER BY g.scheduled_start_time ASC
+	`
+
+	// Add one day to end date to make it inclusive (query uses < for end)
+	endDateExclusive := endDate.AddDate(0, 0, 1)
+
+	rows, err := s.pool.Query(ctx, query, leagueName, startDate, endDateExclusive)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query games for league %s: %w", leagueName, err)
+	}
+	defer rows.Close()
+
+	var games []*models.Game
+	for rows.Next() {
+		var game models.Game
+		err := rows.Scan(
+			&game.ID,
+			&game.ContenderIDA,
+			&game.ContenderIDB,
+			&game.VendorID,
+			&game.ScheduledStartTime,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan game row: %w", err)
+		}
+		games = append(games, &game)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating game rows: %w", err)
+	}
+
+	return games, nil
+}
