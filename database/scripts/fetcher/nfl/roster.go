@@ -19,6 +19,7 @@ type NFLTeamRosterResponse struct {
 		ID          string      `json:"id"`
 		FirstName   string      `json:"first_name"`
 		LastName    string      `json:"last_name"`
+		NameSuffix  string      `json:"name_suffix"`
 		Position    string      `json:"position"`
 		JerseyNum   string      `json:"jersey"`
 		Height      interface{} `json:"height"` // Can be int or float
@@ -63,9 +64,15 @@ func FetchNFLTeamRoster(apiClient *sportradar.Client, dataStore *fetcher.Referen
 			abbreviatedName = fmt.Sprintf("%c.%s", playerData.FirstName[0], playerData.LastName)
 		}
 
+		// Create display name with suffix if present
+		displayName := fmt.Sprintf("%s %s", playerData.FirstName, playerData.LastName)
+		if playerData.NameSuffix != "" {
+			displayName = fmt.Sprintf("%s %s", displayName, playerData.NameSuffix)
+		}
+
 		individual := &fetcher.Individual{
 			VendorID:        playerData.ID,
-			DisplayName:     fmt.Sprintf("%s %s", playerData.FirstName, playerData.LastName),
+			DisplayName:     displayName,
 			AbbreviatedName: abbreviatedName,
 			DateOfBirth:     dateOfBirth,
 			Position:        playerData.Position,
