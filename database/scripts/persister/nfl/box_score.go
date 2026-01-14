@@ -29,7 +29,6 @@ type playerStatsAccumulator struct {
 	PassingCompletions  decimal.Decimal
 	ReceivingReceptions decimal.Decimal
 	InterceptionsCaught decimal.Decimal
-	FumblesForced       decimal.Decimal
 	FumblesCommitted         decimal.Decimal
 	SacksMade           decimal.Decimal
 	SackAssistsMade     decimal.Decimal
@@ -60,7 +59,6 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 		PassingCompletions:  zero,
 		ReceivingReceptions: zero,
 		InterceptionsCaught: zero,
-		FumblesForced:       zero,
 		FumblesCommitted:         zero,
 		SacksMade:           zero,
 		SackAssistsMade:     zero,
@@ -115,7 +113,6 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		acc.PassingCompletions = acc.PassingCompletions.Add(stat.PassingCompletions)
 		acc.ReceivingReceptions = acc.ReceivingReceptions.Add(stat.ReceivingReceptions)
 		acc.InterceptionsCaught = acc.InterceptionsCaught.Add(stat.InterceptionsCaught)
-		acc.FumblesForced = acc.FumblesForced.Add(stat.FumblesForced)
 		acc.FumblesCommitted = acc.FumblesCommitted.Add(stat.FumblesCommitted)
 		acc.SacksMade = acc.SacksMade.Add(stat.SacksMade)
 		acc.SackAssistsMade = acc.SackAssistsMade.Add(stat.SackAssistsMade)
@@ -164,7 +161,6 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 			PassingCompletions:  acc.PassingCompletions,
 			ReceivingReceptions: acc.ReceivingReceptions,
 			InterceptionsCaught: acc.InterceptionsCaught,
-			FumblesForced:       acc.FumblesForced,
 			FumblesCommitted:         acc.FumblesCommitted,
 			SacksMade:           acc.SacksMade,
 			SackAssistsMade:     acc.SackAssistsMade,

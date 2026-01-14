@@ -28,7 +28,6 @@ type NFLBoxScoreForUpsert struct {
 	PassingCompletions   decimal.Decimal
 	ReceivingReceptions  decimal.Decimal
 	InterceptionsCaught  decimal.Decimal
-	FumblesForced        decimal.Decimal
 	FumblesCommitted          decimal.Decimal
 	SacksMade            decimal.Decimal
 	SackAssistsMade      decimal.Decimal
@@ -59,7 +58,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 		INSERT INTO nfl_box_scores (
 			game_id, individual_id,
 			passing_completions, receiving_receptions,
-			interceptions_caught, fumbles_forced, fumbles_committed,
+			interceptions_caught, fumbles_committed,
 			sacks_made, sack_assists_made, tackles_made, tackle_assists_made,
 			field_goal_attempts, field_goal_makes,
 			extra_point_attempts, extra_point_makes,
@@ -70,7 +69,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
 			NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
@@ -78,7 +77,6 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			passing_completions = EXCLUDED.passing_completions,
 			receiving_receptions = EXCLUDED.receiving_receptions,
 			interceptions_caught = EXCLUDED.interceptions_caught,
-			fumbles_forced = EXCLUDED.fumbles_forced,
 			fumbles_committed = EXCLUDED.fumbles_committed,
 			sacks_made = EXCLUDED.sacks_made,
 			sack_assists_made = EXCLUDED.sack_assists_made,
@@ -108,7 +106,6 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 		boxScore.PassingCompletions,
 		boxScore.ReceivingReceptions,
 		boxScore.InterceptionsCaught,
-		boxScore.FumblesForced,
 		boxScore.FumblesCommitted,
 		boxScore.SacksMade,
 		boxScore.SackAssistsMade,
@@ -146,7 +143,7 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 		SELECT
 			bs.id, bs.game_id, bs.individual_id,
 			bs.passing_completions, bs.receiving_receptions,
-			bs.interceptions_caught, bs.fumbles_forced, bs.fumbles_committed,
+			bs.interceptions_caught, bs.fumbles_committed,
 			bs.sacks_made, bs.sack_assists_made, bs.tackles_made, bs.tackle_assists_made,
 			bs.field_goal_attempts, bs.field_goal_makes,
 			bs.extra_point_attempts, bs.extra_point_makes,
@@ -180,7 +177,6 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			&stats.PassingCompletions,
 			&stats.ReceivingReceptions,
 			&stats.InterceptionsCaught,
-			&stats.FumblesForced,
 			&stats.FumblesCommitted,
 			&stats.SacksMade,
 			&stats.SackAssistsMade,

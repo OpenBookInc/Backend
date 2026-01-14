@@ -75,7 +75,6 @@ type PlayStatistic struct {
 	ReceivingReceptions decimal.Decimal // Receptions
 	InterceptionsThrown decimal.Decimal // Interceptions thrown (QB stat)
 	InterceptionsCaught decimal.Decimal // Interceptions caught (defensive stat)
-	FumblesForced       decimal.Decimal // Fumbles forced (defensive stat)
 	FumblesCommitted    decimal.Decimal // Fumbles committed (offensive stat)
 	SacksTaken          decimal.Decimal // Sacks taken (QB stat)
 	SacksMade           decimal.Decimal // Sacks made (defensive stat, can be 0.5 for split credit)
