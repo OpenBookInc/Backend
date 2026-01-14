@@ -267,9 +267,8 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			playStatistic.ReceivingTouchdowns = decimal.NewFromFloat(stat.Touchdown)
 		case "defense":
 			playStatistic.SacksMade = decimal.NewFromFloat(stat.Sack)
-			// TacklesMade and TackleAssistsMade already set above
-		case "interception":
 			playStatistic.InterceptionsCaught = decimal.NewFromFloat(stat.Interception)
+			// TacklesMade and TackleAssistsMade already set above
 		case "fumble":
 			playStatistic.FumblesCommitted = decimal.NewFromFloat(stat.Fumble)
 		case "field_goal":

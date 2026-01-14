@@ -37,8 +37,6 @@ func MapStatTypeToDB(apiStatType string) (string, error) {
 		return "defense", nil
 	case "fumble":
 		return "fumble", nil
-	case "interception":
-		return "interception", nil
 	case "field_goal":
 		return "field_goal", nil
 	case "extra_point":
