@@ -683,9 +683,9 @@ func (wc *WebClient) handleClientOrderId(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(map[string]uint64{"clientOrderId": currentId})
 }
 
-// Entry Pools handler - displays all pool states
+// Entry Pools handler - redirects to main page
 func (wc *WebClient) handleEntryPools(w http.ResponseWriter, r *http.Request) {
-	renderEntryPoolsPage(w)
+	http.Redirect(w, r, "/trade", http.StatusSeeOther)
 }
 
 // Get entry pools data as JSON
@@ -698,7 +698,7 @@ func (wc *WebClient) handleEntryPoolsData(w http.ResponseWriter, r *http.Request
 
 // Trade page handler - displays unified send/receive interface
 func (wc *WebClient) handleTrade(w http.ResponseWriter, r *http.Request) {
-	renderTradePage(w)
+	renderMainPage(w)
 }
 
 func splitAndTrim(s, sep string) []string {
@@ -740,15 +740,16 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
-func renderEntryPoolsPage(w http.ResponseWriter) {
+func renderMainPage(w http.ResponseWriter) {
 	tmpl := `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Matching Engine Tester - Entry Pools</title>
+    <title>Matching Engine Tester</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: #f5f5f5; }
+        .header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .header h1 { margin: 0; font-size: 24px; }
         .header-right { display: flex; align-items: center; gap: 10px; }
         .target-selector { display: flex; align-items: center; gap: 8px; }
@@ -757,22 +758,68 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
         .target-indicator { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }
         .target-matching { background: #e74c3c; }
         .target-gateway { background: #3498db; }
-        .nav { background: #444; padding: 10px 20px; }
-        .nav a { margin-right: 15px; padding: 5px 15px; text-decoration: none; background: #007bff; color: white; border-radius: 3px; display: inline-block; }
-        .nav a:hover { background: #0056b3; }
-        .container { padding: 20px; }
-        .pool-card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .pool-header { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #333; }
-        .pool-info { font-size: 14px; color: #666; margin-bottom: 15px; }
-        .lineups-container { display: flex; gap: 15px; overflow-x: auto; }
-        .lineup-column { flex: 0 0 200px; background: #f8f9fa; border-radius: 4px; padding: 10px; }
-        .lineup-header { font-weight: bold; margin-bottom: 5px; font-size: 14px; }
-        .lineup-subheader { font-size: 11px; color: #666; margin-bottom: 10px; }
-        .orders-stack { position: relative; height: 300px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
+        
+        /* Main layout - two columns */
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .left-panel { flex: 1; display: flex; flex-direction: column; border-right: 3px solid #ddd; overflow-y: auto; background: #fff; }
+        .right-panel { flex: 1; overflow-y: auto; padding: 20px; background: #f5f5f5; }
+        
+        /* Trade panel styles */
+        .form-panel { padding: 20px; border-bottom: 2px solid #ddd; background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        .form-group > label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 3px; }
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; margin-right: 10px; }
+        button:hover { background: #218838; }
+        .status-message { padding: 10px; margin: 10px 0; border-radius: 3px; display: inline-block; }
+        .status-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .status-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        
+        /* Request/Response columns */
+        .messages-container { display: flex; flex: 1; overflow: hidden; }
+        .messages-column { flex: 1; padding: 15px; overflow-y: auto; }
+        .messages-column h3 { margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px; font-size: 16px; }
+        .messages-column:first-child { border-right: 1px solid #ddd; }
+        .message-box { background: #f8f9fa; padding: 10px; margin-bottom: 8px; border-radius: 3px; border: 1px solid #ddd; }
+        pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-size: 11px; }
+        
+        /* Form field toggles */
+        .message-type-selector { margin-bottom: 15px; }
+        .message-type-selector label { display: inline; margin-right: 20px; font-weight: normal; }
+        .message-type-selector input[type="radio"] { margin-right: 5px; }
+        .form-fields { display: none; }
+        .form-fields.active { display: block; }
+        
+        /* Leg styles */
+        .leg-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+        .leg-item label { margin: 0; font-weight: normal; }
+        .leg-id-input { width: 80px; }
+        .over-under-toggle { display: flex; gap: 0; }
+        .over-under-toggle button { padding: 6px 12px; border: 1px solid #aaa; background: #d0d0d0; color: #333; cursor: pointer; transition: all 0.2s; }
+        .over-under-toggle button:first-child { border-radius: 4px 0 0 4px; border-right: none; }
+        .over-under-toggle button:last-child { border-radius: 0 4px 4px 0; }
+        .over-under-toggle button.active { background: #007bff; color: white; border-color: #007bff; }
+        .over-under-toggle button:hover:not(.active) { background: #bbb; }
+        .remove-leg-btn { padding: 6px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .remove-leg-btn:hover { background: #c82333; }
+        .add-leg-btn { padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; }
+        .add-leg-btn:hover { background: #5a6268; }
+        
+        /* Entry Pools styles */
+        .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #007bff; }
+        .pool-card { background: white; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pool-header { font-size: 14px; font-weight: bold; margin-bottom: 4px; color: #333; }
+        .pool-info { font-size: 12px; color: #666; margin-bottom: 8px; }
+        .lineups-container { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 5px; scroll-behavior: smooth; }
+        .lineup-column { flex: 0 0 100px; background: #f8f9fa; border-radius: 4px; padding: 6px; }
+        .lineup-header { font-weight: bold; margin-bottom: 2px; font-size: 11px; }
+        .lineup-subheader { font-size: 9px; color: #666; margin-bottom: 6px; }
+        .orders-stack { position: relative; height: 150px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
         .order-bar { position: absolute; left: 0; right: 0; cursor: pointer; transition: opacity 0.2s; }
         .order-bar:hover { opacity: 0.8; }
-        .tooltip { position: absolute; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 1000; display: none; }
-        .empty-lineup { height: 300px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; }
+        .tooltip { position: fixed; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 1000; display: none; }
+        .empty-lineup { height: 150px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 11px; }
+        .empty-pools { color: #999; font-style: italic; }
     </style>
 </head>
 <body>
@@ -786,20 +833,344 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
                     <option value="gateway">Gateway (:50052)</option>
                 </select>
             </div>
-            <span id="targetIndicator" class="target-indicator target-matching">Matching Engine</span>
+            <span id="targetIndicator" class="target-indicator target-matching">MATCHING</span>
         </div>
     </div>
-    <div class="nav">
-        <a href="/entrypools">Entry Pools</a>
-        <a href="/trade">Trade</a>
-    </div>
-    <div class="container" id="poolsContainer">
-        <p>Loading pools...</p>
-    </div>
+    
+    <div class="main-container">
+        <!-- Left Panel: Trade -->
+        <div class="left-panel">
+            <div class="form-panel">
+                <h2 style="margin-top: 0; margin-bottom: 15px;">Send Order</h2>
+                <form id="mainForm">
+                    <div class="message-type-selector">
+                        <label><input type="radio" name="messageType" value="NewOrder" checked> New Order</label>
+                        <label><input type="radio" name="messageType" value="CancelOrder"> Cancel Order</label>
+                    </div>
 
+                    <div class="form-group">
+                        <label>Sequence Number:</label>
+                        <input type="number" name="sequenceNumber" value="0" required>
+                    </div>
+
+                    <!-- New Order Fields -->
+                    <div id="newOrderFields" class="form-fields active">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                            <div class="form-group">
+                                <label>Client Order ID:</label>
+                                <input type="number" name="clientOrderId" value="1001">
+                            </div>
+                            <div class="form-group">
+                                <label>Order Type:</label>
+                                <select name="orderType">
+                                    <option value="LIMIT">LIMIT</option>
+                                    <option value="MARKET">MARKET</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Portion:</label>
+                                <input type="number" name="portion" value="250000">
+                            </div>
+                            <div class="form-group">
+                                <label>Quantity:</label>
+                                <input type="number" name="quantity" value="5">
+                            </div>
+                            <div class="form-group">
+                                <label>Self Match ID (optional):</label>
+                                <input type="number" name="selfMatchId" placeholder="Optional">
+                            </div>
+                        </div>
+                        
+                        <!-- Legs Section -->
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label>Legs:</label>
+                            <div id="legsContainer"></div>
+                            <button type="button" id="addLegBtn" class="add-leg-btn">+ Add Leg</button>
+                        </div>
+                        
+                        <!-- Hidden inputs for form submission -->
+                        <input type="hidden" name="legSecurityIds" id="legSecurityIdsHidden">
+                        <input type="hidden" name="isOvers" id="isOversHidden">
+                    </div>
+
+                    <!-- Cancel Order Fields -->
+                    <div id="cancelOrderFields" class="form-fields">
+                        <div class="form-group">
+                            <label>Order ID:</label>
+                            <input type="number" name="orderId" style="width: 150px;">
+                        </div>
+                    </div>
+
+                    <button type="submit">Send Message</button>
+                    <div id="statusMessage" style="display: inline;"></div>
+                </form>
+            </div>
+            
+            <!-- Requests and Responses -->
+            <div class="messages-container">
+                <div class="messages-column">
+                    <h3>Requests</h3>
+                    <div id="requestList">
+                        <p class="empty-pools">No requests yet.</p>
+                    </div>
+                </div>
+                <div class="messages-column">
+                    <h3>Responses</h3>
+                    <div id="responseList">
+                        <p class="empty-pools">No responses yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Entry Pools -->
+        <div class="right-panel">
+            <div class="section-title">Entry Pools</div>
+            <div id="poolsContainer">
+                <p class="empty-pools">No pools yet. Submit orders to create entry pools.</p>
+            </div>
+        </div>
+    </div>
+    
     <div id="tooltip" class="tooltip"></div>
 
     <script>
+        // ============ DOM Elements ============
+        const form = document.getElementById('mainForm');
+        const statusMessage = document.getElementById('statusMessage');
+        const requestList = document.getElementById('requestList');
+        const responseList = document.getElementById('responseList');
+        const newOrderFields = document.getElementById('newOrderFields');
+        const cancelOrderFields = document.getElementById('cancelOrderFields');
+        const messageTypeRadios = document.querySelectorAll('input[name="messageType"]');
+        const poolsContainer = document.getElementById('poolsContainer');
+
+        // ============ Leg Management ============
+        const legsContainer = document.getElementById('legsContainer');
+        const addLegBtn = document.getElementById('addLegBtn');
+        const legSecurityIdsHidden = document.getElementById('legSecurityIdsHidden');
+        const isOversHidden = document.getElementById('isOversHidden');
+        
+        let legs = [
+            { id: 101, isOver: false },
+            { id: 102, isOver: true }
+        ];
+        
+        function getNextLegId() {
+            if (legs.length === 0) return 101;
+            return Math.max(...legs.map(l => l.id)) + 1;
+        }
+        
+        function renderLegs() {
+            legsContainer.innerHTML = '';
+            legs.forEach((leg, index) => {
+                const legItem = document.createElement('div');
+                legItem.className = 'leg-item';
+                legItem.innerHTML = 
+                    '<label>Leg ID:</label>' +
+                    '<input type="number" class="leg-id-input" value="' + leg.id + '" data-index="' + index + '">' +
+                    '<div class="over-under-toggle">' +
+                        '<button type="button" class="over-btn ' + (!leg.isOver ? 'active' : '') + '" data-index="' + index + '">Under</button>' +
+                        '<button type="button" class="under-btn ' + (leg.isOver ? 'active' : '') + '" data-index="' + index + '">Over</button>' +
+                    '</div>' +
+                    '<button type="button" class="remove-leg-btn" data-index="' + index + '">✕</button>';
+                legsContainer.appendChild(legItem);
+            });
+            updateHiddenInputs();
+            attachLegEventListeners();
+        }
+        
+        function updateHiddenInputs() {
+            legSecurityIdsHidden.value = legs.map(l => l.id).join(',');
+            isOversHidden.value = legs.map(l => l.isOver.toString()).join(',');
+        }
+        
+        function attachLegEventListeners() {
+            document.querySelectorAll('.leg-id-input').forEach(input => {
+                input.addEventListener('change', function() {
+                    const index = parseInt(this.dataset.index);
+                    legs[index].id = parseInt(this.value) || 0;
+                    updateHiddenInputs();
+                });
+            });
+            
+            document.querySelectorAll('.under-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    legs[index].isOver = true;
+                    renderLegs();
+                });
+            });
+            
+            document.querySelectorAll('.over-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    legs[index].isOver = false;
+                    renderLegs();
+                });
+            });
+            
+            document.querySelectorAll('.remove-leg-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.dataset.index);
+                    legs.splice(index, 1);
+                    renderLegs();
+                });
+            });
+        }
+        
+        addLegBtn.addEventListener('click', function() {
+            legs.push({ id: getNextLegId(), isOver: false });
+            renderLegs();
+        });
+        
+        renderLegs();
+
+        // ============ Form Type Toggle ============
+        messageTypeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'NewOrder') {
+                    newOrderFields.classList.add('active');
+                    cancelOrderFields.classList.remove('active');
+                } else {
+                    newOrderFields.classList.remove('active');
+                    cancelOrderFields.classList.add('active');
+                }
+            });
+        });
+
+        // ============ Sequence Number ============
+        async function incrementSequenceNumber() {
+            const seqInput = form.querySelector('[name="sequenceNumber"]');
+            if (seqInput) {
+                try {
+                    const response = await fetch('/sequence-number', { method: 'POST' });
+                    const data = await response.json();
+                    seqInput.value = data.sequenceNumber;
+                } catch (err) {
+                    console.error('Error incrementing sequence number:', err);
+                }
+            }
+        }
+
+        async function syncSequenceNumberToServer() {
+            const seqInput = form.querySelector('[name="sequenceNumber"]');
+            if (seqInput) {
+                const manualValue = parseInt(seqInput.value, 10);
+                if (!isNaN(manualValue)) {
+                    try {
+                        await fetch('/sequence-number', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'sequenceNumber=' + manualValue
+                        });
+                    } catch (err) {
+                        console.error('Error setting sequence number:', err);
+                    }
+                }
+            }
+        }
+
+        async function loadInitialSequenceNumber() {
+            const seqInput = form.querySelector('[name="sequenceNumber"]');
+            if (seqInput) {
+                try {
+                    const response = await fetch('/sequence-number');
+                    const data = await response.json();
+                    seqInput.value = data.sequenceNumber;
+                } catch (err) {
+                    console.error('Error fetching sequence number:', err);
+                }
+            }
+        }
+
+        // ============ Client Order ID ============
+        async function incrementClientOrderId() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                try {
+                    const response = await fetch('/client-order-id', { method: 'POST' });
+                    const data = await response.json();
+                    clientOrderIdInput.value = data.clientOrderId;
+                } catch (err) {
+                    console.error('Error incrementing client order ID:', err);
+                }
+            }
+        }
+
+        async function syncClientOrderIdToServer() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                const manualValue = parseInt(clientOrderIdInput.value, 10);
+                if (!isNaN(manualValue)) {
+                    try {
+                        await fetch('/client-order-id', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'clientOrderId=' + manualValue
+                        });
+                    } catch (err) {
+                        console.error('Error setting client order ID:', err);
+                    }
+                }
+            }
+        }
+
+        async function loadInitialClientOrderId() {
+            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+            if (clientOrderIdInput) {
+                try {
+                    const response = await fetch('/client-order-id');
+                    const data = await response.json();
+                    clientOrderIdInput.value = data.clientOrderId;
+                } catch (err) {
+                    console.error('Error fetching client order ID:', err);
+                }
+            }
+        }
+
+        loadInitialSequenceNumber();
+        loadInitialClientOrderId();
+
+        const seqInput = form.querySelector('[name="sequenceNumber"]');
+        if (seqInput) seqInput.addEventListener('change', syncSequenceNumberToServer);
+        
+        const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
+        if (clientOrderIdInput) clientOrderIdInput.addEventListener('change', syncClientOrderIdToServer);
+
+        // ============ Form Submission ============
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const urlEncoded = new URLSearchParams(formData);
+            const messageType = formData.get('messageType');
+
+            try {
+                const response = await fetch('/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: urlEncoded
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    statusMessage.innerHTML = '<span class="status-message status-success">' + data.message + '</span>';
+                    await incrementSequenceNumber();
+                    if (messageType === 'NewOrder') {
+                        await incrementClientOrderId();
+                    }
+                } else {
+                    statusMessage.innerHTML = '<span class="status-message status-error">Error: ' + data.message + '</span>';
+                }
+
+                setTimeout(() => { statusMessage.innerHTML = ''; }, 3000);
+            } catch (err) {
+                statusMessage.innerHTML = '<span class="status-message status-error">Network error: ' + err.message + '</span>';
+            }
+        });
+
+        // ============ Entry Pools ============
         const colors = [
             '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
             '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#AAB7B8',
@@ -809,6 +1180,7 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 
         let colorIndex = 0;
         const orderColors = new Map();
+        let lastPoolsJson = '';
 
         function getOrderColor(orderId) {
             if (!orderColors.has(orderId)) {
@@ -822,13 +1194,23 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
             return n.toLocaleString();
         }
 
-        function renderPools(pools) {
-            const container = document.getElementById('poolsContainer');
+        function renderPools(pools, forceRender = false) {
+            const currentJson = JSON.stringify(pools);
+            if (!forceRender && currentJson === lastPoolsJson) {
+                return; // No changes, skip re-render to preserve scroll
+            }
+            lastPoolsJson = currentJson;
 
             if (!pools || pools.length === 0) {
-                container.innerHTML = '<p style="color: #999;">No pools yet. Submit orders to create entry pools.</p>';
+                poolsContainer.innerHTML = '<p class="empty-pools">No pools yet. Submit orders to create entry pools.</p>';
                 return;
             }
+
+            // Save scroll positions
+            const scrollPositions = {};
+            document.querySelectorAll('.lineups-container').forEach((container, idx) => {
+                scrollPositions[idx] = container.scrollLeft;
+            });
 
             let html = '';
             for (const pool of pools) {
@@ -839,31 +1221,34 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 
                 for (const lineup of pool.Lineups) {
                     html += '<div class="lineup-column">';
-                    html += '<div class="lineup-header">Lineup ' + lineup.LineupIndex + '</div>';
+                    html += '<div class="lineup-header">' + lineup.LineupIndex + '</div>';
 
-                    // Show over/under combination
                     let ouStr = lineup.OverUnders.map(ou =>
-                        ou.LegSecurityID + '=' + (ou.IsOver ? 'O' : 'U')
-                    ).join(', ');
+                        (ou.IsOver ? 'O' : 'U')
+                    ).join('');
                     html += '<div class="lineup-subheader">[' + ouStr + ']</div>';
 
                     if (!lineup.Orders || lineup.Orders.length === 0) {
-                        html += '<div class="empty-lineup">No orders</div>';
+                        html += '<div class="empty-lineup">Empty</div>';
                     } else {
-                        html += '<div class="orders-stack" id="lineup-' + pool.PoolKey + '-' + lineup.LineupIndex + '">';
-                        html += '</div>';
+                        html += '<div class="orders-stack" id="lineup-' + pool.PoolKey + '-' + lineup.LineupIndex + '"></div>';
                     }
 
                     html += '</div>';
                 }
 
-                html += '</div>';
-                html += '</div>';
+                html += '</div></div>';
             }
 
-            container.innerHTML = html;
+            poolsContainer.innerHTML = html;
 
-            // Render order bars
+            // Restore scroll positions
+            document.querySelectorAll('.lineups-container').forEach((container, idx) => {
+                if (scrollPositions[idx] !== undefined) {
+                    container.scrollLeft = scrollPositions[idx];
+                }
+            });
+
             for (const pool of pools) {
                 for (const lineup of pool.Lineups) {
                     if (lineup.Orders && lineup.Orders.length > 0) {
@@ -877,13 +1262,11 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
             const container = document.getElementById('lineup-' + poolKey + '-' + lineupIndex);
             if (!container) return;
 
-            const height = 300;
+            const height = 150;
             const totalQuantity = orders.reduce((sum, o) => sum + o.RemainingQuantity, 0);
 
             let currentBottom = 0;
 
-            // Orders are already sorted by portion (high to low), then FIFO
-            // Render from bottom to top (highest portion at top)
             for (let i = orders.length - 1; i >= 0; i--) {
                 const order = orders[i];
                 const barHeight = totalQuantity > 0 ? (order.RemainingQuantity / totalQuantity) * height : 0;
@@ -894,15 +1277,9 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
                 div.style.height = Math.max(barHeight, 2) + 'px';
                 div.style.backgroundColor = getOrderColor(order.OrderID);
 
-                div.addEventListener('mouseenter', function(e) {
-                    showTooltip(e, order);
-                });
-                div.addEventListener('mousemove', function(e) {
-                    updateTooltipPosition(e);
-                });
-                div.addEventListener('mouseleave', function() {
-                    hideTooltip();
-                });
+                div.addEventListener('mouseenter', (e) => showTooltip(e, order));
+                div.addEventListener('mousemove', updateTooltipPosition);
+                div.addEventListener('mouseleave', hideTooltip);
 
                 container.appendChild(div);
                 currentBottom += barHeight;
@@ -923,13 +1300,12 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
 
         function updateTooltipPosition(e) {
             const tooltip = document.getElementById('tooltip');
-            tooltip.style.left = (e.pageX + 10) + 'px';
-            tooltip.style.top = (e.pageY + 10) + 'px';
+            tooltip.style.left = (e.clientX + 10) + 'px';
+            tooltip.style.top = (e.clientY + 10) + 'px';
         }
 
         function hideTooltip() {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.style.display = 'none';
+            document.getElementById('tooltip').style.display = 'none';
         }
 
         async function fetchPools() {
@@ -942,16 +1318,16 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
             }
         }
 
-        // Target mode handling
+        // ============ Target Mode ============
         const targetModeSelect = document.getElementById('targetModeSelect');
         const targetIndicator = document.getElementById('targetIndicator');
 
         function updateTargetIndicator(mode) {
             if (mode === 'gateway') {
-                targetIndicator.textContent = 'Gateway';
+                targetIndicator.textContent = 'GATEWAY';
                 targetIndicator.className = 'target-indicator target-gateway';
             } else {
-                targetIndicator.textContent = 'Matching Engine';
+                targetIndicator.textContent = 'RUST';
                 targetIndicator.className = 'target-indicator target-matching';
             }
         }
@@ -972,9 +1348,7 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
             try {
                 const response = await fetch('/target-mode', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: 'targetMode=' + newMode
                 });
                 const data = await response.json();
@@ -983,407 +1357,10 @@ func renderEntryPoolsPage(w http.ResponseWriter) {
                     loadTargetMode();
                 } else {
                     updateTargetIndicator(newMode);
-                    // Reset color assignments since pool state was cleared
+                    requestList.innerHTML = '<p class="empty-pools">No requests yet.</p>';
+                    responseList.innerHTML = '<p class="empty-pools">No responses yet.</p>';
                     orderColors.clear();
                     colorIndex = 0;
-                }
-            } catch (err) {
-                console.error('Error switching target:', err);
-                alert('Network error switching target');
-                loadTargetMode();
-            }
-        });
-
-        // Load target mode on page load
-        loadTargetMode();
-
-        // Initial fetch
-        fetchPools();
-
-        // Auto-refresh every 500ms
-        setInterval(fetchPools, 500);
-    </script>
-</body>
-</html>
-`
-
-	t, err := template.New("entrypools").Parse(tmpl)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	t.Execute(w, nil)
-}
-
-func renderTradePage(w http.ResponseWriter) {
-	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Matching Engine Tester - Trade</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .header-right { display: flex; align-items: center; gap: 10px; }
-        .target-selector { display: flex; align-items: center; gap: 8px; }
-        .target-selector label { font-size: 14px; }
-        .target-selector select { padding: 5px 10px; border-radius: 3px; border: none; }
-        .target-indicator { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }
-        .target-matching { background: #e74c3c; }
-        .target-gateway { background: #3498db; }
-        .nav { background: #444; padding: 10px 20px; }
-        .nav a { margin-right: 15px; padding: 5px 15px; text-decoration: none; background: #007bff; color: white; border-radius: 3px; display: inline-block; }
-        .nav a:hover { background: #0056b3; }
-        .form-panel { padding: 20px; border-bottom: 2px solid #ddd; background: #f8f9fa; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 3px; }
-        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; margin-right: 10px; }
-        button:hover { background: #218838; }
-        .status-message { padding: 10px; margin: 10px 0; border-radius: 3px; display: inline-block; }
-        .status-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-        .status-error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-        .columns { display: flex; flex: 1; overflow: hidden; }
-        .column { flex: 1; padding: 20px; overflow-y: auto; }
-        .column h3 { margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-        .left-column { border-right: 2px solid #ddd; }
-        .right-column { background: #f8f9fa; }
-        .message-box { background: white; padding: 15px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ddd; }
-        pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-size: 12px; }
-        .message-type-selector { margin-bottom: 15px; }
-        .message-type-selector label { display: inline; margin-right: 20px; font-weight: normal; }
-        .message-type-selector input[type="radio"] { margin-right: 5px; }
-        .form-fields { display: none; }
-        .form-fields.active { display: block; }
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Matching Engine Tester</h1>
-        <div class="header-right">
-            <div class="target-selector">
-                <label>Target:</label>
-                <select id="targetModeSelect">
-                    <option value="matching_server">Matching Server (:50051)</option>
-                    <option value="gateway">Gateway (:50052)</option>
-                </select>
-            </div>
-            <span id="targetIndicator" class="target-indicator target-matching">Matching Engine</span>
-        </div>
-    </div>
-    <div class="nav">
-        <a href="/entrypools">Entry Pools</a>
-        <a href="/trade">Trade</a>
-    </div>
-    <div class="form-panel">
-        <h2>Send Message</h2>
-        <form id="mainForm">
-            <div class="message-type-selector">
-                <label><input type="radio" name="messageType" value="NewOrder" checked> New Order</label>
-                <label><input type="radio" name="messageType" value="CancelOrder"> Cancel Order</label>
-            </div>
-
-            <div class="form-group">
-                <label>Sequence Number:</label>
-                <input type="number" name="sequenceNumber" value="0" required>
-            </div>
-
-            <!-- New Order Fields -->
-            <div id="newOrderFields" class="form-fields active">
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
-                    <div class="form-group">
-                        <label>Client Order ID:</label>
-                        <input type="number" name="clientOrderId" value="1001">
-                    </div>
-                    <div class="form-group">
-                        <label>Leg Security IDs:</label>
-                        <input type="text" name="legSecurityIds" placeholder="101,102" value="101,102">
-                    </div>
-                    <div class="form-group">
-                        <label>Is Over (true/false):</label>
-                        <input type="text" name="isOvers" placeholder="false,true" value="false,true">
-                    </div>
-                    <div class="form-group">
-                        <label>Order Type:</label>
-                        <select name="orderType">
-                            <option value="LIMIT">LIMIT</option>
-                            <option value="MARKET">MARKET</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Portion:</label>
-                        <input type="number" name="portion" value="250000">
-                    </div>
-                    <div class="form-group">
-                        <label>Quantity:</label>
-                        <input type="number" name="quantity" value="5">
-                    </div>
-                    <div class="form-group">
-                        <label>Self Match ID (optional):</label>
-                        <input type="number" name="selfMatchId" placeholder="Optional">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Cancel Order Fields -->
-            <div id="cancelOrderFields" class="form-fields">
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 600px;">
-                    <div class="form-group">
-                        <label>Order ID:</label>
-                        <input type="number" name="orderId">
-                    </div>
-                </div>
-            </div>
-
-            <button type="submit">Send Message</button>
-            <div id="statusMessage" style="display: inline;"></div>
-        </form>
-    </div>
-
-    <div class="columns">
-        <div class="column left-column">
-            <h3>Requests</h3>
-            <div id="requestList">
-                <p>No requests yet.</p>
-            </div>
-        </div>
-        <div class="column right-column">
-            <h3>Responses</h3>
-            <div id="responseList">
-                <p>No responses yet.</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const form = document.getElementById('mainForm');
-        const statusMessage = document.getElementById('statusMessage');
-        const requestList = document.getElementById('requestList');
-        const responseList = document.getElementById('responseList');
-        const newOrderFields = document.getElementById('newOrderFields');
-        const cancelOrderFields = document.getElementById('cancelOrderFields');
-        const messageTypeRadios = document.querySelectorAll('input[name="messageType"]');
-
-        // Toggle form fields based on message type
-        messageTypeRadios.forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (this.value === 'NewOrder') {
-                    newOrderFields.classList.add('active');
-                    cancelOrderFields.classList.remove('active');
-                } else {
-                    newOrderFields.classList.remove('active');
-                    cancelOrderFields.classList.add('active');
-                }
-            });
-        });
-
-        // Increment the global sequence number on the server and update the field
-        async function incrementSequenceNumber() {
-            const seqInput = form.querySelector('[name="sequenceNumber"]');
-            if (seqInput) {
-                try {
-                    const response = await fetch('/sequence-number', { method: 'POST' });
-                    const data = await response.json();
-                    seqInput.value = data.sequenceNumber;
-                } catch (err) {
-                    console.error('Error incrementing sequence number:', err);
-                }
-            }
-        }
-
-        // Sync manually typed sequence number to server
-        async function syncSequenceNumberToServer() {
-            const seqInput = form.querySelector('[name="sequenceNumber"]');
-            if (seqInput) {
-                const manualValue = parseInt(seqInput.value, 10);
-                if (!isNaN(manualValue)) {
-                    try {
-                        await fetch('/sequence-number', {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: 'sequenceNumber=' + manualValue
-                        });
-                    } catch (err) {
-                        console.error('Error setting sequence number:', err);
-                    }
-                }
-            }
-        }
-
-        // Load current sequence number from server on page load only
-        async function loadInitialSequenceNumber() {
-            const seqInput = form.querySelector('[name="sequenceNumber"]');
-            if (seqInput) {
-                try {
-                    const response = await fetch('/sequence-number');
-                    const data = await response.json();
-                    seqInput.value = data.sequenceNumber;
-                } catch (err) {
-                    console.error('Error fetching sequence number:', err);
-                }
-            }
-        }
-
-        // Increment the global client order ID on the server and update the field
-        async function incrementClientOrderId() {
-            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
-            if (clientOrderIdInput) {
-                try {
-                    const response = await fetch('/client-order-id', { method: 'POST' });
-                    const data = await response.json();
-                    clientOrderIdInput.value = data.clientOrderId;
-                } catch (err) {
-                    console.error('Error incrementing client order ID:', err);
-                }
-            }
-        }
-
-        // Sync manually typed client order ID to server
-        async function syncClientOrderIdToServer() {
-            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
-            if (clientOrderIdInput) {
-                const manualValue = parseInt(clientOrderIdInput.value, 10);
-                if (!isNaN(manualValue)) {
-                    try {
-                        await fetch('/client-order-id', {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: 'clientOrderId=' + manualValue
-                        });
-                    } catch (err) {
-                        console.error('Error setting client order ID:', err);
-                    }
-                }
-            }
-        }
-
-        // Load current client order ID from server on page load only
-        async function loadInitialClientOrderId() {
-            const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
-            if (clientOrderIdInput) {
-                try {
-                    const response = await fetch('/client-order-id');
-                    const data = await response.json();
-                    clientOrderIdInput.value = data.clientOrderId;
-                } catch (err) {
-                    console.error('Error fetching client order ID:', err);
-                }
-            }
-        }
-
-        // Load sequence number once on page load
-        loadInitialSequenceNumber();
-
-        // Load client order ID once on page load
-        loadInitialClientOrderId();
-
-        // Sync to server when user changes the value
-        const seqInput = form.querySelector('[name="sequenceNumber"]');
-        if (seqInput) {
-            seqInput.addEventListener('change', syncSequenceNumberToServer);
-        }
-
-        // Sync to server when user changes the client order ID
-        const clientOrderIdInput = form.querySelector('[name="clientOrderId"]');
-        if (clientOrderIdInput) {
-            clientOrderIdInput.addEventListener('change', syncClientOrderIdToServer);
-        }
-
-        // Handle form submission
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(form);
-            // Convert FormData to URLSearchParams for proper URL encoding
-            const urlEncoded = new URLSearchParams(formData);
-
-            const messageType = formData.get('messageType');
-
-            try {
-                const response = await fetch('/send', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: urlEncoded
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    statusMessage.innerHTML = '<span class="status-message status-success">' + data.message + '</span>';
-                    // Increment global sequence number on server
-                    await incrementSequenceNumber();
-                    // Increment client order ID for new order submissions
-                    if (messageType === 'NewOrder') {
-                        await incrementClientOrderId();
-                    }
-                } else {
-                    statusMessage.innerHTML = '<span class="status-message status-error">Error: ' + data.message + '</span>';
-                }
-
-                // Clear status after 3 seconds
-                setTimeout(() => {
-                    statusMessage.innerHTML = '';
-                }, 3000);
-
-            } catch (err) {
-                statusMessage.innerHTML = '<span class="status-message status-error">Network error: ' + err.message + '</span>';
-            }
-        });
-
-        // Target mode handling
-        const targetModeSelect = document.getElementById('targetModeSelect');
-        const targetIndicator = document.getElementById('targetIndicator');
-
-        function updateTargetIndicator(mode) {
-            if (mode === 'gateway') {
-                targetIndicator.textContent = 'Gateway';
-                targetIndicator.className = 'target-indicator target-gateway';
-            } else {
-                targetIndicator.textContent = 'Matching Engine';
-                targetIndicator.className = 'target-indicator target-matching';
-            }
-        }
-
-        async function loadTargetMode() {
-            try {
-                const response = await fetch('/target-mode');
-                const data = await response.json();
-                targetModeSelect.value = data.targetMode;
-                updateTargetIndicator(data.targetMode);
-            } catch (err) {
-                console.error('Error fetching target mode:', err);
-            }
-        }
-
-        targetModeSelect.addEventListener('change', async function() {
-            const newMode = this.value;
-            try {
-                const response = await fetch('/target-mode', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'targetMode=' + newMode
-                });
-                const data = await response.json();
-                if (data.error) {
-                    alert('Failed to switch target: ' + data.error);
-                    loadTargetMode(); // Revert select to actual value
-                } else {
-                    updateTargetIndicator(newMode);
-                    // Clear the request/response lists since state was reset
-                    requestList.innerHTML = '<p>No requests yet.</p>';
-                    responseList.innerHTML = '<p>No responses yet.</p>';
-                    // Reload sequence number and client order ID
                     loadInitialSequenceNumber();
                     loadInitialClientOrderId();
                 }
@@ -1394,13 +1371,11 @@ func renderTradePage(w http.ResponseWriter) {
             }
         });
 
-        // Load target mode on page load
         loadTargetMode();
 
-        // Fetch and update both requests and responses every 500ms
+        // ============ Polling ============
         setInterval(async () => {
             try {
-                // Fetch requests
                 const reqResponse = await fetch('/requests');
                 const requests = await reqResponse.json();
 
@@ -1409,10 +1384,9 @@ func renderTradePage(w http.ResponseWriter) {
                         '<div class="message-box"><pre>' + r + '</pre></div>'
                     ).join('');
                 } else {
-                    requestList.innerHTML = '<p>No requests yet.</p>';
+                    requestList.innerHTML = '<p class="empty-pools">No requests yet.</p>';
                 }
 
-                // Fetch responses
                 const respResponse = await fetch('/responses');
                 const responses = await respResponse.json();
 
@@ -1421,18 +1395,21 @@ func renderTradePage(w http.ResponseWriter) {
                         '<div class="message-box"><pre>' + r + '</pre></div>'
                     ).join('');
                 } else {
-                    responseList.innerHTML = '<p>No responses yet.</p>';
+                    responseList.innerHTML = '<p class="empty-pools">No responses yet.</p>';
                 }
             } catch (err) {
                 console.error('Error fetching data:', err);
             }
         }, 500);
+
+        fetchPools();
+        setInterval(fetchPools, 500);
     </script>
 </body>
 </html>
 `
 
-	t, err := template.New("trade").Parse(tmpl)
+	t, err := template.New("main").Parse(tmpl)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1501,7 +1478,7 @@ func main() {
 	defer client.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/entrypools", http.StatusSeeOther)
+		http.Redirect(w, r, "/trade", http.StatusSeeOther)
 	})
 	http.HandleFunc("/entrypools", client.handleEntryPools)
 	http.HandleFunc("/entrypools-data", client.handleEntryPoolsData)
