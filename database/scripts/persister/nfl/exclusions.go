@@ -13,10 +13,14 @@ import (
 // For fetch-level exclusions, see fetcher/exclusions.go.
 
 // shouldPersistDrive determines whether a drive should be persisted to the database.
-// Returns false for "event" type entries (timeouts, end-of-period markers, etc.).
+// Returns false for "event" type entries (timeouts, end-of-period markers, etc.) and
+// standalone penalty plays (which contain no meaningful statistics).
 // Returns true for "drive" type entries.
 func shouldPersistDrive(drive *fetcher_nfl.Drive) bool {
 	if drive.Type == "event" {
+		return false
+	}
+	if drive.Type == "play" && drive.PlayType == "penalty" {
 		return false
 	}
 	return true
