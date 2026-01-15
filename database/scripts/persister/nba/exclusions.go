@@ -33,9 +33,12 @@ var excludedStatTypes = map[string]bool{
 	"technicalfoul":                   true,
 	"technicalfoulnonunsportsmanlike": true,
 	"attemptblocked":                  true,
+	"ejection":                        true,
 	// Offensive fouls are excluded because Sportradar already creates a "personalfoul"
 	// statistic for the same event. Including both would double-count the foul.
 	"offensivefoul": true,
+	// Same goes for flagrant fouls
+	"flagrantfoul": true,
 }
 
 // shouldPersistPlay determines whether a play (event) should be persisted to the database.
