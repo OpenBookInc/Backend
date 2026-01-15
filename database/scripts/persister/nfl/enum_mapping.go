@@ -41,6 +41,8 @@ func MapStatTypeToDB(apiStatType string) (string, error) {
 		return "field_goal", nil
 	case "extra_point":
 		return "extra_point", nil
+	case "misc":
+		return "miscellaneous", nil
 	default:
 		return "", fmt.Errorf("unexpected stat type value from Sportradar API: %q", apiStatType)
 	}

@@ -277,6 +277,8 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 		case "extra_point":
 			playStatistic.ExtraPointAttempts = decimal.NewFromFloat(stat.Attempt)
 			playStatistic.ExtraPointMakes = decimal.NewFromFloat(stat.Made)
+		case "miscellaneous":
+			// No stat-type-specific fields to populate for miscellaneous stats
 		default:
 			return fmt.Errorf("unexpected stat type after mapping: %s", statType)
 		}
