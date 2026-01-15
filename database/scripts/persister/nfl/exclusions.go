@@ -49,7 +49,7 @@ func shouldPersistPlayStatistic(stat *fetcher_nfl.Statistic) bool {
 	}
 
 	// Skip ignoreable stat types (stat types that we don't need for our use case)
-	ignoreableStatTypes := []string{"return", "first_down", "kick", "punt", "penalty", "block", "conversion" /* refers to two-point conversions */, "defense_conversion" /* indicates a defender was targeted during a two-point conversion */}
+	ignoreableStatTypes := []string{"return", "first_down", "kick", "punt", "penalty", "block", "conversion" /* refers to two-point conversions */, "defense_conversion" /* indicates a defender was targeted during a two-point conversion */, "down_conversion" /* tracks whether a play converted on 3rd/4th down */}
 	for _, ignoreType := range ignoreableStatTypes {
 		if stat.StatType == ignoreType {
 			return false
