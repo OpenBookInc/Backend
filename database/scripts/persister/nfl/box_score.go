@@ -29,11 +29,9 @@ type playerStatsAccumulator struct {
 	PassingCompletions  decimal.Decimal
 	ReceivingReceptions decimal.Decimal
 	InterceptionsCaught decimal.Decimal
-	FumblesCommitted         decimal.Decimal
+	FumblesCommitted    decimal.Decimal
 	SacksMade           decimal.Decimal
 	SackAssistsMade     decimal.Decimal
-	TacklesMade         decimal.Decimal
-	TackleAssistsMade   decimal.Decimal
 	FieldGoalAttempts   decimal.Decimal
 	FieldGoalMakes      decimal.Decimal
 	ExtraPointAttempts  decimal.Decimal
@@ -59,11 +57,9 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 		PassingCompletions:  zero,
 		ReceivingReceptions: zero,
 		InterceptionsCaught: zero,
-		FumblesCommitted:         zero,
+		FumblesCommitted:    zero,
 		SacksMade:           zero,
 		SackAssistsMade:     zero,
-		TacklesMade:         zero,
-		TackleAssistsMade:   zero,
 		FieldGoalAttempts:   zero,
 		FieldGoalMakes:      zero,
 		ExtraPointAttempts:  zero,
@@ -116,8 +112,6 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		acc.FumblesCommitted = acc.FumblesCommitted.Add(stat.FumblesCommitted)
 		acc.SacksMade = acc.SacksMade.Add(stat.SacksMade)
 		acc.SackAssistsMade = acc.SackAssistsMade.Add(stat.SackAssistsMade)
-		acc.TacklesMade = acc.TacklesMade.Add(stat.TacklesMade)
-		acc.TackleAssistsMade = acc.TackleAssistsMade.Add(stat.TackleAssistsMade)
 		acc.FieldGoalAttempts = acc.FieldGoalAttempts.Add(stat.FieldGoalAttempts)
 		acc.FieldGoalMakes = acc.FieldGoalMakes.Add(stat.FieldGoalMakes)
 		acc.ExtraPointAttempts = acc.ExtraPointAttempts.Add(stat.ExtraPointAttempts)
@@ -161,11 +155,9 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, data *reader
 			PassingCompletions:  acc.PassingCompletions,
 			ReceivingReceptions: acc.ReceivingReceptions,
 			InterceptionsCaught: acc.InterceptionsCaught,
-			FumblesCommitted:         acc.FumblesCommitted,
+			FumblesCommitted:    acc.FumblesCommitted,
 			SacksMade:           acc.SacksMade,
 			SackAssistsMade:     acc.SackAssistsMade,
-			TacklesMade:         acc.TacklesMade,
-			TackleAssistsMade:   acc.TackleAssistsMade,
 			FieldGoalAttempts:   acc.FieldGoalAttempts,
 			FieldGoalMakes:      acc.FieldGoalMakes,
 			ExtraPointAttempts:  acc.ExtraPointAttempts,

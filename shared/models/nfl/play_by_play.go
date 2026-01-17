@@ -79,8 +79,6 @@ type PlayStatistic struct {
 	SacksTaken          decimal.Decimal // Sacks taken (QB stat)
 	SacksMade           decimal.Decimal // Sacks made (defensive stat, can be 0.5 for split credit)
 	SackAssistsMade     decimal.Decimal // Sack assists (defensive stat)
-	TacklesMade         decimal.Decimal // Tackles made (can be 0.5 for split credit)
-	TackleAssistsMade   decimal.Decimal // Assisted tackles (defensive stat)
 	FieldGoalAttempts   decimal.Decimal // Field goal attempts
 	FieldGoalMakes      decimal.Decimal // Field goals made
 	ExtraPointAttempts  decimal.Decimal // Extra point attempts

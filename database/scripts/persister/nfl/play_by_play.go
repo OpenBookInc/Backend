@@ -241,8 +241,6 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 			SacksTaken:          decimal.NewFromFloat(0),
 			SacksMade:           decimal.NewFromFloat(0),
 			SackAssistsMade:     decimal.NewFromFloat(stat.AstSack),
-			TacklesMade:         decimal.NewFromFloat(stat.Tackle),
-			TackleAssistsMade:   decimal.NewFromFloat(stat.AstTackle),
 			FieldGoalAttempts:   decimal.NewFromFloat(0),
 			FieldGoalMakes:      decimal.NewFromFloat(0),
 			ExtraPointAttempts:  decimal.NewFromFloat(0),
@@ -268,7 +266,6 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 		case "defense":
 			playStatistic.SacksMade = decimal.NewFromFloat(stat.Sack)
 			playStatistic.InterceptionsCaught = decimal.NewFromFloat(stat.Interception)
-			// TacklesMade and TackleAssistsMade already set above
 		case "fumble":
 			playStatistic.FumblesCommitted = decimal.NewFromFloat(stat.Fumble)
 		case "field_goal":
