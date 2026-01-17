@@ -55,8 +55,51 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 	return id, nil
 }
 
-// GetIndividualByVendorID retrieves an individual by vendor_id
+// GetIndividualByID retrieves an individual by database ID.
+// Uses the registry for caching and resolves the nested League pointer.
+func (s *Store) GetIndividualByID(ctx context.Context, id int) (*models.Individual, error) {
+	// Check registry first
+	if individual := models.Registry.GetIndividual(id); individual != nil {
+		return individual, nil
+	}
+
+	// Query database
+	query := `
+		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number
+		FROM individuals
+		WHERE id = $1
+	`
+
+	var individual models.Individual
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&individual.ID,
+		&individual.DisplayName,
+		&individual.AbbreviatedName,
+		&individual.DateOfBirth,
+		&individual.VendorID,
+		&individual.LeagueID,
+		&individual.Position,
+		&individual.JerseyNumber,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get individual with id %d: %w", id, err)
+	}
+
+	// Resolve nested League pointer
+	league, err := s.GetLeagueByID(ctx, int(individual.LeagueID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for individual %d: %w", id, err)
+	}
+	individual.League = league
+
+	// Register and return
+	return models.Registry.RegisterIndividual(&individual), nil
+}
+
+// GetIndividualByVendorID retrieves an individual by vendor_id.
+// Uses the registry for caching and resolves the nested League pointer.
 func (s *Store) GetIndividualByVendorID(ctx context.Context, vendorID string) (*models.Individual, error) {
+	// Query database to get the ID first
 	query := `
 		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number
 		FROM individuals
@@ -78,5 +121,18 @@ func (s *Store) GetIndividualByVendorID(ctx context.Context, vendorID string) (*
 		return nil, fmt.Errorf("failed to get individual with vendor_id %s: %w", vendorID, err)
 	}
 
-	return &individual, nil
+	// Check if already registered (by ID)
+	if existing := models.Registry.GetIndividual(individual.ID); existing != nil {
+		return existing, nil
+	}
+
+	// Resolve nested League pointer
+	league, err := s.GetLeagueByID(ctx, int(individual.LeagueID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for individual %s: %w", vendorID, err)
+	}
+	individual.League = league
+
+	// Register and return
+	return models.Registry.RegisterIndividual(&individual), nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	models "github.com/openbook/shared/models"
 	models_nba "github.com/openbook/shared/models/nba"
 	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
@@ -102,23 +101,26 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 }
 
 // GetNBABoxScoresByGameID retrieves all box scores for a game with individual info.
-// Uses JOIN to fetch individual details along with stats.
+// Uses the registry for caching Game and Individual instances.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
 func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nba.IndividualBoxScore, error) {
+	// Get the game from registry (resolves teams automatically)
+	game, err := s.GetGameByID(ctx, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game %d: %w", gameID, err)
+	}
+
 	query := `
 		SELECT
-			bs.id, bs.game_id, bs.individual_id,
+			bs.id, bs.individual_id,
 			bs.two_point_attempts, bs.two_point_makes,
 			bs.three_point_attempts, bs.three_point_makes,
 			bs.free_throw_attempts, bs.free_throw_makes,
 			bs.assists, bs.defensive_rebounds, bs.offensive_rebounds,
-			bs.steals, bs.blocks, bs.turnovers_committed, bs.personal_fouls_committed,
-			i.id, i.vendor_id, i.display_name, i.abbreviated_name,
-			i.date_of_birth, i.league_id, i.position, i.jersey_number
+			bs.steals, bs.blocks, bs.turnovers_committed, bs.personal_fouls_committed
 		FROM nba_box_scores bs
-		JOIN individuals i ON bs.individual_id = i.id
 		WHERE bs.game_id = $1
-		ORDER BY i.display_name
+		ORDER BY bs.individual_id
 	`
 
 	rows, err := s.Pool().Query(ctx, query, gameID)
@@ -130,12 +132,11 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 	var results []*models_nba.IndividualBoxScore
 	for rows.Next() {
 		stats := &models_nba.NBAStats{}
-		individual := &models.Individual{}
+		var individualID int
 
 		err := rows.Scan(
 			&stats.ID,
-			&stats.GameID,
-			&stats.IndividualID,
+			&individualID,
 			&stats.TwoPointAttempts,
 			&stats.TwoPointMakes,
 			&stats.ThreePointAttempts,
@@ -149,22 +150,27 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			&stats.Blocks,
 			&stats.TurnoversCommitted,
 			&stats.PersonalFoulsCommitted,
-			&individual.ID,
-			&individual.VendorID,
-			&individual.DisplayName,
-			&individual.AbbreviatedName,
-			&individual.DateOfBirth,
-			&individual.LeagueID,
-			&individual.Position,
-			&individual.JerseyNumber,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan box score row: %w", err)
 		}
 
+		// Get individual from registry
+		individual, err := s.GetIndividualByID(ctx, individualID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get individual %d: %w", individualID, err)
+		}
+
+		// Set pointer fields
+		stats.Game = game
+		stats.Individual = individual
+
+		// Register NBAStats in sport-specific registry
+		registeredStats := models_nba.Registry.RegisterNBAStats(stats)
+
 		results = append(results, &models_nba.IndividualBoxScore{
 			Individual: individual,
-			Stats:      stats,
+			Stats:      registeredStats,
 		})
 	}
 

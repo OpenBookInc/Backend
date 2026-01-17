@@ -17,22 +17,22 @@ import (
 
 // NBAStats holds aggregated statistics for a player in a single game
 type NBAStats struct {
-	ID                     int             // Database ID (auto-increment)
-	GameID                 int             // Foreign key to games table
-	IndividualID           int             // Foreign key to individuals table
-	TwoPointAttempts       decimal.Decimal // Two-point field goal attempts
-	TwoPointMakes          decimal.Decimal // Two-point field goals made
-	ThreePointAttempts     decimal.Decimal // Three-point field goal attempts
-	ThreePointMakes        decimal.Decimal // Three-point field goals made
-	FreeThrowAttempts      decimal.Decimal // Free throw attempts
-	FreeThrowMakes         decimal.Decimal // Free throws made
-	Assists                decimal.Decimal // Assists
-	DefensiveRebounds      decimal.Decimal // Defensive rebounds
-	OffensiveRebounds      decimal.Decimal // Offensive rebounds
-	Steals                 decimal.Decimal // Steals
-	Blocks                 decimal.Decimal // Blocks
-	TurnoversCommitted     decimal.Decimal // Turnovers committed
-	PersonalFoulsCommitted decimal.Decimal // Personal fouls committed
+	ID                     int                   // Database ID (auto-increment)
+	Game                   *models.Game          `json:"-"` // Game information (pointer to registry instance)
+	Individual             *models.Individual    `json:"-"` // Player information (pointer to registry instance)
+	TwoPointAttempts       decimal.Decimal       // Two-point field goal attempts
+	TwoPointMakes          decimal.Decimal       // Two-point field goals made
+	ThreePointAttempts     decimal.Decimal       // Three-point field goal attempts
+	ThreePointMakes        decimal.Decimal       // Three-point field goals made
+	FreeThrowAttempts      decimal.Decimal       // Free throw attempts
+	FreeThrowMakes         decimal.Decimal       // Free throws made
+	Assists                decimal.Decimal       // Assists
+	DefensiveRebounds      decimal.Decimal       // Defensive rebounds
+	OffensiveRebounds      decimal.Decimal       // Offensive rebounds
+	Steals                 decimal.Decimal       // Steals
+	Blocks                 decimal.Decimal       // Blocks
+	TurnoversCommitted     decimal.Decimal       // Turnovers committed
+	PersonalFoulsCommitted decimal.Decimal       // Personal fouls committed
 }
 
 // IndividualBoxScore combines player information with their game statistics

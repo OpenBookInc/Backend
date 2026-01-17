@@ -38,8 +38,46 @@ func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualSt
 	return id, nil
 }
 
-// GetIndividualStatusByIndividualID retrieves an individual's status by individual_id
+// GetIndividualStatusByID retrieves an individual status by database ID.
+// Uses the registry for caching and resolves the nested Individual pointer.
+func (s *Store) GetIndividualStatusByID(ctx context.Context, id int) (*models.IndividualStatus, error) {
+	// Check registry first
+	if status := models.Registry.GetIndividualStatus(id); status != nil {
+		return status, nil
+	}
+
+	// Query database
+	query := `
+		SELECT id, individual_id, status
+		FROM individual_statuses
+		WHERE id = $1
+	`
+
+	var status models.IndividualStatus
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&status.ID,
+		&status.IndividualID,
+		&status.Status,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get individual status with id %d: %w", id, err)
+	}
+
+	// Resolve nested Individual pointer
+	individual, err := s.GetIndividualByID(ctx, int(status.IndividualID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve individual for status %d: %w", id, err)
+	}
+	status.Individual = individual
+
+	// Register and return
+	return models.Registry.RegisterIndividualStatus(&status), nil
+}
+
+// GetIndividualStatusByIndividualID retrieves an individual's status by individual_id.
+// Uses the registry for caching and resolves the nested Individual pointer.
 func (s *Store) GetIndividualStatusByIndividualID(ctx context.Context, individualID int64) (*models.IndividualStatus, error) {
+	// Query database to get the ID first
 	query := `
 		SELECT id, individual_id, status
 		FROM individual_statuses
@@ -56,5 +94,18 @@ func (s *Store) GetIndividualStatusByIndividualID(ctx context.Context, individua
 		return nil, fmt.Errorf("failed to get individual status with individual_id %d: %w", individualID, err)
 	}
 
-	return &status, nil
+	// Check if already registered (by ID)
+	if existing := models.Registry.GetIndividualStatus(status.ID); existing != nil {
+		return existing, nil
+	}
+
+	// Resolve nested Individual pointer
+	individual, err := s.GetIndividualByID(ctx, int(status.IndividualID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve individual for status (individual_id %d): %w", individualID, err)
+	}
+	status.Individual = individual
+
+	// Register and return
+	return models.Registry.RegisterIndividualStatus(&status), nil
 }

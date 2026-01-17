@@ -35,8 +35,52 @@ func (s *Store) UpsertRoster(ctx context.Context, roster *RosterForUpsert) (int,
 	return id, nil
 }
 
-// GetRosterByTeamID retrieves a roster by team_id
+// GetRosterByID retrieves a roster by database ID.
+// Uses the registry for caching and resolves nested Team and Players pointers.
+func (s *Store) GetRosterByID(ctx context.Context, id int) (*models.Roster, error) {
+	// Check registry first
+	if roster := models.Registry.GetRoster(id); roster != nil {
+		return roster, nil
+	}
+
+	// Query database
+	query := `SELECT id, team_id, individual_ids FROM rosters WHERE id = $1`
+
+	var roster models.Roster
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&roster.ID,
+		&roster.TeamID,
+		&roster.IndividualIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get roster with id %d: %w", id, err)
+	}
+
+	// Resolve nested Team pointer
+	team, err := s.GetTeamByID(ctx, int(roster.TeamID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve team for roster %d: %w", id, err)
+	}
+	roster.Team = team
+
+	// Resolve nested Players pointers
+	roster.Players = make([]*models.Individual, 0, len(roster.IndividualIDs))
+	for _, individualID := range roster.IndividualIDs {
+		individual, err := s.GetIndividualByID(ctx, int(individualID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve individual %d for roster %d: %w", individualID, id, err)
+		}
+		roster.Players = append(roster.Players, individual)
+	}
+
+	// Register and return
+	return models.Registry.RegisterRoster(&roster), nil
+}
+
+// GetRosterByTeamID retrieves a roster by team_id.
+// Uses the registry for caching and resolves nested Team and Players pointers.
 func (s *Store) GetRosterByTeamID(ctx context.Context, teamID int64) (*models.Roster, error) {
+	// Query database to get the ID first
 	query := `SELECT id, team_id, individual_ids FROM rosters WHERE team_id = $1`
 
 	var roster models.Roster
@@ -49,5 +93,28 @@ func (s *Store) GetRosterByTeamID(ctx context.Context, teamID int64) (*models.Ro
 		return nil, fmt.Errorf("failed to get roster for team_id %d: %w", teamID, err)
 	}
 
-	return &roster, nil
+	// Check if already registered (by ID)
+	if existing := models.Registry.GetRoster(roster.ID); existing != nil {
+		return existing, nil
+	}
+
+	// Resolve nested Team pointer
+	team, err := s.GetTeamByID(ctx, int(roster.TeamID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve team for roster (team_id %d): %w", teamID, err)
+	}
+	roster.Team = team
+
+	// Resolve nested Players pointers
+	roster.Players = make([]*models.Individual, 0, len(roster.IndividualIDs))
+	for _, individualID := range roster.IndividualIDs {
+		individual, err := s.GetIndividualByID(ctx, int(individualID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve individual %d for roster (team_id %d): %w", individualID, teamID, err)
+		}
+		roster.Players = append(roster.Players, individual)
+	}
+
+	// Register and return
+	return models.Registry.RegisterRoster(&roster), nil
 }

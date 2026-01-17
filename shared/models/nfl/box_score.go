@@ -17,32 +17,32 @@ import (
 
 // NFLStats holds aggregated statistics for a player in a single game
 type NFLStats struct {
-	ID                  int             // Database ID (auto-increment)
-	GameID              int             // Foreign key to games table
-	IndividualID        int             // Foreign key to individuals table
-	PassingCompletions  decimal.Decimal // Pass completions
-	ReceivingReceptions decimal.Decimal // Receptions
-	InterceptionsCaught decimal.Decimal // Interceptions caught (defensive stat)
-	FumblesCommitted         decimal.Decimal // Fumbles committed (offensive stat)
-	SacksMade           decimal.Decimal // Sacks made (defensive stat)
-	SackAssistsMade     decimal.Decimal // Sack assists (defensive stat)
-	TacklesMade         decimal.Decimal // Tackles made (defensive stat)
-	TackleAssistsMade   decimal.Decimal // Assisted tackles (defensive stat)
-	FieldGoalAttempts   decimal.Decimal // Field goal attempts
-	FieldGoalMakes      decimal.Decimal // Field goals made
-	ExtraPointAttempts  decimal.Decimal // Extra point attempts
-	ExtraPointMakes     decimal.Decimal // Extra points made
-	PassingAttempts     decimal.Decimal // Passing attempts
-	RushingAttempts     decimal.Decimal // Rushing attempts
-	ReceivingTargets    decimal.Decimal // Receiving targets
-	PassingYards        decimal.Decimal // Passing yards
-	RushingYards        decimal.Decimal // Rushing yards
-	ReceivingYards      decimal.Decimal // Receiving yards
-	PassingTouchdowns   decimal.Decimal // Passing touchdowns
-	RushingTouchdowns   decimal.Decimal // Rushing touchdowns
-	ReceivingTouchdowns decimal.Decimal // Receiving touchdowns
-	InterceptionsThrown decimal.Decimal // Interceptions thrown (QB stat)
-	SacksTaken          decimal.Decimal // Sacks taken (QB stat)
+	ID                  int                   // Database ID (auto-increment)
+	Game                *models.Game          `json:"-"` // Game information (pointer to registry instance)
+	Individual          *models.Individual    `json:"-"` // Player information (pointer to registry instance)
+	PassingCompletions  decimal.Decimal       // Pass completions
+	ReceivingReceptions decimal.Decimal       // Receptions
+	InterceptionsCaught decimal.Decimal       // Interceptions caught (defensive stat)
+	FumblesCommitted         decimal.Decimal  // Fumbles committed (offensive stat)
+	SacksMade           decimal.Decimal       // Sacks made (defensive stat)
+	SackAssistsMade     decimal.Decimal       // Sack assists (defensive stat)
+	TacklesMade         decimal.Decimal       // Tackles made (defensive stat)
+	TackleAssistsMade   decimal.Decimal       // Assisted tackles (defensive stat)
+	FieldGoalAttempts   decimal.Decimal       // Field goal attempts
+	FieldGoalMakes      decimal.Decimal       // Field goals made
+	ExtraPointAttempts  decimal.Decimal       // Extra point attempts
+	ExtraPointMakes     decimal.Decimal       // Extra points made
+	PassingAttempts     decimal.Decimal       // Passing attempts
+	RushingAttempts     decimal.Decimal       // Rushing attempts
+	ReceivingTargets    decimal.Decimal       // Receiving targets
+	PassingYards        decimal.Decimal       // Passing yards
+	RushingYards        decimal.Decimal       // Rushing yards
+	ReceivingYards      decimal.Decimal       // Receiving yards
+	PassingTouchdowns   decimal.Decimal       // Passing touchdowns
+	RushingTouchdowns   decimal.Decimal       // Rushing touchdowns
+	ReceivingTouchdowns decimal.Decimal       // Receiving touchdowns
+	InterceptionsThrown decimal.Decimal       // Interceptions thrown (QB stat)
+	SacksTaken          decimal.Decimal       // Sacks taken (QB stat)
 }
 
 // IndividualBoxScore combines player information with their game statistics

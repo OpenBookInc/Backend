@@ -45,8 +45,44 @@ func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForU
 	return id, nil
 }
 
-// GetConferenceByVendorID retrieves a conference by vendor_id
+// GetConferenceByID retrieves a conference by database ID.
+// Uses the registry for caching and resolves the nested League pointer.
+func (s *Store) GetConferenceByID(ctx context.Context, id int) (*models.Conference, error) {
+	// Check registry first
+	if conference := models.Registry.GetConference(id); conference != nil {
+		return conference, nil
+	}
+
+	// Query database
+	query := `SELECT id, name, league_id, vendor_id, alias FROM conferences WHERE id = $1`
+
+	var conference models.Conference
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&conference.ID,
+		&conference.Name,
+		&conference.LeagueID,
+		&conference.VendorID,
+		&conference.Alias,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conference with id %d: %w", id, err)
+	}
+
+	// Resolve nested League pointer
+	league, err := s.GetLeagueByID(ctx, int(conference.LeagueID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for conference %d: %w", id, err)
+	}
+	conference.League = league
+
+	// Register and return
+	return models.Registry.RegisterConference(&conference), nil
+}
+
+// GetConferenceByVendorID retrieves a conference by vendor_id.
+// Uses the registry for caching and resolves the nested League pointer.
 func (s *Store) GetConferenceByVendorID(ctx context.Context, vendorID string) (*models.Conference, error) {
+	// Query database to get the ID first
 	query := `SELECT id, name, league_id, vendor_id, alias FROM conferences WHERE vendor_id = $1`
 
 	var conference models.Conference
@@ -61,5 +97,18 @@ func (s *Store) GetConferenceByVendorID(ctx context.Context, vendorID string) (*
 		return nil, fmt.Errorf("failed to get conference with vendor_id %s: %w", vendorID, err)
 	}
 
-	return &conference, nil
+	// Check if already registered (by ID)
+	if existing := models.Registry.GetConference(conference.ID); existing != nil {
+		return existing, nil
+	}
+
+	// Resolve nested League pointer
+	league, err := s.GetLeagueByID(ctx, int(conference.LeagueID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", vendorID, err)
+	}
+	conference.League = league
+
+	// Register and return
+	return models.Registry.RegisterConference(&conference), nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	models "github.com/openbook/shared/models"
 	models_nfl "github.com/openbook/shared/models/nfl"
 	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
@@ -136,12 +135,18 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 }
 
 // GetNFLBoxScoresByGameID retrieves all box scores for a game with individual info.
-// Uses JOIN to fetch individual details along with stats.
+// Uses the registry for caching Game and Individual instances.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
 func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.IndividualBoxScore, error) {
+	// Get the game from registry (resolves teams automatically)
+	game, err := s.GetGameByID(ctx, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game %d: %w", gameID, err)
+	}
+
 	query := `
 		SELECT
-			bs.id, bs.game_id, bs.individual_id,
+			bs.id, bs.individual_id,
 			bs.passing_completions, bs.receiving_receptions,
 			bs.interceptions_caught, bs.fumbles_committed,
 			bs.sacks_made, bs.sack_assists_made, bs.tackles_made, bs.tackle_assists_made,
@@ -150,13 +155,10 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			bs.passing_attempts, bs.rushing_attempts, bs.receiving_targets,
 			bs.passing_yards, bs.rushing_yards, bs.receiving_yards,
 			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
-			bs.interceptions_thrown, bs.sacks_taken,
-			i.id, i.vendor_id, i.display_name, i.abbreviated_name,
-			i.date_of_birth, i.league_id, i.position, i.jersey_number
+			bs.interceptions_thrown, bs.sacks_taken
 		FROM nfl_box_scores bs
-		JOIN individuals i ON bs.individual_id = i.id
 		WHERE bs.game_id = $1
-		ORDER BY i.display_name
+		ORDER BY bs.individual_id
 	`
 
 	rows, err := s.Pool().Query(ctx, query, gameID)
@@ -168,12 +170,11 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 	var results []*models_nfl.IndividualBoxScore
 	for rows.Next() {
 		stats := &models_nfl.NFLStats{}
-		individual := &models.Individual{}
+		var individualID int
 
 		err := rows.Scan(
 			&stats.ID,
-			&stats.GameID,
-			&stats.IndividualID,
+			&individualID,
 			&stats.PassingCompletions,
 			&stats.ReceivingReceptions,
 			&stats.InterceptionsCaught,
@@ -197,22 +198,27 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			&stats.ReceivingTouchdowns,
 			&stats.InterceptionsThrown,
 			&stats.SacksTaken,
-			&individual.ID,
-			&individual.VendorID,
-			&individual.DisplayName,
-			&individual.AbbreviatedName,
-			&individual.DateOfBirth,
-			&individual.LeagueID,
-			&individual.Position,
-			&individual.JerseyNumber,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan box score row: %w", err)
 		}
 
+		// Get individual from registry
+		individual, err := s.GetIndividualByID(ctx, individualID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get individual %d: %w", individualID, err)
+		}
+
+		// Set pointer fields
+		stats.Game = game
+		stats.Individual = individual
+
+		// Register NFLStats in sport-specific registry
+		registeredStats := models_nfl.Registry.RegisterNFLStats(stats)
+
 		results = append(results, &models_nfl.IndividualBoxScore{
 			Individual: individual,
-			Stats:      stats,
+			Stats:      registeredStats,
 		})
 	}
 

@@ -57,8 +57,52 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error
 	return id, nil
 }
 
-// GetTeamByVendorID retrieves a team by vendor_id
+// GetTeamByID retrieves a team by database ID.
+// Uses the registry for caching and resolves the nested Division pointer.
+func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
+	// Check registry first
+	if team := models.Registry.GetTeam(id); team != nil {
+		return team, nil
+	}
+
+	// Query database
+	query := `
+		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
+		FROM teams
+		WHERE id = $1
+	`
+
+	var team models.Team
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&team.ID,
+		&team.Name,
+		&team.Market,
+		&team.Alias,
+		&team.VendorID,
+		&team.DivisionID,
+		&team.VenueName,
+		&team.VenueCity,
+		&team.VenueState,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team with id %d: %w", id, err)
+	}
+
+	// Resolve nested Division pointer
+	division, err := s.GetDivisionByID(ctx, int(team.DivisionID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve division for team %d: %w", id, err)
+	}
+	team.Division = division
+
+	// Register and return
+	return models.Registry.RegisterTeam(&team), nil
+}
+
+// GetTeamByVendorID retrieves a team by vendor_id.
+// Uses the registry for caching and resolves the nested Division pointer.
 func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models.Team, error) {
+	// Query database to get the ID first
 	query := `
 		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
 		FROM teams
@@ -81,5 +125,18 @@ func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models
 		return nil, fmt.Errorf("failed to get team with vendor_id %s: %w", vendorID, err)
 	}
 
-	return &team, nil
+	// Check if already registered (by ID)
+	if existing := models.Registry.GetTeam(team.ID); existing != nil {
+		return existing, nil
+	}
+
+	// Resolve nested Division pointer
+	division, err := s.GetDivisionByID(ctx, int(team.DivisionID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve division for team %s: %w", vendorID, err)
+	}
+	team.Division = division
+
+	// Register and return
+	return models.Registry.RegisterTeam(&team), nil
 }
