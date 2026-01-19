@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ const (
 // BaseConfig holds common configuration shared across all scripts
 type BaseConfig struct {
 	// API Configuration
-	SportradarAPIKey      string
+	SportradarAPIKeys     []sportradar.ApiKeyParameters
 	SportradarAccessLevel sportradar.AccessLevel
 
 	// Rate Limiting Configuration
@@ -78,12 +79,63 @@ type BatchUpdateConfig struct {
 	NBAGameDateEndInclusive   time.Time
 }
 
+// parseApiKeys parses the SPORTRADAR_API_KEYS environment variable.
+// Format: "key1:limit1,key2:limit2,..."
+// Returns nil if the string is empty.
+// Returns an error if the format is invalid.
+func parseApiKeys(envValue string) ([]sportradar.ApiKeyParameters, error) {
+	if envValue == "" {
+		return nil, nil
+	}
+
+	var keys []sportradar.ApiKeyParameters
+	pairs := strings.Split(envValue, ",")
+
+	for i, pair := range pairs {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+
+		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid format for API key %d: expected 'key:limit', got '%s'", i+1, pair)
+		}
+
+		apiKey := strings.TrimSpace(parts[0])
+		limitStr := strings.TrimSpace(parts[1])
+
+		if apiKey == "" {
+			return nil, fmt.Errorf("empty API key in entry %d", i+1)
+		}
+
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid request limit for API key %d: '%s' is not a valid integer", i+1, limitStr)
+		}
+
+		if limit <= 0 {
+			return nil, fmt.Errorf("request limit for API key %d must be positive, got %d", i+1, limit)
+		}
+
+		keys = append(keys, sportradar.ApiKeyParameters{
+			ApiKey:       apiKey,
+			RequestLimit: limit,
+		})
+	}
+
+	return keys, nil
+}
+
 // loadBaseConfig reads common configuration from environment variables
 func loadBaseConfig() BaseConfig {
 	accessLevel := sportradar.AccessLevel(strings.ToLower(os.Getenv("SPORTRADAR_ACCESS_LEVEL")))
 
+	// Parse API keys - errors are handled in Validate()
+	apiKeys, _ := parseApiKeys(os.Getenv("SPORTRADAR_API_KEYS"))
+
 	return BaseConfig{
-		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
+		SportradarAPIKeys:          apiKeys,
 		SportradarAccessLevel:      accessLevel,
 		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("SPORTRADAR_RATE_LIMIT_DELAY_MS", 0),
 		PGHost:                     os.Getenv("PG_HOST"),
@@ -97,9 +149,19 @@ func loadBaseConfig() BaseConfig {
 
 // Validate checks that all required base configuration fields are set
 func (c *BaseConfig) Validate() error {
-	if c.SportradarAPIKey == "" {
-		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEY")
+	// Validate API keys - re-parse to get detailed error message
+	apiKeysEnv := os.Getenv("SPORTRADAR_API_KEYS")
+	if apiKeysEnv == "" {
+		return fmt.Errorf("missing required environment variable: SPORTRADAR_API_KEYS (format: key1:limit1,key2:limit2)")
 	}
+	apiKeys, err := parseApiKeys(apiKeysEnv)
+	if err != nil {
+		return fmt.Errorf("invalid SPORTRADAR_API_KEYS: %w", err)
+	}
+	if len(apiKeys) == 0 {
+		return fmt.Errorf("SPORTRADAR_API_KEYS must contain at least one key:limit pair")
+	}
+	c.SportradarAPIKeys = apiKeys
 
 	// Validate access level
 	if c.SportradarAccessLevel == "" {
@@ -156,8 +218,9 @@ func LoadReferenceDataConfigFromFile(envFile string) (*ReferenceDataConfig, erro
 
 // LoadReferenceDataConfig reads reference data configuration from environment variables
 // Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
-//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH,
-//   NFL_SEASON_START_YEAR, NFL_SEASON_TYPE, NFL_WEEK, NBA_SEASON_START_YEAR, NBA_SEASON_TYPE
+//
+//	PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH,
+//	NFL_SEASON_START_YEAR, NFL_SEASON_TYPE, NFL_WEEK, NBA_SEASON_START_YEAR, NBA_SEASON_TYPE
 //
 // This does not load any .env files - use LoadReferenceDataConfigFromFile for that
 func LoadReferenceDataConfig() *ReferenceDataConfig {
@@ -230,7 +293,8 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 
 // LoadPlayByPlayConfig reads play-by-play configuration from environment variables
 // Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
-//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
+//
+//	PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
 //
 // This does not load any .env files - use LoadPlayByPlayConfigFromFile for that
 func LoadPlayByPlayConfig() *PlayByPlayConfig {
@@ -350,7 +414,9 @@ func LoadBatchUpdateConfigFromFile(envFile string) (*BatchUpdateConfig, error) {
 
 // LoadBatchUpdateConfig reads batch update configuration from environment variables
 // Required fields: SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
-//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+//
+//	PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+//
 // At least one date range must be set (NFL or NBA)
 // Date format: YYYY-MM-DD
 //

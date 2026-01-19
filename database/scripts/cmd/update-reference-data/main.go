@@ -51,8 +51,9 @@ func main() {
 		AccessLevel:    cfg.SportradarAccessLevel,
 		RateLimitDelay: time.Duration(cfg.RateLimitDelayMilliseconds) * time.Millisecond,
 		Timeout:        30 * time.Second,
+		ApiKeys:        cfg.SportradarAPIKeys,
 	}
-	apiClient := sportradar.NewClientWithConfig(cfg.SportradarAPIKey, clientConfig)
+	apiClient := sportradar.NewClientWithConfig(clientConfig)
 
 	// Create in-memory data store and add leagues
 	dataStore := fetcher.NewReferenceData()

@@ -68,8 +68,9 @@ func main() {
 		AccessLevel:    cfg.SportradarAccessLevel,
 		RateLimitDelay: time.Duration(cfg.RateLimitDelayMilliseconds) * time.Millisecond,
 		Timeout:        30 * time.Second,
+		ApiKeys:        cfg.SportradarAPIKeys,
 	}
-	apiClient := sportradar.NewClientWithConfig(cfg.SportradarAPIKey, clientConfig)
+	apiClient := sportradar.NewClientWithConfig(clientConfig)
 
 	// Fetch play-by-play data
 	fmt.Println("\nFetching play-by-play data from Sportradar API...")
