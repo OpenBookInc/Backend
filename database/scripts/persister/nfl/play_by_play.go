@@ -2,11 +2,14 @@ package nfl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/openbook/population-scripts/client/sportradar"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
+	"github.com/openbook/population-scripts/persister"
 	"github.com/openbook/population-scripts/store"
 	store_nfl "github.com/openbook/population-scripts/store/nfl"
 	"github.com/shopspring/decimal"
@@ -33,8 +36,16 @@ import (
 // All foreign key lookups (teams, players) are done via database subqueries.
 // All enum validations are done by the database.
 // If any operation fails, the entire transaction is rolled back.
-func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
-	// Step 1: Start transaction for all write operations
+//
+// Before persisting play-by-play data, this function ensures all referenced players
+// exist in the database by fetching and persisting any missing player profiles.
+func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
+	// Step 1: Ensure all referenced players exist in the database
+	if err := persistMissingIndividuals(ctx, dbStore, apiClient, pbp); err != nil {
+		return fmt.Errorf("failed to persist missing individuals: %w", err)
+	}
+
+	// Step 2: Start transaction for all write operations
 	tx, err := dbStore.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -47,7 +58,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		}
 	}()
 
-	// Step 2: Upsert game status
+	// Step 3: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
 	if err != nil {
@@ -61,7 +72,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		return fmt.Errorf("failed to upsert game status: %w", err)
 	}
 
-	// Step 3: Process all drives, plays, and statistics
+	// Step 4: Process all drives, plays, and statistics
 	for _, period := range pbp.Periods {
 		for _, drive := range period.PBP {
 			if err := persistDrive(ctx, dbStore, tx, gameID, &period, &drive); err != nil {
@@ -70,7 +81,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		}
 	}
 
-	// Step 4: Commit the transaction
+	// Step 5: Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -100,7 +111,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 	var vendorOffensiveTeamID string
 	if drive.OffensiveTeam != nil {
 		vendorOffensiveTeamID = drive.OffensiveTeam.ID
-	} else if drive.Type == "play" && drive.PlayType == "extra_point" {
+	} else if drive.IsStandalonePlayDrive() {
 		// Standalone PAT after a special teams touchdown (e.g., punt return TD).
 		// The offensive_team is nil because this isn't a traditional drive, but the
 		// team attempting the PAT is available in start_situation.possession.
@@ -125,10 +136,10 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		return err
 	}
 
-	// For standalone play entries (type="play", e.g., extra points after special teams TDs),
+	// For standalone play entries (e.g., extra points after special teams TDs),
 	// the play data and statistics are at the drive level, not nested in events.
 	// Convert the drive to an Event and persist it using the standard flow.
-	if drive.Type == "play" && drive.PlayType == "extra_point" {
+	if drive.IsStandalonePlayDrive() {
 		event := drive.AsEvent()
 		if err := persistPlay(ctx, dbStore, tx, driveID, period, event); err != nil {
 			return fmt.Errorf("failed to persist standalone PAT play (vendor_id: %s): %w", drive.ID, err)
@@ -290,6 +301,45 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	// Replace all statistics for this play - player lookups done via subqueries
 	if err := store_nfl.ReplaceNFLPlayStatistics(dbStore, ctx, tx, playID, stats); err != nil {
 		return fmt.Errorf("failed to replace statistics: %w", err)
+	}
+
+	return nil
+}
+
+// persistMissingIndividuals ensures all players referenced in the play-by-play data
+// exist in the database. For any missing players, it fetches their profile from the
+// Sportradar API and persists them.
+func persistMissingIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nfl.PlayByPlayResponse) error {
+	// Get NFL league ID for persisting new players
+	nflLeague, err := dbStore.GetLeagueByName(ctx, "NFL")
+	if err != nil {
+		return fmt.Errorf("failed to get NFL league: %w", err)
+	}
+
+	// Extract all unique player vendor IDs from persistable statistics
+	playerVendorIDs := ExtractPlayerVendorIDs(pbp)
+
+	// Check each player and fetch/persist if missing
+	for _, vendorID := range playerVendorIDs {
+		_, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("failed to check if player exists (vendor_id: %s): %w", vendorID, err)
+			}
+
+			// Player not found - fetch and persist their profile
+			apiClient.RateLimitWait()
+			profile, err := fetcher_nfl.FetchPlayerProfile(apiClient, vendorID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch player profile (vendor_id: %s): %w", vendorID, err)
+			}
+
+			_, err = persister.PersistNFLPlayerProfile(ctx, dbStore, profile, nflLeague.ID)
+			if err != nil {
+				return fmt.Errorf("failed to persist player profile (vendor_id: %s): %w", vendorID, err)
+			}
+			fmt.Printf("  Persisted missing player: %s\n", profile.GetDisplayName())
+		}
 	}
 
 	return nil

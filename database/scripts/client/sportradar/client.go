@@ -257,3 +257,39 @@ func (c *Client) GetNBAPlayByPlay(gameID string) ([]byte, error) {
 
 	return resp.Body(), nil
 }
+
+// GetNFLPlayerProfile retrieves profile data for a specific NFL player
+func (c *Client) GetNFLPlayerProfile(playerID string) ([]byte, error) {
+	url := fmt.Sprintf("%s/players/%s/profile.json", c.getNFLBasePath(), playerID)
+	resp, err := c.httpClient.R().
+		SetQueryParam("api_key", c.apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NFL player profile: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
+// GetNBAPlayerProfile retrieves profile data for a specific NBA player
+func (c *Client) GetNBAPlayerProfile(playerID string) ([]byte, error) {
+	url := fmt.Sprintf("%s/players/%s/profile.json", c.getNBABasePath(), playerID)
+	resp, err := c.httpClient.R().
+		SetQueryParam("api_key", c.apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NBA player profile: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}

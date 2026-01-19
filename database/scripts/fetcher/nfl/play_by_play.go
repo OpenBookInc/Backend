@@ -688,6 +688,14 @@ func (d *Drive) String() string {
 	return sb.String()
 }
 
+// IsStandalonePlayDrive returns true if this Drive entry represents a standalone play
+// rather than a traditional multi-play drive. Standalone plays (e.g., extra points
+// after special teams touchdowns) have type="play" and contain Event-like fields
+// at the drive level instead of nested in the events array.
+func (d *Drive) IsStandalonePlayDrive() bool {
+	return d.Type == "play" && d.PlayType == "extra_point"
+}
+
 // AsEvent converts a standalone play Drive entry (type="play") to an Event struct.
 // This is used for standalone plays like extra points after special teams TDs,
 // where the API returns Event-like fields at the drive level instead of nested

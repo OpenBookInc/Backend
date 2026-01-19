@@ -2,11 +2,14 @@ package nba
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/openbook/population-scripts/client/sportradar"
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
+	"github.com/openbook/population-scripts/persister"
 	"github.com/openbook/population-scripts/store"
 	store_nba "github.com/openbook/population-scripts/store/nba"
 	"github.com/shopspring/decimal"
@@ -34,8 +37,16 @@ import (
 // All foreign key lookups (players) are done via database subqueries.
 // All enum validations are done by the database.
 // If any operation fails, the entire transaction is rolled back.
-func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int, pbp *fetcher_nba.PlayByPlayResponse) error {
-	// Step 1: Start transaction for all write operations
+//
+// Before persisting play-by-play data, this function ensures all referenced players
+// exist in the database by fetching and persisting any missing player profiles.
+func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, gameID int, pbp *fetcher_nba.PlayByPlayResponse) error {
+	// Step 1: Ensure all referenced players exist in the database
+	if err := persistMissingIndividuals(ctx, dbStore, apiClient, pbp); err != nil {
+		return fmt.Errorf("failed to persist missing individuals: %w", err)
+	}
+
+	// Step 2: Start transaction for all write operations
 	tx, err := dbStore.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -48,7 +59,7 @@ func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		}
 	}()
 
-	// Step 2: Upsert game status
+	// Step 3: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
 	if err != nil {
@@ -62,7 +73,7 @@ func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		return fmt.Errorf("failed to upsert game status: %w", err)
 	}
 
-	// Step 3: Process all periods and events (plays)
+	// Step 4: Process all periods and events (plays)
 	// NBA has no drives - plays are directly under periods
 	for _, period := range pbp.Periods {
 		for _, event := range period.Events {
@@ -72,7 +83,7 @@ func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int,
 		}
 	}
 
-	// Step 4: Commit the transaction
+	// Step 5: Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -205,6 +216,45 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID in
 	// Replace all statistics for this play - player lookups done via subqueries
 	if err := store_nba.ReplaceNBAPlayStatistics(dbStore, ctx, tx, playID, stats); err != nil {
 		return fmt.Errorf("failed to replace statistics: %w", err)
+	}
+
+	return nil
+}
+
+// persistMissingIndividuals ensures all players referenced in the play-by-play data
+// exist in the database. For any missing players, it fetches their profile from the
+// Sportradar API and persists them.
+func persistMissingIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nba.PlayByPlayResponse) error {
+	// Get NBA league ID for persisting new players
+	nbaLeague, err := dbStore.GetLeagueByName(ctx, "NBA")
+	if err != nil {
+		return fmt.Errorf("failed to get NBA league: %w", err)
+	}
+
+	// Extract all unique player vendor IDs from persistable statistics
+	playerVendorIDs := ExtractPlayerVendorIDs(pbp)
+
+	// Check each player and fetch/persist if missing
+	for _, vendorID := range playerVendorIDs {
+		_, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("failed to check if player exists (vendor_id: %s): %w", vendorID, err)
+			}
+
+			// Player not found - fetch and persist their profile
+			apiClient.RateLimitWait()
+			profile, err := fetcher_nba.FetchPlayerProfile(apiClient, vendorID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch player profile (vendor_id: %s): %w", vendorID, err)
+			}
+
+			_, err = persister.PersistNBAPlayerProfile(ctx, dbStore, profile, nbaLeague.ID)
+			if err != nil {
+				return fmt.Errorf("failed to persist player profile (vendor_id: %s): %w", vendorID, err)
+			}
+			fmt.Printf("  Persisted missing player: %s\n", profile.GetDisplayName())
+		}
 	}
 
 	return nil

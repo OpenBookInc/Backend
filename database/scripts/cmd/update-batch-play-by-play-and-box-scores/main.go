@@ -132,7 +132,7 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Persist play-by-play data
 	fmt.Printf("  Persisting play-by-play data...\n")
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, game.ID, playByPlay); err != nil {
+	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, apiClient, game.ID, playByPlay); err != nil {
 		return fmt.Errorf("failed to persist play-by-play: %w", err)
 	}
 
@@ -201,7 +201,7 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Persist play-by-play data
 	fmt.Printf("  Persisting play-by-play data...\n")
-	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, game.ID, playByPlay); err != nil {
+	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, apiClient, game.ID, playByPlay); err != nil {
 		return fmt.Errorf("failed to persist play-by-play: %w", err)
 	}
 

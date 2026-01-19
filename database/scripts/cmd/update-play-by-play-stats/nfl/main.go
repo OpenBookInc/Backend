@@ -80,7 +80,7 @@ func main() {
 
 	// Persist play-by-play data to database
 	fmt.Println("\nPersisting play-by-play data to database...")
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, cfg.NFLGameID, playByPlay); err != nil {
+	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, apiClient, cfg.NFLGameID, playByPlay); err != nil {
 		fatal("Failed to persist play-by-play data: %v", err)
 	}
 	fmt.Println("Successfully persisted play-by-play data!")
