@@ -103,20 +103,20 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 
 	// Determine the possession team vendor ID.
 	// For regular drives (type="drive"), use the offensive_team field.
-	// For standalone PAT plays (type="play", play_type="extra_point"), the offensive_team
-	// is nil because the API structures these differently - they occur after special teams
-	// touchdowns (punt/kick returns) where there's no traditional "offensive drive".
-	// In this case, we use start_situation.possession which indicates the team attempting
-	// the extra point (the team that scored the touchdown).
+	// For standalone plays (type="play", play_type="extra_point" or "conversion"),
+	// the offensive_team is nil because the API structures these differently - they
+	// occur after special teams touchdowns (punt/kick returns) where there's no
+	// traditional "offensive drive". In this case, we use start_situation.possession
+	// which indicates the team attempting the PAT or two-point conversion.
 	var vendorOffensiveTeamID string
 	if drive.OffensiveTeam != nil {
 		vendorOffensiveTeamID = drive.OffensiveTeam.ID
 	} else if drive.IsStandalonePlayDrive() {
-		// Standalone PAT after a special teams touchdown (e.g., punt return TD).
+		// Standalone PAT or two-point conversion after a special teams touchdown.
 		// The offensive_team is nil because this isn't a traditional drive, but the
-		// team attempting the PAT is available in start_situation.possession.
+		// team attempting the scoring play is available in start_situation.possession.
 		if drive.StartSituation == nil || drive.StartSituation.Possession == nil {
-			return fmt.Errorf("PAT drive missing start_situation.possession information")
+			return fmt.Errorf("standalone play missing start_situation.possession information")
 		}
 		vendorOffensiveTeamID = drive.StartSituation.Possession.ID
 	} else {
@@ -136,13 +136,13 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		return err
 	}
 
-	// For standalone play entries (e.g., extra points after special teams TDs),
-	// the play data and statistics are at the drive level, not nested in events.
-	// Convert the drive to an Event and persist it using the standard flow.
+	// For standalone play entries (e.g., extra points or two-point conversions after
+	// special teams TDs), the play data and statistics are at the drive level, not
+	// nested in events. Convert the drive to an Event and persist it using the standard flow.
 	if drive.IsStandalonePlayDrive() {
 		event := drive.AsEvent()
 		if err := persistPlay(ctx, dbStore, tx, driveID, period, event); err != nil {
-			return fmt.Errorf("failed to persist standalone PAT play (vendor_id: %s): %w", drive.ID, err)
+			return fmt.Errorf("failed to persist standalone play (vendor_id: %s): %w", drive.ID, err)
 		}
 		return nil
 	}
