@@ -10,6 +10,7 @@ import (
 
 	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/config"
+	decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	persister_nfl "github.com/openbook/population-scripts/persister/nfl"
 	"github.com/openbook/population-scripts/store"
@@ -77,6 +78,9 @@ func main() {
 	if playByPlay.ID != game.VendorID {
 		fatal("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
 	}
+
+	// Decorate the fetched data with derived statistics (currently a no-op for NFL)
+	playByPlay = decorator_nfl.DecoratePlayByPlay(playByPlay)
 
 	// Persist play-by-play data to database
 	fmt.Println("\nPersisting play-by-play data to database...")

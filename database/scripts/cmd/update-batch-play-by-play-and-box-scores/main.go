@@ -10,6 +10,8 @@ import (
 
 	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/config"
+	decorator_nba "github.com/openbook/population-scripts/decorator/nba"
+	decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	persister_nba "github.com/openbook/population-scripts/persister/nba"
@@ -130,6 +132,9 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 		return fmt.Errorf("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
 	}
 
+	// Decorate the fetched data with derived statistics (currently a no-op for NFL)
+	playByPlay = decorator_nfl.DecoratePlayByPlay(playByPlay)
+
 	// Persist play-by-play data
 	fmt.Printf("  Persisting play-by-play data...\n")
 	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, apiClient, game.ID, playByPlay); err != nil {
@@ -198,6 +203,9 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	if playByPlay.ID != game.VendorID {
 		return fmt.Errorf("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
 	}
+
+	// Decorate the fetched data with derived statistics (e.g., heave blocks)
+	playByPlay = decorator_nba.DecoratePlayByPlay(playByPlay)
 
 	// Persist play-by-play data
 	fmt.Printf("  Persisting play-by-play data...\n")

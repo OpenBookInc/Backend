@@ -10,6 +10,7 @@ import (
 
 	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/config"
+	decorator_nba "github.com/openbook/population-scripts/decorator/nba"
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
 	persister_nba "github.com/openbook/population-scripts/persister/nba"
 	"github.com/openbook/population-scripts/store"
@@ -82,6 +83,11 @@ func main() {
 	if playByPlay.ID != game.VendorID {
 		fatal("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
 	}
+
+	// Decorate the fetched data with derived statistics (e.g., heave blocks)
+	fmt.Println("\nDecorating play-by-play data...")
+	playByPlay = decorator_nba.DecoratePlayByPlay(playByPlay)
+	fmt.Println("Decoration complete!")
 
 	// Print formatted output
 	fmt.Println("\n" + strings.Repeat("=", 72))

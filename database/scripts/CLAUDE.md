@@ -57,7 +57,11 @@ go mod download
               │ client/  │   │  store/   │   │shared/   │
               │          │   │ fetcher/  │   │models    │
               └──────────┘   └───────────┘   │(reads)   │
-                                            └──────────┘
+                    │                        └──────────┘
+                    ▼
+              ┌───────────┐
+              │ decorator/│  (enriches fetcher output before persister)
+              └───────────┘
 ```
 
 **Package Roles:**
@@ -67,7 +71,11 @@ go mod download
 - **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly. **CRITICAL**: Field names in fetcher structs MUST match the JSON field names from the API exactly (e.g., `Sequence`, not `VendorSequence`), even if the database uses different column names. The fetcher is a pure representation of the API response.
   - Sport-specific code organized in subdirectories (e.g., `fetcher/nfl/`)
 
-- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs and calls store methods. This is where the mapping from API field names to database column names happens.
+- **decorator/**: Enriches fetcher output with derived data that is missing from the raw API response. Accepts fetcher structs and returns the same type with additional data filled in. This sits between fetcher and persister in the data flow: `fetch → decorate → persist`. The decorator keeps the fetcher pure while allowing the persister to process data normally without special cases.
+  - Sport-specific code organized in subdirectories (e.g., `decorator/nba/`)
+  - Example: NBA heave events lack a statistics array when blocked, but the blocker is mentioned in the description. The decorator parses this and adds the block statistic.
+
+- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs (possibly decorated) and calls store methods. This is where the mapping from API field names to database column names happens.
   - Sport-specific code organized in subdirectories (e.g., `persister/nfl/`)
 
 - **reader/**: Reads data from the database for display and comparison. Returns shared/models types.
@@ -79,16 +87,17 @@ go mod download
 
 - **config/**: Environment-based configuration (API keys, database credentials, rate limits, season parameters).
 
-- **main.go**: Simple wrapper that orchestrates fetcher → persister flow. Should contain minimal logic.
+- **main.go**: Simple wrapper that orchestrates fetcher → decorator → persister flow. Should contain minimal logic.
 
 ### Dependency Rules
 
 **Critical**: These dependency rules ensure clean separation of concerns:
 
-1. **fetcher/** → depends only on `client/` (no models/, no persister/)
-2. **persister/** → depends on `fetcher/` and `store/` (no shared/models)
-3. **store/** → depends on shared/models for READs only; uses internal structs for WRITEs
-4. **main.go** → depends on all packages but contains minimal logic
+1. **fetcher/** → depends only on `client/` (no models/, no persister/, no decorator/)
+2. **decorator/** → depends only on `fetcher/` (enriches fetcher output, no models/, no persister/)
+3. **persister/** → depends on `fetcher/` and `store/` (no shared/models)
+4. **store/** → depends on shared/models for READs only; uses internal structs for WRITEs
+5. **main.go** → depends on all packages but contains minimal logic
 
 ### Import Naming Conventions
 
@@ -103,6 +112,7 @@ import models "github.com/openbook/shared/models"
 ```go
 import (
     models_nfl "github.com/openbook/shared/models/nfl"
+    decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
     fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
     persister_nfl "github.com/openbook/population-scripts/persister/nfl"
     reader_nfl "github.com/openbook/population-scripts/reader/nfl"
@@ -126,7 +136,7 @@ Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transf
 
 **Play-by-Play:**
 ```
-Sportradar API → client/ → fetcher/nfl/ (raw API structs) → persister/nfl/ (transformation) → store/nfl/ → PostgreSQL
+Sportradar API → client/ → fetcher/ (raw API structs) → decorator/ (enrichment) → persister/ (transformation) → store/ → PostgreSQL
 ```
 
 **Box Scores (aggregated from play-by-play):**
