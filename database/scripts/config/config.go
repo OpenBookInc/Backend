@@ -85,7 +85,7 @@ func loadBaseConfig() BaseConfig {
 	return BaseConfig{
 		SportradarAPIKey:           os.Getenv("SPORTRADAR_API_KEY"),
 		SportradarAccessLevel:      accessLevel,
-		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("RATE_LIMIT_DELAY_MS", 1000),
+		RateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("SPORTRADAR_RATE_LIMIT_DELAY_MS", 0),
 		PGHost:                     os.Getenv("PG_HOST"),
 		PGPort:                     os.Getenv("PG_PORT"),
 		PGDatabase:                 os.Getenv("PG_DATABASE"),
@@ -128,6 +128,9 @@ func (c *BaseConfig) Validate() error {
 	if c.PGKeyPath == "" {
 		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
 	}
+	if c.RateLimitDelayMilliseconds <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: SPORTRADAR_RATE_LIMIT_DELAY_MS (must be a positive integer)")
+	}
 
 	return nil
 }
@@ -152,26 +155,19 @@ func LoadReferenceDataConfigFromFile(envFile string) (*ReferenceDataConfig, erro
 }
 
 // LoadReferenceDataConfig reads reference data configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
-// Optional fields (with defaults):
-//   - RATE_LIMIT_DELAY_MS (default: 1000)
-//   - NFL_SEASON_START_YEAR (default: current year)
-//   - NFL_SEASON_TYPE (default: "REG")
-//   - NFL_WEEK (default: 1)
-//   - NBA_SEASON_START_YEAR (default: current year)
-//   - NBA_SEASON_TYPE (default: "REG")
+// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
+//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH,
+//   NFL_SEASON_START_YEAR, NFL_SEASON_TYPE, NFL_WEEK, NBA_SEASON_START_YEAR, NBA_SEASON_TYPE
 //
 // This does not load any .env files - use LoadReferenceDataConfigFromFile for that
 func LoadReferenceDataConfig() *ReferenceDataConfig {
-	currentYear := time.Now().Year()
-
 	return &ReferenceDataConfig{
 		BaseConfig:         loadBaseConfig(),
-		NFLSeasonStartYear: envloader.GetEnvAsIntWithDefault("NFL_SEASON_START_YEAR", currentYear),
-		NFLSeasonType:      strings.ToUpper(envloader.GetEnvAsStringWithDefault("NFL_SEASON_TYPE", SeasonTypeRegular)),
-		NFLWeek:            envloader.GetEnvAsIntWithDefault("NFL_WEEK", 1),
-		NBASeasonStartYear: envloader.GetEnvAsIntWithDefault("NBA_SEASON_START_YEAR", currentYear),
-		NBASeasonType:      strings.ToUpper(envloader.GetEnvAsStringWithDefault("NBA_SEASON_TYPE", SeasonTypeRegular)),
+		NFLSeasonStartYear: envloader.GetEnvAsIntWithDefault("NFL_SEASON_START_YEAR", 0),
+		NFLSeasonType:      strings.ToUpper(os.Getenv("NFL_SEASON_TYPE")),
+		NFLWeek:            envloader.GetEnvAsIntWithDefault("NFL_WEEK", 0),
+		NBASeasonStartYear: envloader.GetEnvAsIntWithDefault("NBA_SEASON_START_YEAR", 0),
+		NBASeasonType:      strings.ToUpper(os.Getenv("NBA_SEASON_TYPE")),
 	}
 }
 
@@ -180,6 +176,23 @@ func (c *ReferenceDataConfig) Validate() error {
 	// Validate base config first
 	if err := c.BaseConfig.Validate(); err != nil {
 		return err
+	}
+
+	// Season configuration validation
+	if c.NFLSeasonStartYear <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_SEASON_START_YEAR (must be a positive integer)")
+	}
+	if c.NFLSeasonType == "" {
+		return fmt.Errorf("missing required environment variable: NFL_SEASON_TYPE")
+	}
+	if c.NFLWeek <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NFL_WEEK (must be a positive integer)")
+	}
+	if c.NBASeasonStartYear <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: NBA_SEASON_START_YEAR (must be a positive integer)")
+	}
+	if c.NBASeasonType == "" {
+		return fmt.Errorf("missing required environment variable: NBA_SEASON_TYPE")
 	}
 
 	// Season type validation
@@ -216,9 +229,8 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 }
 
 // LoadPlayByPlayConfig reads play-by-play configuration from environment variables
-// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
-// Optional fields (with defaults):
-//   - RATE_LIMIT_DELAY_MS (default: 1000)
+// Required fields (no defaults): SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
+//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
 //
 // This does not load any .env files - use LoadPlayByPlayConfigFromFile for that
 func LoadPlayByPlayConfig() *PlayByPlayConfig {
@@ -276,9 +288,7 @@ func LoadBoxScoreConfigFromFile(envFile string) (*BoxScoreConfig, error) {
 
 // LoadBoxScoreConfig reads box score configuration from environment variables
 // Required fields (no defaults): PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, NFL_GAME_ID or NBA_GAME_ID
-// Note: SPORTRADAR_API_KEY is not required for box score generation (no API calls)
-// Optional fields (with defaults):
-//   - RATE_LIMIT_DELAY_MS (default: 1000) - not used but inherited from BaseConfig
+// Note: SPORTRADAR_API_KEY and SPORTRADAR_RATE_LIMIT_DELAY_MS are not required for box score generation (no API calls)
 //
 // This does not load any .env files - use LoadBoxScoreConfigFromFile for that
 func LoadBoxScoreConfig() *BoxScoreConfig {
@@ -339,7 +349,8 @@ func LoadBatchUpdateConfigFromFile(envFile string) (*BatchUpdateConfig, error) {
 }
 
 // LoadBatchUpdateConfig reads batch update configuration from environment variables
-// Required fields: SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
+// Required fields: SPORTRADAR_API_KEY, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
+//   PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH
 // At least one date range must be set (NFL or NBA)
 // Date format: YYYY-MM-DD
 //

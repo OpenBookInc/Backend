@@ -12,17 +12,19 @@ Sports data population tool that fetches NBA/NFL data from Sportradar API and pe
 # Validate/compile all packages
 go build ./...
 
-# Run reference data update
+# Run reference data update (teams, players, games, rosters, injuries)
 ./update_reference_data.sh
 
-# Run NFL play-by-play update
+# Run play-by-play update for a single game
 ./update_nfl_play_by_play_stats.sh
+./update_nba_play_by_play_stats.sh
 
-# Run NFL box score generation (from play-by-play data)
+# Run box score generation for a single game (from play-by-play data)
 ./update_nfl_box_score_data.sh
-
-# Run NBA box score generation (from play-by-play data)
 ./update_nba_box_score_data.sh
+
+# Run batch play-by-play and box score update for games in a date range
+./update_batch_play_by_play_and_box_scores.sh
 
 # View NFL box score data from database
 ./compare_nfl_box_score_data.sh
@@ -353,20 +355,30 @@ PostgreSQL enum types are defined in migrations and auto-generated to Go in `sha
 
 Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 
-**Required:**
-- `SPORTRADAR_API_KEY`: Sportradar trial API key
+**Required (all scripts):**
 - `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD`: PostgreSQL connection
 - `PG_KEY_PATH`: Path to SSL certificate (.pem file)
 
-**Optional (with defaults):**
-- `RATE_LIMIT_DELAY_MS`: Milliseconds between API requests (default: 1000)
-- `NFL_SEASON_START_YEAR`: NFL season start year (default: current year)
-- `NFL_SEASON_TYPE`: Season type - REG, PST, PRE (default: REG)
-- `NFL_WEEK`: Week number for injury data (default: 1)
-- `NFL_GAME_ID`: Specific game ID for NFL play-by-play fetch
-- `NBA_SEASON_START_YEAR`: NBA season start year (default: current year)
-- `NBA_SEASON_TYPE`: Season type - REG, PST (default: REG)
-- `NBA_GAME_ID`: Specific game ID for NBA play-by-play fetch
+**Required (Sportradar API scripts):**
+- `SPORTRADAR_API_KEY`: Sportradar API key
+- `SPORTRADAR_ACCESS_LEVEL`: API access level (trial, production)
+- `SPORTRADAR_RATE_LIMIT_DELAY_MS`: Milliseconds between Sportradar API requests
+
+**Required (update_reference_data):**
+- `NFL_SEASON_START_YEAR`: NFL season start year
+- `NFL_SEASON_TYPE`: Season type - REG, PST, PRE
+- `NFL_WEEK`: Week number for injury data
+- `NBA_SEASON_START_YEAR`: NBA season start year
+- `NBA_SEASON_TYPE`: Season type - REG, PST
+
+**Required (single game scripts: update_*_play_by_play_stats, update_*_box_score_data):**
+- `NFL_GAME_ID`: Database integer ID for NFL game (not vendor UUID)
+- `NBA_GAME_ID`: Database integer ID for NBA game (not vendor UUID)
+
+**Required (update_batch_play_by_play_and_box_scores):**
+- At least one complete date range must be set:
+  - `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
+  - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
 
 ## API Endpoints
 
