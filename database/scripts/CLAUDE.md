@@ -396,14 +396,16 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 
 **NBA:**
 - Hierarchy: `/nba/trial/v8/en/league/hierarchy.json`
-- Team Profile: `/nba/trial/v8/en/teams/{teamID}/profile.json`
+- Team Profile: `/nba/trial/v8/en/teams/{teamID}/profile.json` (provides roster player IDs)
+- Player Profile: `/nba/trial/v8/en/players/{playerID}/profile.json` (source of individual data)
 - Season Schedule: `/nba/trial/v8/en/games/{year}/{seasonType}/schedule.json`
 - Injuries: `/nba/trial/v8/en/league/injuries.json` (current, no date parameter)
 - Play-by-Play: `/nba/trial/v8/en/games/{gameID}/pbp.json`
 
 **NFL:**
 - Hierarchy: `/nfl/official/trial/v7/en/league/hierarchy.json`
-- Team Roster: `/nfl/official/trial/v7/en/teams/{teamID}/full_roster.json`
+- Team Roster: `/nfl/official/trial/v7/en/teams/{teamID}/full_roster.json` (provides roster player IDs)
+- Player Profile: `/nfl/official/trial/v7/en/players/{playerID}/profile.json` (source of individual data)
 - Season Schedule: `/nfl/official/trial/v7/en/games/{year}/{seasonType}/schedule.json`
 - Weekly Injuries: `/nfl/official/trial/v7/en/seasons/{year}/{seasonType}/{week}/injuries.json`
 - Play-by-Play: `/nfl/official/trial/v7/en/games/{gameID}/pbp.json`

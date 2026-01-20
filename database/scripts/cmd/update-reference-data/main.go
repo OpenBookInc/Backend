@@ -122,7 +122,7 @@ func main() {
 	fmt.Println("\nPersisting data to database...")
 	fmt.Println(strings.Repeat("=", 72))
 
-	if err := persister.PersistReferenceData(ctx, dbStore, dataStore); err != nil {
+	if err := persister.PersistReferenceData(ctx, dbStore, dataStore, apiClient); err != nil {
 		fatal("Failed to persist data to database: %v", err)
 	}
 

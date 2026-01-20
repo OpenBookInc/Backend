@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/fetcher"
 	"github.com/openbook/population-scripts/store"
 )
@@ -29,14 +30,14 @@ import (
 // 2. Conferences (requires league IDs)
 // 3. Divisions (requires conference IDs)
 // 4. Teams (requires division IDs)
-// 5. Individuals (requires league IDs)
+// 5. Individuals (requires league IDs) - fetches player profiles from API during persistence
 // 6. Rosters (requires team IDs and individual IDs)
 // 7. Games (requires team IDs)
 // 8. Individual statuses (requires individual IDs)
 //
 // Each entity type is upserted independently. Partial success is acceptable.
 // Returns an error if any upsert fails.
-func PersistReferenceData(ctx context.Context, dbStore *store.Store, dataStore *fetcher.ReferenceData) error {
+func PersistReferenceData(ctx context.Context, dbStore *store.Store, dataStore *fetcher.ReferenceData, apiClient *sportradar.Client) error {
 	// Step 1: Upsert leagues
 	fmt.Println("Upserting leagues...")
 	if err := persistLeagues(ctx, dbStore, dataStore); err != nil {
@@ -65,13 +66,13 @@ func PersistReferenceData(ctx context.Context, dbStore *store.Store, dataStore *
 	}
 	fmt.Printf("  Upserted %d teams\n", len(dataStore.Teams))
 
-	// Step 5 & 6: Upsert individuals and rosters
+	// Step 5 & 6: Upsert individuals and rosters (fetches player profiles from API)
 	fmt.Println("Upserting rosters and individuals...")
-	individualCount, rosterCount, err := persistRostersAndIndividuals(ctx, dbStore, dataStore)
+	individualCount, rosterCount, err := persistRostersAndIndividuals(ctx, dbStore, dataStore, apiClient)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("  Upserted %d individuals\n", individualCount)
+	fmt.Printf("  Created %d new individuals\n", individualCount)
 	fmt.Printf("  Upserted %d rosters\n", rosterCount)
 
 	// Step 7: Upsert games
@@ -179,10 +180,11 @@ func persistTeams(ctx context.Context, dbStore *store.Store, dataStore *fetcher.
 	return nil
 }
 
-// persistRostersAndIndividuals upserts all rosters and their individuals
-// Returns the count of individuals and rosters upserted
-func persistRostersAndIndividuals(ctx context.Context, dbStore *store.Store, dataStore *fetcher.ReferenceData) (int, int, error) {
-	individualCount := 0
+// persistRostersAndIndividuals upserts all rosters and their individuals.
+// Only fetches player profiles from the API for individuals not already in the database.
+// Returns the count of new individuals created and rosters upserted.
+func persistRostersAndIndividuals(ctx context.Context, dbStore *store.Store, dataStore *fetcher.ReferenceData, apiClient *sportradar.Client) (int, int, error) {
+	newIndividualCount := 0
 	rosterCount := 0
 
 	for _, roster := range dataStore.Rosters {
@@ -190,32 +192,44 @@ func persistRostersAndIndividuals(ctx context.Context, dbStore *store.Store, dat
 			continue
 		}
 
-		// Determine league ID from the team's division->conference->league chain
-		leagueID := 0
+		// Determine league from the team's division->conference->league chain
+		leagueName := ""
 		if roster.Team.Division != nil &&
 			roster.Team.Division.Conference != nil &&
 			roster.Team.Division.Conference.League != nil {
-			leagueID = roster.Team.Division.Conference.League.ID
+			leagueName = roster.Team.Division.Conference.League.Name
 		}
 
-		// Upsert all individuals in this roster and collect their IDs
+		fmt.Printf("  Processing players for %s %s (%d players)...\n",
+			roster.Team.Market, roster.Team.Name, len(roster.Players))
+
+		// Upsert all individuals in this roster and collect their IDs.
+		// Only fetches player profiles from the API for individuals not already in the database.
 		var individualIDs []int64
-		for _, player := range roster.Players {
-			playerID, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
-				VendorID:        player.VendorID,
-				DisplayName:     player.DisplayName,
-				AbbreviatedName: player.AbbreviatedName,
-				DateOfBirth:     player.DateOfBirth,
-				LeagueID:        leagueID,
-				Position:        player.Position,
-				JerseyNumber:    player.JerseyNumber,
-			})
+		teamNewCount := 0
+		for i, player := range roster.Players {
+			individual, created, err := UpsertIndividualIfMissing(ctx, dbStore, apiClient, player.VendorID, leagueName)
 			if err != nil {
-				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.DisplayName, err)
+				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.VendorID, err)
 			}
-			player.ID = playerID
-			individualIDs = append(individualIDs, int64(playerID))
-			individualCount++
+
+			player.ID = individual.ID
+			player.DisplayName = individual.DisplayName
+			player.AbbreviatedName = individual.AbbreviatedName
+			player.DateOfBirth = individual.DateOfBirth
+			player.Position = individual.Position
+			player.JerseyNumber = individual.JerseyNumber
+
+			individualIDs = append(individualIDs, int64(individual.ID))
+			if created {
+				newIndividualCount++
+				teamNewCount++
+			}
+
+			// Progress output every 10 players
+			if (i+1)%10 == 0 || i+1 == len(roster.Players) {
+				fmt.Printf("    Processed %d/%d players (%d new)\n", i+1, len(roster.Players), teamNewCount)
+			}
 		}
 
 		// Upsert the roster
@@ -231,7 +245,7 @@ func persistRostersAndIndividuals(ctx context.Context, dbStore *store.Store, dat
 		rosterCount++
 	}
 
-	return individualCount, rosterCount, nil
+	return newIndividualCount, rosterCount, nil
 }
 
 // persistGames upserts all games and updates their IDs in the dataStore

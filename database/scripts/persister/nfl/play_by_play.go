@@ -2,7 +2,6 @@ package nfl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -310,35 +309,17 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 // exist in the database. For any missing players, it fetches their profile from the
 // Sportradar API and persists them.
 func persistMissingIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nfl.PlayByPlayResponse) error {
-	// Get NFL league ID for persisting new players
-	nflLeague, err := dbStore.GetLeagueByName(ctx, "NFL")
-	if err != nil {
-		return fmt.Errorf("failed to get NFL league: %w", err)
-	}
-
 	// Extract all unique player vendor IDs from persistable statistics
 	playerVendorIDs := ExtractPlayerVendorIDs(pbp)
 
 	// Check each player and fetch/persist if missing
 	for _, vendorID := range playerVendorIDs {
-		_, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+		individual, created, err := persister.UpsertIndividualIfMissing(ctx, dbStore, apiClient, vendorID, "NFL")
 		if err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return fmt.Errorf("failed to check if player exists (vendor_id: %s): %w", vendorID, err)
-			}
-
-			// Player not found - fetch and persist their profile
-			apiClient.RateLimitWait()
-			profile, err := fetcher_nfl.FetchPlayerProfile(apiClient, vendorID)
-			if err != nil {
-				return fmt.Errorf("failed to fetch player profile (vendor_id: %s): %w", vendorID, err)
-			}
-
-			_, err = persister.PersistNFLPlayerProfile(ctx, dbStore, profile, nflLeague.ID)
-			if err != nil {
-				return fmt.Errorf("failed to persist player profile (vendor_id: %s): %w", vendorID, err)
-			}
-			fmt.Printf("  Persisted missing player: %s\n", profile.GetDisplayName())
+			return fmt.Errorf("failed to ensure player exists (vendor_id: %s): %w", vendorID, err)
+		}
+		if created {
+			fmt.Printf("  Persisted missing player: %s\n", individual.DisplayName)
 		}
 	}
 
