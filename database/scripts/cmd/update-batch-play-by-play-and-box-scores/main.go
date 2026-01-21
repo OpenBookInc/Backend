@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/openbook/population-scripts/client/sportradar"
+	"github.com/openbook/population-scripts/cmd/common"
 	"github.com/openbook/population-scripts/config"
 	decorator_nba "github.com/openbook/population-scripts/decorator/nba"
 	decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
@@ -59,13 +61,18 @@ func main() {
 	ctx := context.Background()
 
 	// Connect to database
-	fmt.Println("\nConnecting to database...")
-	dbStore, err := store.New(ctx, cfg.PGHost, cfg.PGPort, cfg.PGDatabase, cfg.PGUser, cfg.PGPassword, cfg.PGKeyPath)
+	dbStore, err := common.ConnectToDatabase(ctx, &common.DatabaseConfig{
+		Host:     cfg.PGHost,
+		Port:     cfg.PGPort,
+		Database: cfg.PGDatabase,
+		User:     cfg.PGUser,
+		Password: cfg.PGPassword,
+		KeyPath:  cfg.PGKeyPath,
+	})
 	if err != nil {
-		fatal("Failed to connect to database: %v", err)
+		fatal("%v", err)
 	}
 	defer dbStore.Close()
-	fmt.Println("Connected to database successfully!")
 
 	// Create API client with configured rate limit and access level
 	clientConfig := &sportradar.ClientConfig{
@@ -146,23 +153,17 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
-	pbpTx, err := dbStore.BeginTx(ctx)
+	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
+		if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+			return fmt.Errorf("failed to persist play-by-play: %w", err)
+		}
+		if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+			return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to begin play-by-play transaction: %w", err)
-	}
-
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
-		pbpTx.Rollback(ctx)
-		return fmt.Errorf("failed to persist play-by-play: %w", err)
-	}
-
-	if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
-		pbpTx.Rollback(ctx)
-		return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
-	}
-
-	if err := pbpTx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit play-by-play transaction: %w", err)
+		return err
 	}
 
 	// Read play-by-play data back for box score generation
@@ -188,24 +189,18 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	}
 
 	// Persist box scores in a transaction
-	bsTx, err := dbStore.BeginTx(ctx)
+	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
+		upsertedBoxScores, err := persister_nfl.PersistNFLBoxScores(ctx, dbStore, tx, pbpData)
+		if err != nil {
+			return fmt.Errorf("failed to persist box scores: %w", err)
+		}
+		if err := persister_nfl.CheckAndUpdateNFLBoxScoreDeletions(ctx, dbStore, tx, existingBoxScores, upsertedBoxScores); err != nil {
+			return fmt.Errorf("failed to check and update box score deletions: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to begin box score transaction: %w", err)
-	}
-
-	upsertedBoxScores, err := persister_nfl.PersistNFLBoxScores(ctx, dbStore, bsTx, pbpData)
-	if err != nil {
-		bsTx.Rollback(ctx)
-		return fmt.Errorf("failed to persist box scores: %w", err)
-	}
-
-	if err := persister_nfl.CheckAndUpdateNFLBoxScoreDeletions(ctx, dbStore, bsTx, existingBoxScores, upsertedBoxScores); err != nil {
-		bsTx.Rollback(ctx)
-		return fmt.Errorf("failed to check and update box score deletions: %w", err)
-	}
-
-	if err := bsTx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit box score transaction: %w", err)
+		return err
 	}
 
 	fmt.Printf("  Successfully processed game %d\n", game.ID)
@@ -263,23 +258,17 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
-	pbpTx, err := dbStore.BeginTx(ctx)
+	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
+		if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+			return fmt.Errorf("failed to persist play-by-play: %w", err)
+		}
+		if err := persister_nba.CheckAndUpdateNBAPlayByPlayDeletions(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+			return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to begin play-by-play transaction: %w", err)
-	}
-
-	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
-		pbpTx.Rollback(ctx)
-		return fmt.Errorf("failed to persist play-by-play: %w", err)
-	}
-
-	if err := persister_nba.CheckAndUpdateNBAPlayByPlayDeletions(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
-		pbpTx.Rollback(ctx)
-		return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
-	}
-
-	if err := pbpTx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit play-by-play transaction: %w", err)
+		return err
 	}
 
 	// Read play-by-play data back for box score generation
@@ -305,24 +294,18 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	}
 
 	// Persist box scores in a transaction
-	bsTx, err := dbStore.BeginTx(ctx)
+	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
+		upsertedBoxScores, err := persister_nba.PersistNBABoxScores(ctx, dbStore, tx, pbpData)
+		if err != nil {
+			return fmt.Errorf("failed to persist box scores: %w", err)
+		}
+		if err := persister_nba.CheckAndUpdateNBABoxScoreDeletions(ctx, dbStore, tx, existingBoxScores, upsertedBoxScores); err != nil {
+			return fmt.Errorf("failed to check and update box score deletions: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to begin box score transaction: %w", err)
-	}
-
-	upsertedBoxScores, err := persister_nba.PersistNBABoxScores(ctx, dbStore, bsTx, pbpData)
-	if err != nil {
-		bsTx.Rollback(ctx)
-		return fmt.Errorf("failed to persist box scores: %w", err)
-	}
-
-	if err := persister_nba.CheckAndUpdateNBABoxScoreDeletions(ctx, dbStore, bsTx, existingBoxScores, upsertedBoxScores); err != nil {
-		bsTx.Rollback(ctx)
-		return fmt.Errorf("failed to check and update box score deletions: %w", err)
-	}
-
-	if err := bsTx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit box score transaction: %w", err)
+		return err
 	}
 
 	fmt.Printf("  Successfully processed game %d\n", game.ID)

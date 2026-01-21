@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/openbook/population-scripts/client/sportradar"
+	"github.com/openbook/population-scripts/cmd/common"
 	"github.com/openbook/population-scripts/config"
 	decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	persister_nfl "github.com/openbook/population-scripts/persister/nfl"
-	"github.com/openbook/population-scripts/store"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -42,13 +43,18 @@ func main() {
 	ctx := context.Background()
 
 	// Connect to database
-	fmt.Println("\nConnecting to database...")
-	dbStore, err := store.New(ctx, cfg.PGHost, cfg.PGPort, cfg.PGDatabase, cfg.PGUser, cfg.PGPassword, cfg.PGKeyPath)
+	dbStore, err := common.ConnectToDatabase(ctx, &common.DatabaseConfig{
+		Host:     cfg.PGHost,
+		Port:     cfg.PGPort,
+		Database: cfg.PGDatabase,
+		User:     cfg.PGUser,
+		Password: cfg.PGPassword,
+		KeyPath:  cfg.PGKeyPath,
+	})
 	if err != nil {
-		fatal("Failed to connect to database: %v", err)
+		fatal("%v", err)
 	}
 	defer dbStore.Close()
-	fmt.Println("Connected to database successfully!")
 
 	// Lookup game by database ID to get vendor_id for API call
 	fmt.Println("\nLooking up game in database...")
@@ -89,28 +95,19 @@ func main() {
 		fatal("Failed to persist missing individuals: %v", err)
 	}
 
-	// Step 2: Begin transaction for play-by-play persistence and deletion checking
+	// Step 2: Persist play-by-play data in a transaction
 	fmt.Println("\nPersisting play-by-play data to database...")
-	tx, err := dbStore.BeginTx(ctx)
+	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
+		if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
+			return fmt.Errorf("failed to persist play-by-play data: %w", err)
+		}
+		if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
+			return fmt.Errorf("failed to check and update deletions: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		fatal("Failed to begin transaction: %v", err)
-	}
-
-	// Persist play-by-play data
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
-		tx.Rollback(ctx)
-		fatal("Failed to persist play-by-play data: %v", err)
-	}
-
-	// Check and update deletions
-	if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
-		tx.Rollback(ctx)
-		fatal("Failed to check and update deletions: %v", err)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(ctx); err != nil {
-		fatal("Failed to commit transaction: %v", err)
+		fatal("%v", err)
 	}
 	fmt.Println("Successfully persisted play-by-play data!")
 
