@@ -114,6 +114,7 @@ func ReplaceNBAPlayStatistics(s *store.Store, ctx context.Context, tx pgx.Tx, pl
 
 // GetNBAPlayStatisticsByGameID retrieves all statistics for a given game.
 // Joins through nba_plays to filter by game_id.
+// Only returns statistics where the associated play is not deleted.
 // Returns all PlayStatistic records associated with plays in the specified game.
 func GetNBAPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nba.PlayStatistic, error) {
 	query := `
@@ -125,7 +126,7 @@ func GetNBAPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID in
 		       ps.steals, ps.blocks, ps.turnovers_committed, ps.personal_fouls_committed
 		FROM nba_play_statistics ps
 		JOIN nba_plays p ON ps.play_id = p.id
-		WHERE p.game_id = $1
+		WHERE p.game_id = $1 AND p.vendor_deleted = FALSE
 	`
 
 	rows, err := s.Pool().Query(ctx, query, gameID)

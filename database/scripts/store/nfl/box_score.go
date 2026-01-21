@@ -51,6 +51,7 @@ type NFLBoxScoreForUpsert struct {
 // UpsertNFLBoxScore inserts or updates a box score in the database.
 // Uses (game_id, individual_id) as the unique constraint for ON CONFLICT.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
+// Sets vendor_deleted = FALSE on both insert and update.
 func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore *NFLBoxScoreForUpsert) error {
 	query := `
 		INSERT INTO nfl_box_scores (
@@ -64,11 +65,11 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			passing_yards, rushing_yards, receiving_yards,
 			passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
 			interceptions_thrown, sacks_taken,
-			created_at, updated_at
+			vendor_deleted, created_at, updated_at
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
-			NOW(), NOW()
+			FALSE, NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
 		DO UPDATE SET
@@ -93,6 +94,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			receiving_touchdowns = EXCLUDED.receiving_touchdowns,
 			interceptions_thrown = EXCLUDED.interceptions_thrown,
 			sacks_taken = EXCLUDED.sacks_taken,
+			vendor_deleted = FALSE,
 			updated_at = NOW()
 	`
 
@@ -129,8 +131,25 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 	return nil
 }
 
+// MarkNFLBoxScoreDeleted marks an NFL box score as vendor_deleted = TRUE.
+// This function accepts a transaction (pgx.Tx) to support atomic operations.
+func MarkNFLBoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, boxScoreID int) error {
+	query := `
+		UPDATE nfl_box_scores
+		SET vendor_deleted = TRUE, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := tx.Exec(ctx, query, boxScoreID)
+	if err != nil {
+		return fmt.Errorf("failed to mark box score as deleted (box_score_id: %d): %w", boxScoreID, err)
+	}
+
+	return nil
+}
+
 // GetNFLBoxScoresByGameID retrieves all box scores for a game with individual info.
 // Uses the registry for caching Game and Individual instances.
+// Only returns box scores where vendor_deleted = FALSE.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
 func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.IndividualBoxScore, error) {
 	// Get the game from registry (resolves teams automatically)
@@ -152,7 +171,7 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			bs.passing_touchdowns, bs.rushing_touchdowns, bs.receiving_touchdowns,
 			bs.interceptions_thrown, bs.sacks_taken
 		FROM nfl_box_scores bs
-		WHERE bs.game_id = $1
+		WHERE bs.game_id = $1 AND bs.vendor_deleted = FALSE
 		ORDER BY bs.individual_id
 	`
 
@@ -224,7 +243,7 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 
 // GetAllNFLGamesWithBoxScores returns all game IDs that have NFL box score entries
 // within the specified date range (inclusive).
-// Filters by scheduled_start_time.
+// Filters by scheduled_start_time and only considers non-deleted box scores.
 // Returns game IDs ordered by game_id ascending.
 func GetAllNFLGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]int, error) {
 	query := `
@@ -232,6 +251,7 @@ func GetAllNFLGamesWithBoxScores(s *store.Store, ctx context.Context, startDate,
 		FROM nfl_box_scores bs
 		JOIN games g ON bs.game_id = g.id
 		WHERE g.scheduled_start_time >= $1 AND DATE(g.scheduled_start_time) <= DATE($2)
+		  AND bs.vendor_deleted = FALSE
 		ORDER BY bs.game_id
 	`
 

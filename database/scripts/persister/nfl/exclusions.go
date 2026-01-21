@@ -13,10 +13,15 @@ import (
 // For fetch-level exclusions, see fetcher/exclusions.go.
 
 // shouldPersistDrive determines whether a drive should be persisted to the database.
-// Returns false for "event" type entries (timeouts, end-of-period markers, etc.) and
-// standalone penalty plays (which contain no meaningful statistics).
-// Returns true for "drive" type entries.
+// Returns false for:
+// - Deleted entries (removed/invalidated by Sportradar)
+// - "event" type entries (timeouts, end-of-period markers, etc.)
+// - Standalone penalty plays (which contain no meaningful statistics)
+// Returns true for "drive" type entries and valid standalone plays.
 func shouldPersistDrive(drive *fetcher_nfl.Drive) bool {
+	if drive.Deleted {
+		return false
+	}
 	if drive.Type == "event" {
 		return false
 	}
@@ -27,9 +32,16 @@ func shouldPersistDrive(drive *fetcher_nfl.Drive) bool {
 }
 
 // shouldPersistPlay determines whether a play (event) should be persisted to the database.
-// Returns false for non-play events (timeouts, end-of-period markers, etc.) and unofficial plays.
+// Returns false for:
+// - Deleted entries (removed/invalidated by Sportradar)
+// - Non-play events (timeouts, end-of-period markers, etc.)
+// - Unofficial plays
 // Returns true only for official, confirmed plays.
 func shouldPersistPlay(event *fetcher_nfl.Event) bool {
+	if event.Deleted {
+		return false
+	}
+
 	if event.Type != "play" {
 		return false
 	}

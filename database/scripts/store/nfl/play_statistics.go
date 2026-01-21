@@ -135,22 +135,26 @@ func ReplaceNFLPlayStatistics(s *store.Store, ctx context.Context, tx pgx.Tx, pl
 	return nil
 }
 
-// GetNFLPlayStatisticsByPlayID retrieves all statistics for a given play
+// GetNFLPlayStatisticsByPlayID retrieves all statistics for a given play.
+// Only returns statistics where the associated play and drive are not deleted.
 func GetNFLPlayStatisticsByPlayID(s *store.Store, ctx context.Context, playID int) ([]*models_nfl.PlayStatistic, error) {
 	query := `
-		SELECT id, play_id, individual_id, stat_type,
-		       passing_attempts, rushing_attempts, receiving_targets,
-		       passing_yards, rushing_yards, receiving_yards,
-		       passing_touchdowns, rushing_touchdowns, receiving_touchdowns,
-		       passing_completions, receiving_receptions,
-		       interceptions_thrown, interceptions_caught,
-		       fumbles_committed,
-		       sacks_taken, sacks_made, sack_assists_made,
-		       field_goal_attempts, field_goal_makes,
-		       extra_point_attempts, extra_point_makes,
-		       nullified
-		FROM nfl_play_statistics
-		WHERE play_id = $1
+		SELECT ps.id, ps.play_id, ps.individual_id, ps.stat_type,
+		       ps.passing_attempts, ps.rushing_attempts, ps.receiving_targets,
+		       ps.passing_yards, ps.rushing_yards, ps.receiving_yards,
+		       ps.passing_touchdowns, ps.rushing_touchdowns, ps.receiving_touchdowns,
+		       ps.passing_completions, ps.receiving_receptions,
+		       ps.interceptions_thrown, ps.interceptions_caught,
+		       ps.fumbles_committed,
+		       ps.sacks_taken, ps.sacks_made, ps.sack_assists_made,
+		       ps.field_goal_attempts, ps.field_goal_makes,
+		       ps.extra_point_attempts, ps.extra_point_makes,
+		       ps.nullified
+		FROM nfl_play_statistics ps
+		JOIN nfl_plays p ON ps.play_id = p.id
+		JOIN nfl_drives d ON p.drive_id = d.id
+		WHERE ps.play_id = $1
+		  AND p.vendor_deleted = FALSE AND d.vendor_deleted = FALSE
 	`
 
 	rows, err := s.Pool().Query(ctx, query, playID)
@@ -205,6 +209,7 @@ func GetNFLPlayStatisticsByPlayID(s *store.Store, ctx context.Context, playID in
 
 // GetNFLPlayStatisticsByGameID retrieves all statistics for a given game.
 // Joins through nfl_plays -> nfl_drives to filter by game_id.
+// Only returns statistics where the associated play and drive are not deleted.
 // Returns all PlayStatistic records associated with plays in the specified game.
 func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.PlayStatistic, error) {
 	query := `
@@ -223,6 +228,7 @@ func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID in
 		JOIN nfl_plays p ON ps.play_id = p.id
 		JOIN nfl_drives d ON p.drive_id = d.id
 		WHERE d.game_id = $1
+		  AND p.vendor_deleted = FALSE AND d.vendor_deleted = FALSE
 	`
 
 	rows, err := s.Pool().Query(ctx, query, gameID)

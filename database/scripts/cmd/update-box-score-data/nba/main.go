@@ -11,6 +11,7 @@ import (
 	persister_nba "github.com/openbook/population-scripts/persister/nba"
 	reader_nba "github.com/openbook/population-scripts/reader/nba"
 	"github.com/openbook/population-scripts/store"
+	store_nba "github.com/openbook/population-scripts/store/nba"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -68,10 +69,37 @@ func main() {
 	boxScoreCount := persister_nba.GetBoxScoreCount(pbpData)
 	fmt.Printf("Will generate box scores for %d players\n", boxScoreCount)
 
-	// Persist box scores to database
+	// Step 1: Get existing box scores before starting the transaction
+	fmt.Println("\nGetting existing box scores from database...")
+	existingBoxScores, err := store_nba.GetNBABoxScoresByGameID(dbStore, ctx, cfg.NBAGameID)
+	if err != nil {
+		fatal("Failed to get existing box scores: %v", err)
+	}
+	fmt.Printf("Found %d existing box scores\n", len(existingBoxScores))
+
+	// Step 2: Begin transaction for box score persistence and deletion checking
 	fmt.Println("\nPersisting box scores to database...")
-	if err := persister_nba.PersistNBABoxScores(ctx, dbStore, pbpData); err != nil {
+	tx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		fatal("Failed to begin transaction: %v", err)
+	}
+
+	// Persist box scores
+	upsertedBoxScores, err := persister_nba.PersistNBABoxScores(ctx, dbStore, tx, pbpData)
+	if err != nil {
+		tx.Rollback(ctx)
 		fatal("Failed to persist box scores: %v", err)
+	}
+
+	// Check and update deletions
+	if err := persister_nba.CheckAndUpdateNBABoxScoreDeletions(ctx, dbStore, tx, existingBoxScores, upsertedBoxScores); err != nil {
+		tx.Rollback(ctx)
+		fatal("Failed to check and update deletions: %v", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		fatal("Failed to commit transaction: %v", err)
 	}
 	fmt.Printf("Successfully persisted %d box scores!\n", boxScoreCount)
 

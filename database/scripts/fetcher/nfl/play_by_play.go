@@ -361,7 +361,10 @@ func (p *Period) String() string {
 }
 
 // Event represents a game event (play, timeout, etc.)
+// Events may have "deleted": true, indicating they were removed/invalidated
+// by Sportradar. These should be skipped during persistence.
 type Event struct {
+	Deleted        bool           `json:"deleted"`
 	ID             string         `json:"id"`
 	Type           string         `json:"type"`
 	PlayType       string         `json:"play_type"`
@@ -598,7 +601,11 @@ func (l *LocationInfo) String() string {
 // For type="play" entries (e.g., PATs after punt/kick return TDs), the structure
 // differs from regular drives: they have no offensive_team, but contain play_type,
 // start_situation, and statistics at the drive level instead of nested in events.
+//
+// Entries may also have "deleted": true, indicating they were removed/invalidated
+// by Sportradar. These should be skipped during persistence.
 type Drive struct {
+	Deleted       bool          `json:"deleted"`
 	Type          string        `json:"type"`
 	ID            string        `json:"id"`
 	Sequence      float64       `json:"sequence"`

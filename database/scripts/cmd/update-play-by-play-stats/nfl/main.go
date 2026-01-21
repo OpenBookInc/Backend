@@ -83,10 +83,34 @@ func main() {
 	// Decorate the fetched data with derived statistics (currently a no-op for NFL)
 	playByPlay = decorator_nfl.DecoratePlayByPlay(playByPlay)
 
-	// Persist play-by-play data to database
+	// Step 1: Persist missing individuals (outside transaction, may make API calls)
+	fmt.Println("\nEnsuring all referenced players exist in database...")
+	if err := persister_nfl.PersistMissingNFLIndividuals(ctx, dbStore, apiClient, playByPlay); err != nil {
+		fatal("Failed to persist missing individuals: %v", err)
+	}
+
+	// Step 2: Begin transaction for play-by-play persistence and deletion checking
 	fmt.Println("\nPersisting play-by-play data to database...")
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, apiClient, cfg.NFLGameID, playByPlay); err != nil {
+	tx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		fatal("Failed to begin transaction: %v", err)
+	}
+
+	// Persist play-by-play data
+	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
+		tx.Rollback(ctx)
 		fatal("Failed to persist play-by-play data: %v", err)
+	}
+
+	// Check and update deletions
+	if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, cfg.NFLGameID, playByPlay); err != nil {
+		tx.Rollback(ctx)
+		fatal("Failed to check and update deletions: %v", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		fatal("Failed to commit transaction: %v", err)
 	}
 	fmt.Println("Successfully persisted play-by-play data!")
 

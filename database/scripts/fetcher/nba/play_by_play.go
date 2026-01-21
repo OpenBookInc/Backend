@@ -201,8 +201,11 @@ type TeamScore struct {
 	Reference string `json:"reference"`
 }
 
-// Event represents a single play-by-play event
+// Event represents a single play-by-play event.
+// Events may have "deleted": true, indicating they were removed/invalidated
+// by Sportradar. These should be skipped during persistence.
 type Event struct {
+	Deleted      bool         `json:"deleted"`
 	ID           string       `json:"id"`
 	Clock        string       `json:"clock"`
 	Updated      string       `json:"updated"`

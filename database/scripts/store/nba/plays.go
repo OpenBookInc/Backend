@@ -26,21 +26,23 @@ type NBAPlayForUpsert struct {
 // Uses (game_id, vendor_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the play for use as a foreign key in statistics.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
+// Sets vendor_deleted = FALSE on both insert and update.
 func UpsertNBAPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NBAPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nba_plays (
 			game_id, vendor_id, vendor_sequence,
 			period_type, period_number,
 			description,
-			vendor_created_at, vendor_updated_at, created_at, updated_at
+			vendor_deleted, vendor_created_at, vendor_updated_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4::period_type, $5, $6, $7, $8, NOW(), NOW())
+		VALUES ($1, $2, $3, $4::period_type, $5, $6, FALSE, $7, $8, NOW(), NOW())
 		ON CONFLICT (game_id, vendor_id)
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,
 			period_type = EXCLUDED.period_type,
 			period_number = EXCLUDED.period_number,
 			description = EXCLUDED.description,
+			vendor_deleted = FALSE,
 			vendor_created_at = EXCLUDED.vendor_created_at,
 			vendor_updated_at = EXCLUDED.vendor_updated_at,
 			updated_at = NOW()
@@ -63,4 +65,43 @@ func UpsertNBAPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NBAPlay
 	}
 
 	return id, nil
+}
+
+// NBAPlayBasic holds the minimal play data needed for deletion checking
+type NBAPlayBasic struct {
+	ID int
+}
+
+// GetNBAPlayByVendorID retrieves an NBA play by game_id and vendor_id.
+// Only returns plays where vendor_deleted = FALSE.
+func GetNBAPlayByVendorID(s *store.Store, ctx context.Context, gameID int, vendorID string) (*NBAPlayBasic, error) {
+	query := `
+		SELECT id
+		FROM nba_plays
+		WHERE game_id = $1 AND vendor_id = $2 AND vendor_deleted = FALSE
+	`
+
+	var play NBAPlayBasic
+	err := s.Pool().QueryRow(ctx, query, gameID, vendorID).Scan(&play.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NBA play with vendor_id %s: %w", vendorID, err)
+	}
+
+	return &play, nil
+}
+
+// MarkNBAPlayDeleted marks an NBA play as vendor_deleted = TRUE.
+// This function accepts a transaction (pgx.Tx) to support atomic operations.
+func MarkNBAPlayDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, playID int) error {
+	query := `
+		UPDATE nba_plays
+		SET vendor_deleted = TRUE, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := tx.Exec(ctx, query, playID)
+	if err != nil {
+		return fmt.Errorf("failed to mark play as deleted (play_id: %d): %w", playID, err)
+	}
+
+	return nil
 }

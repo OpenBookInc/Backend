@@ -287,6 +287,90 @@ All upserts require UNIQUE constraints:
 
 Missing constraints cause: `ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification`
 
+### Vendor Deletion (Soft Deletes)
+
+The codebase implements soft deletes via a `vendor_deleted` boolean column on play-by-play and box score tables. This allows data to be "deleted" without losing it, enabling audit trails and potential recovery.
+
+**Tables with `vendor_deleted`:**
+- `nfl_drives`
+- `nfl_plays`
+- `nba_plays`
+- `nfl_box_scores`
+- `nba_box_scores`
+
+**How it works:**
+
+1. **Sportradar API `deleted` field**: The API response includes a `deleted` boolean field on drives (NFL) and events/plays (NFL/NBA). When Sportradar marks data as deleted, this field is set to `true`.
+
+2. **Upserts reset `vendor_deleted` to FALSE**: When a drive, play, or box score is upserted, it always sets `vendor_deleted = FALSE`. This handles the case where previously-deleted data is "undeleted" by Sportradar.
+
+3. **Deletion checking after persistence**: After persisting play-by-play data, `CheckAndUpdate*Deletions()` functions scan for entities marked as deleted in the API and mark them as deleted in the database.
+
+4. **Read filtering**: All getter functions (e.g., `GetNFLDriveByVendorID`) filter by `vendor_deleted = FALSE`. Deletion checking uses these same functions - if an entity is already deleted (not found), we skip marking it again.
+
+**Play-by-Play Deletion Logic:**
+
+```
+CheckAndUpdateNFLPlayByPlayDeletions:
+  For each drive in API response:
+    If drive.Deleted == true:
+      Look up drive in DB (non-deleted only)
+      If found: Mark drive deleted (cascades to plays)
+      If not found: Skip (doesn't exist or already deleted)
+    Else:
+      For each event in drive:
+        If event.Deleted == true:
+          Look up drive in DB → Look up play in DB (non-deleted only)
+          If found: Mark play deleted
+          If not found: Skip (doesn't exist or already deleted)
+
+CheckAndUpdateNBAPlayByPlayDeletions:
+  For each event in API response:
+    If event.Deleted == true:
+      Look up play in DB (non-deleted only)
+      If found: Mark play deleted
+      If not found: Skip (doesn't exist or already deleted)
+```
+
+**Box Score Deletion Logic:**
+
+Box scores are derived from play-by-play data, so deletion is detected differently:
+```
+CheckAndUpdateNFLBoxScoreDeletions / CheckAndUpdateNBABoxScoreDeletions:
+  1. Query existing box scores BEFORE the transaction
+  2. Persist new box scores (returns list of upserted records)
+  3. Compare: any existing box score whose individual_id is NOT in the upserted list → mark deleted
+```
+
+**NFL Drive → Play Cascade:**
+
+When an NFL drive is marked deleted, all its plays are automatically marked deleted in the same operation:
+```go
+// MarkNFLDriveDeleted cascades to plays
+UPDATE nfl_plays SET vendor_deleted = TRUE WHERE drive_id = $1
+UPDATE nfl_drives SET vendor_deleted = TRUE WHERE id = $1
+```
+
+**Edge Cases Handled:**
+
+| Edge Case | Behavior |
+|-----------|----------|
+| Entity marked deleted in API but doesn't exist in DB | Silently skipped (nothing to delete) |
+| Entity marked deleted in API but already deleted in DB | Silently skipped (lookup returns not found) |
+| Previously deleted entity reappears in API (not deleted) | Upsert resets `vendor_deleted = FALSE` |
+| NFL play's parent drive is deleted | Play excluded from reads (filtered by both play AND drive `vendor_deleted`) |
+| Box score for player who no longer has stats | Marked as deleted via comparison logic |
+| Statistics associated with deleted plays | Not directly marked; excluded via play's deleted status |
+
+**Transaction Scope:**
+
+All deletion checks happen within the same transaction as the persist operations:
+1. `PersistMissing*Individuals()` - Outside transaction (may make API calls)
+2. `BeginTx()`
+3. `Persist*PlayByPlay()` or `Persist*BoxScores()`
+4. `CheckAndUpdate*Deletions()`
+5. `Commit()`
+
 ### Data Exclusion Rules
 
 Exclusion logic is split between two files based on when filtering occurs:

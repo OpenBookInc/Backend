@@ -27,37 +27,31 @@ import (
 // - Fault-intolerant: Any constraint violation causes full transaction rollback
 // =============================================================================
 
-// PersistNFLPlayByPlay persists play-by-play data to the database in a single transaction.
+// PersistMissingNFLIndividuals ensures all players referenced in the play-by-play data
+// exist in the database. For any missing players, it fetches their profile from the
+// Sportradar API and persists them.
+//
+// This function should be called BEFORE starting the transaction, as it may make
+// API calls and individual database writes that should not be part of the main transaction.
+func PersistMissingNFLIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nfl.PlayByPlayResponse) error {
+	return persistMissingIndividuals(ctx, dbStore, apiClient, pbp)
+}
+
+// PersistNFLPlayByPlay persists play-by-play data to the database within the provided transaction.
 // Only events with Type == "play" AND Official == true are persisted.
 // These represent official, confirmed plays (not timeouts, penalties without plays, etc.)
 //
 // The gameID parameter is the database game ID (not vendor UUID).
 // All foreign key lookups (teams, players) are done via database subqueries.
 // All enum validations are done by the database.
-// If any operation fails, the entire transaction is rolled back.
 //
-// Before persisting play-by-play data, this function ensures all referenced players
-// exist in the database by fetching and persisting any missing player profiles.
-func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
-	// Step 1: Ensure all referenced players exist in the database
-	if err := persistMissingIndividuals(ctx, dbStore, apiClient, pbp); err != nil {
-		return fmt.Errorf("failed to persist missing individuals: %w", err)
-	}
-
-	// Step 2: Start transaction for all write operations
-	tx, err := dbStore.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	// Defer rollback - no-op if commit succeeds
-	defer func() {
-		if tx != nil {
-			tx.Rollback(ctx)
-		}
-	}()
-
-	// Step 3: Upsert game status
+// IMPORTANT: The caller is responsible for:
+// 1. Calling PersistMissingNFLIndividuals() before starting the transaction
+// 2. Beginning the transaction and passing it to this function
+// 3. Calling CheckAndUpdateNFLPlayByPlayDeletions() after this function
+// 4. Committing the transaction
+func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
+	// Step 1: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
 	if err != nil {
@@ -71,7 +65,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, apiClient *
 		return fmt.Errorf("failed to upsert game status: %w", err)
 	}
 
-	// Step 4: Process all drives, plays, and statistics
+	// Step 2: Process all drives, plays, and statistics
 	for _, period := range pbp.Periods {
 		for _, drive := range period.PBP {
 			if err := persistDrive(ctx, dbStore, tx, gameID, &period, &drive); err != nil {
@@ -79,14 +73,6 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, apiClient *
 			}
 		}
 	}
-
-	// Step 5: Commit the transaction
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Mark tx as nil so deferred rollback is a no-op
-	tx = nil
 
 	return nil
 }
@@ -337,4 +323,57 @@ func parseTimestamp(ts string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("invalid timestamp format %q: %w", ts, err)
 	}
 	return t, nil
+}
+
+// CheckAndUpdateNFLPlayByPlayDeletions marks drives and plays as deleted in the database
+// if they are marked as deleted in the fetcher response.
+//
+// This function iterates through all drives and plays in the fetcher response and:
+// - For drives with Deleted=true, marks the drive as deleted (which cascades to plays)
+// - For plays with Deleted=true, marks the play as deleted
+//
+// The caller is responsible for committing the transaction after this function returns.
+func CheckAndUpdateNFLPlayByPlayDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
+	for _, period := range pbp.Periods {
+		for _, drive := range period.PBP {
+			// Check if the drive is marked as deleted
+			if drive.Deleted {
+				// Look up the drive in the database (only finds non-deleted drives)
+				existingDrive, err := store_nfl.GetNFLDriveByVendorID(dbStore, ctx, gameID, drive.ID)
+				if err != nil {
+					// Drive doesn't exist or is already deleted - nothing to do
+					continue
+				}
+				// Mark the drive as deleted (cascades to plays)
+				if err := store_nfl.MarkNFLDriveDeleted(dbStore, ctx, tx, existingDrive.ID); err != nil {
+					return fmt.Errorf("failed to mark drive as deleted (vendor_id: %s): %w", drive.ID, err)
+				}
+				continue
+			}
+
+			// For non-deleted drives, check their events for deleted plays
+			for _, event := range drive.Events {
+				if event.Deleted {
+					// Look up the drive first to get its database ID
+					existingDrive, err := store_nfl.GetNFLDriveByVendorID(dbStore, ctx, gameID, drive.ID)
+					if err != nil {
+						// Drive doesn't exist or is deleted - play can't be marked deleted
+						continue
+					}
+					// Look up the play in the database (only finds non-deleted plays)
+					existingPlay, err := store_nfl.GetNFLPlayByVendorID(dbStore, ctx, existingDrive.ID, event.ID)
+					if err != nil {
+						// Play doesn't exist or is already deleted - nothing to do
+						continue
+					}
+					// Mark the play as deleted
+					if err := store_nfl.MarkNFLPlayDeleted(dbStore, ctx, tx, existingPlay.ID); err != nil {
+						return fmt.Errorf("failed to mark play as deleted (vendor_id: %s): %w", event.ID, err)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }

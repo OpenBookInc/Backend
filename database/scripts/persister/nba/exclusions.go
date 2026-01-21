@@ -43,9 +43,15 @@ var excludedStatTypes = map[string]bool{
 
 // shouldPersistPlay determines whether a play (event) should be persisted to the database.
 // Returns false for:
+// - Deleted entries (removed/invalidated by Sportradar)
 // - Events with excluded event_type (game management events)
 // - Events with zero persistable statistics after filtering
 func shouldPersistPlay(event *fetcher_nba.Event) bool {
+	// Check if event is deleted
+	if event.Deleted {
+		return false
+	}
+
 	// Check if event type is excluded
 	if excludedEventTypes[event.EventType] {
 		return false

@@ -43,6 +43,7 @@ type NBABoxScoreForUpsert struct {
 // UpsertNBABoxScore inserts or updates a box score in the database.
 // Uses (game_id, individual_id) as the unique constraint for ON CONFLICT.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
+// Sets vendor_deleted = FALSE on both insert and update.
 func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore *NBABoxScoreForUpsert) error {
 	query := `
 		INSERT INTO nba_box_scores (
@@ -52,11 +53,11 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			free_throw_attempts, free_throw_makes,
 			assists, defensive_rebounds, offensive_rebounds,
 			steals, blocks, turnovers_committed, personal_fouls_committed,
-			created_at, updated_at
+			vendor_deleted, created_at, updated_at
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-			NOW(), NOW()
+			FALSE, NOW(), NOW()
 		)
 		ON CONFLICT (game_id, individual_id)
 		DO UPDATE SET
@@ -73,6 +74,7 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			blocks = EXCLUDED.blocks,
 			turnovers_committed = EXCLUDED.turnovers_committed,
 			personal_fouls_committed = EXCLUDED.personal_fouls_committed,
+			vendor_deleted = FALSE,
 			updated_at = NOW()
 	`
 
@@ -101,8 +103,25 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 	return nil
 }
 
+// MarkNBABoxScoreDeleted marks an NBA box score as vendor_deleted = TRUE.
+// This function accepts a transaction (pgx.Tx) to support atomic operations.
+func MarkNBABoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, boxScoreID int) error {
+	query := `
+		UPDATE nba_box_scores
+		SET vendor_deleted = TRUE, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := tx.Exec(ctx, query, boxScoreID)
+	if err != nil {
+		return fmt.Errorf("failed to mark box score as deleted (box_score_id: %d): %w", boxScoreID, err)
+	}
+
+	return nil
+}
+
 // GetNBABoxScoresByGameID retrieves all box scores for a game with individual info.
 // Uses the registry for caching Game and Individual instances.
+// Only returns box scores where vendor_deleted = FALSE.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
 func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nba.IndividualBoxScore, error) {
 	// Get the game from registry (resolves teams automatically)
@@ -120,7 +139,7 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 			bs.assists, bs.defensive_rebounds, bs.offensive_rebounds,
 			bs.steals, bs.blocks, bs.turnovers_committed, bs.personal_fouls_committed
 		FROM nba_box_scores bs
-		WHERE bs.game_id = $1
+		WHERE bs.game_id = $1 AND bs.vendor_deleted = FALSE
 		ORDER BY bs.individual_id
 	`
 
@@ -184,7 +203,7 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 
 // GetAllNBAGamesWithBoxScores returns all game IDs that have NBA box score entries
 // within the specified date range (inclusive).
-// Filters by scheduled_start_time.
+// Filters by scheduled_start_time and only considers non-deleted box scores.
 // Returns game IDs ordered by game_id ascending.
 func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]int, error) {
 	query := `
@@ -192,6 +211,7 @@ func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate,
 		FROM nba_box_scores bs
 		JOIN games g ON bs.game_id = g.id
 		WHERE g.scheduled_start_time >= $1 AND DATE(g.scheduled_start_time) <= DATE($2)
+		  AND bs.vendor_deleted = FALSE
 		ORDER BY bs.game_id
 	`
 

@@ -19,6 +19,8 @@ import (
 	reader_nba "github.com/openbook/population-scripts/reader/nba"
 	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
+	store_nba "github.com/openbook/population-scripts/store/nba"
+	store_nfl "github.com/openbook/population-scripts/store/nfl"
 	models "github.com/openbook/shared/models"
 )
 
@@ -136,10 +138,31 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	// Decorate the fetched data with derived statistics (currently a no-op for NFL)
 	playByPlay = decorator_nfl.DecoratePlayByPlay(playByPlay)
 
-	// Persist play-by-play data
+	// Persist missing individuals (outside transaction, may make API calls)
+	fmt.Printf("  Ensuring all referenced players exist in database...\n")
+	if err := persister_nfl.PersistMissingNFLIndividuals(ctx, dbStore, apiClient, playByPlay); err != nil {
+		return fmt.Errorf("failed to persist missing individuals: %w", err)
+	}
+
+	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
-	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, apiClient, game.ID, playByPlay); err != nil {
+	pbpTx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin play-by-play transaction: %w", err)
+	}
+
+	if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
+		pbpTx.Rollback(ctx)
 		return fmt.Errorf("failed to persist play-by-play: %w", err)
+	}
+
+	if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
+		pbpTx.Rollback(ctx)
+		return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
+	}
+
+	if err := pbpTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit play-by-play transaction: %w", err)
 	}
 
 	// Read play-by-play data back for box score generation
@@ -157,8 +180,32 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	boxScoreCount := persister_nfl.GetBoxScoreCount(pbpData)
 	fmt.Printf("  Generating box scores for %d players...\n", boxScoreCount)
-	if err := persister_nfl.PersistNFLBoxScores(ctx, dbStore, pbpData); err != nil {
+
+	// Get existing box scores before starting the transaction
+	existingBoxScores, err := store_nfl.GetNFLBoxScoresByGameID(dbStore, ctx, game.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing box scores: %w", err)
+	}
+
+	// Persist box scores in a transaction
+	bsTx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin box score transaction: %w", err)
+	}
+
+	upsertedBoxScores, err := persister_nfl.PersistNFLBoxScores(ctx, dbStore, bsTx, pbpData)
+	if err != nil {
+		bsTx.Rollback(ctx)
 		return fmt.Errorf("failed to persist box scores: %w", err)
+	}
+
+	if err := persister_nfl.CheckAndUpdateNFLBoxScoreDeletions(ctx, dbStore, bsTx, existingBoxScores, upsertedBoxScores); err != nil {
+		bsTx.Rollback(ctx)
+		return fmt.Errorf("failed to check and update box score deletions: %w", err)
+	}
+
+	if err := bsTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit box score transaction: %w", err)
 	}
 
 	fmt.Printf("  Successfully processed game %d\n", game.ID)
@@ -208,10 +255,31 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	// Decorate the fetched data with derived statistics (e.g., heave blocks)
 	playByPlay = decorator_nba.DecoratePlayByPlay(playByPlay)
 
-	// Persist play-by-play data
+	// Persist missing individuals (outside transaction, may make API calls)
+	fmt.Printf("  Ensuring all referenced players exist in database...\n")
+	if err := persister_nba.PersistMissingNBAIndividuals(ctx, dbStore, apiClient, playByPlay); err != nil {
+		return fmt.Errorf("failed to persist missing individuals: %w", err)
+	}
+
+	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
-	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, apiClient, game.ID, playByPlay); err != nil {
+	pbpTx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin play-by-play transaction: %w", err)
+	}
+
+	if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
+		pbpTx.Rollback(ctx)
 		return fmt.Errorf("failed to persist play-by-play: %w", err)
+	}
+
+	if err := persister_nba.CheckAndUpdateNBAPlayByPlayDeletions(ctx, dbStore, pbpTx, game.ID, playByPlay); err != nil {
+		pbpTx.Rollback(ctx)
+		return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
+	}
+
+	if err := pbpTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit play-by-play transaction: %w", err)
 	}
 
 	// Read play-by-play data back for box score generation
@@ -229,8 +297,32 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	boxScoreCount := persister_nba.GetBoxScoreCount(pbpData)
 	fmt.Printf("  Generating box scores for %d players...\n", boxScoreCount)
-	if err := persister_nba.PersistNBABoxScores(ctx, dbStore, pbpData); err != nil {
+
+	// Get existing box scores before starting the transaction
+	existingBoxScores, err := store_nba.GetNBABoxScoresByGameID(dbStore, ctx, game.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing box scores: %w", err)
+	}
+
+	// Persist box scores in a transaction
+	bsTx, err := dbStore.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin box score transaction: %w", err)
+	}
+
+	upsertedBoxScores, err := persister_nba.PersistNBABoxScores(ctx, dbStore, bsTx, pbpData)
+	if err != nil {
+		bsTx.Rollback(ctx)
 		return fmt.Errorf("failed to persist box scores: %w", err)
+	}
+
+	if err := persister_nba.CheckAndUpdateNBABoxScoreDeletions(ctx, dbStore, bsTx, existingBoxScores, upsertedBoxScores); err != nil {
+		bsTx.Rollback(ctx)
+		return fmt.Errorf("failed to check and update box score deletions: %w", err)
+	}
+
+	if err := bsTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit box score transaction: %w", err)
 	}
 
 	fmt.Printf("  Successfully processed game %d\n", game.ID)

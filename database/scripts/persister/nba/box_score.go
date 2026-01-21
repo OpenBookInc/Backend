@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	reader_nba "github.com/openbook/population-scripts/reader/nba"
 	"github.com/openbook/population-scripts/store"
 	store_nba "github.com/openbook/population-scripts/store/nba"
+	models_nba "github.com/openbook/shared/models/nba"
 	"github.com/shopspring/decimal"
 )
 
@@ -65,15 +67,19 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 }
 
 // PersistNBABoxScores aggregates play-by-play statistics into box scores
-// and persists them to the database in a single transaction.
+// and persists them to the database within the provided transaction.
 //
 // Aggregation rules:
 // - Groups all statistics by individual_id
 // - Sums each stat column across all plays for that player
 //
-// All box scores for the game are upserted atomically - if any fails,
-// the entire transaction is rolled back.
-func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, data *reader_nba.NBAPlayByPlayData) error {
+// Returns the list of box scores that were upserted, for use with CheckAndUpdateNBABoxScoreDeletions.
+//
+// IMPORTANT: The caller is responsible for:
+// 1. Beginning the transaction and passing it to this function
+// 2. Calling CheckAndUpdateNBABoxScoreDeletions() after this function
+// 3. Committing the transaction
+func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, data *reader_nba.NBAPlayByPlayData) ([]*store_nba.NBABoxScoreForUpsert, error) {
 	// Step 1: Aggregate statistics by player
 	accumulators := make(map[int]*playerStatsAccumulator)
 
@@ -101,25 +107,13 @@ func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		acc.PersonalFoulsCommitted = acc.PersonalFoulsCommitted.Add(stat.PersonalFoulsCommitted)
 	}
 
-	// If no statistics to persist, return early
+	// If no statistics to persist, return empty slice
 	if len(accumulators) == 0 {
-		return nil
+		return []*store_nba.NBABoxScoreForUpsert{}, nil
 	}
 
-	// Step 2: Begin transaction
-	tx, err := dbStore.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	// Defer rollback - no-op if commit succeeds
-	defer func() {
-		if tx != nil {
-			tx.Rollback(ctx)
-		}
-	}()
-
-	// Step 3: Convert accumulators to box scores and upsert
+	// Step 2: Convert accumulators to box scores and upsert
+	var upsertedBoxScores []*store_nba.NBABoxScoreForUpsert
 	for _, acc := range accumulators {
 		boxScore := &store_nba.NBABoxScoreForUpsert{
 			GameID:                 data.GameID,
@@ -140,19 +134,12 @@ func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, data *reader
 		}
 
 		if err := store_nba.UpsertNBABoxScore(dbStore, ctx, tx, boxScore); err != nil {
-			return fmt.Errorf("failed to upsert box score for individual_id %d: %w", acc.IndividualID, err)
+			return nil, fmt.Errorf("failed to upsert box score for individual_id %d: %w", acc.IndividualID, err)
 		}
+		upsertedBoxScores = append(upsertedBoxScores, boxScore)
 	}
 
-	// Step 4: Commit transaction
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Mark tx as nil so deferred rollback is a no-op
-	tx = nil
-
-	return nil
+	return upsertedBoxScores, nil
 }
 
 // GetBoxScoreCount returns the number of box scores that would be generated
@@ -163,4 +150,35 @@ func GetBoxScoreCount(data *reader_nba.NBAPlayByPlayData) int {
 		players[stat.IndividualID] = true
 	}
 	return len(players)
+}
+
+// CheckAndUpdateNBABoxScoreDeletions marks box scores as deleted if they exist
+// in the database but were not upserted in the current persist operation.
+//
+// Parameters:
+// - existingBoxScores: The box scores that existed in the database before the persist operation
+// - upsertedBoxScores: The box scores that were upserted in the persist operation
+//
+// For any box score in existingBoxScores that doesn't have a matching individual_id
+// in upsertedBoxScores, this function marks it as deleted.
+//
+// The caller is responsible for committing the transaction after this function returns.
+func CheckAndUpdateNBABoxScoreDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, existingBoxScores []*models_nba.IndividualBoxScore, upsertedBoxScores []*store_nba.NBABoxScoreForUpsert) error {
+	// Build a set of individual IDs that were upserted
+	upsertedIndividuals := make(map[int]bool)
+	for _, boxScore := range upsertedBoxScores {
+		upsertedIndividuals[boxScore.IndividualID] = true
+	}
+
+	// Check each existing box score
+	for _, existing := range existingBoxScores {
+		if !upsertedIndividuals[existing.Individual.ID] {
+			// This box score exists in the database but was not upserted - mark it as deleted
+			if err := store_nba.MarkNBABoxScoreDeleted(dbStore, ctx, tx, existing.Stats.ID); err != nil {
+				return fmt.Errorf("failed to mark box score as deleted (id: %d, individual_id: %d): %w", existing.Stats.ID, existing.Individual.ID, err)
+			}
+		}
+	}
+
+	return nil
 }
