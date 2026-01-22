@@ -244,15 +244,15 @@ func GetNFLBoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 // GetAllNFLGamesWithBoxScores returns all game IDs that have NFL box score entries
 // within the specified date range (inclusive).
 // Filters by scheduled_start_time and only considers non-deleted box scores.
-// Returns game IDs ordered by game_id ascending.
+// Returns game IDs ordered by scheduled_start_time ascending (earliest games first).
 func GetAllNFLGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]int, error) {
 	query := `
-		SELECT DISTINCT bs.game_id
+		SELECT DISTINCT bs.game_id, g.scheduled_start_time
 		FROM nfl_box_scores bs
 		JOIN games g ON bs.game_id = g.id
 		WHERE g.scheduled_start_time >= $1 AND DATE(g.scheduled_start_time) <= DATE($2)
 		  AND bs.vendor_deleted = FALSE
-		ORDER BY bs.game_id
+		ORDER BY g.scheduled_start_time
 	`
 
 	rows, err := s.Pool().Query(ctx, query, startDate, endDate)
@@ -264,7 +264,8 @@ func GetAllNFLGamesWithBoxScores(s *store.Store, ctx context.Context, startDate,
 	var gameIDs []int
 	for rows.Next() {
 		var gameID int
-		if err := rows.Scan(&gameID); err != nil {
+		var scheduledStartTime time.Time
+		if err := rows.Scan(&gameID, &scheduledStartTime); err != nil {
 			return nil, fmt.Errorf("failed to scan game_id: %w", err)
 		}
 		gameIDs = append(gameIDs, gameID)
