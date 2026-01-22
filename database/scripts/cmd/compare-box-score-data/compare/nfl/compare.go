@@ -3,7 +3,6 @@ package nfl
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	models_nfl "github.com/openbook/shared/models/nfl"
 	"github.com/shopspring/decimal"
@@ -139,12 +138,16 @@ func compareNFLPlayerStats(gameID int, gameVendorID string, playerName string, p
 		srDecimal := srVal.Field(i).Interface().(decimal.Decimal)
 
 		if !dbDecimal.Equal(srDecimal) {
+			if shouldExcludeStatDiscrepancy(gameID, playerVendorID, field.Name) {
+				continue
+			}
+
 			return &NFLDiscrepancy{
 				GameID:          gameID,
 				GameVendorID:    gameVendorID,
 				PlayerName:      playerName,
 				PlayerVendorID:  playerVendorID,
-				Field:           toSnakeCase(field.Name),
+				Field:           field.Name,
 				DBValue:         dbDecimal,
 				SportradarValue: srDecimal,
 			}
@@ -167,18 +170,6 @@ func shouldExcludeFieldFromComparison(fieldName string) bool {
 	// SacksMade and SackAssistsMade are compared separately via compareSackCredits()
 	// because Sportradar combines them into a single value where assists count as 0.5
 	return fieldName == "SacksMade" || fieldName == "SackAssistsMade"
-}
-
-// toSnakeCase converts PascalCase field names to snake_case for error reporting.
-func toSnakeCase(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			result.WriteByte('_')
-		}
-		result.WriteRune(r)
-	}
-	return strings.ToLower(result.String())
 }
 
 // compareSackCredits compares sack stats using combined "sack credits".
