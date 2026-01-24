@@ -37,7 +37,7 @@ func New(ctx context.Context, host, port, database, user, password, sslKeyPath s
 	}
 
 	// Build connection string
-	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require",
+	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=verify-full",
 		user, password, host, port, database)
 
 	// Parse config
