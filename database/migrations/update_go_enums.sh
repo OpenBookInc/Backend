@@ -99,13 +99,17 @@ value_to_const_name() {
     echo "${base_type}${value_pascal}"
 }
 
-# Query all enum types and their values
+# Query all enum types and their values from the public schema only.
+# Supabase creates internal enums in other schemas (auth, storage, etc.) that
+# our Go code never uses directly, so we exclude them.
 ENUM_QUERY="
 SELECT
     t.typname as enum_name,
     array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
 FROM pg_type t
 JOIN pg_enum e ON t.oid = e.enumtypid
+JOIN pg_namespace n ON t.typnamespace = n.oid
+WHERE n.nspname = 'public'
 GROUP BY t.typname
 ORDER BY t.typname;
 "
