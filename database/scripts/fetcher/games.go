@@ -70,8 +70,8 @@ func FetchNFLGames(apiClient *sportradar.Client, dataStore *ReferenceData, year 
 	for _, week := range scheduleResp.Weeks {
 		for _, gameData := range week.Games {
 			// Check exclusion rules first
-			if shouldExcludeGame(gameData.Home.Alias, gameData.Away.Alias) {
-				// Silently skip excluded games (e.g., TBD teams)
+			if shouldExcludeGame(gameData.Home.ID, gameData.Away.ID, gameData.Home.Alias, gameData.Away.Alias) {
+				// Silently skip excluded games (e.g., TBD teams, undetermined playoff matchups)
 				continue
 			}
 
@@ -128,8 +128,8 @@ func FetchNBAGames(apiClient *sportradar.Client, dataStore *ReferenceData, year 
 	// Process all games
 	for _, gameData := range scheduleResp.Games {
 		// Check exclusion rules first
-		if shouldExcludeGame(gameData.Home.Alias, gameData.Away.Alias) {
-			// Silently skip excluded games (e.g., TBD teams)
+		if shouldExcludeGame(gameData.Home.ID, gameData.Away.ID, gameData.Home.Alias, gameData.Away.Alias) {
+			// Silently skip excluded games (e.g., TBD teams, undetermined playoff matchups)
 			continue
 		}
 
