@@ -456,8 +456,9 @@ func (c *Client) getPlayerPropsBasePath() string {
 	return fmt.Sprintf("/oddscomparison-player-props/%s/v2/en", c.config.AccessLevel)
 }
 
-// GetPlayerPropsSportEventMappings retrieves sport event mappings from the player props API
-func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
+// GetPlayerPropsSportEventMappings retrieves sport event mappings from the player props API.
+// Use start=0 and limit=1000 for first page, then increment start by limit for subsequent pages.
+func (c *Client) GetPlayerPropsSportEventMappings(start, limit int) ([]byte, error) {
 	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
@@ -467,6 +468,8 @@ func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
 	url := fmt.Sprintf("%s/sport_events/mappings.json", c.getPlayerPropsBasePath())
 	resp, err := c.httpClient.R().
 		SetHeader("x-api-key", apiKey).
+		SetQueryParam("start", fmt.Sprintf("%d", start)).
+		SetQueryParam("limit", fmt.Sprintf("%d", limit)).
 		Get(url)
 
 	if err != nil {
@@ -480,8 +483,9 @@ func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
 	return resp.Body(), nil
 }
 
-// GetPlayerPropsCompetitorMappings retrieves competitor mappings from the player props API
-func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
+// GetPlayerPropsCompetitorMappings retrieves competitor mappings from the player props API.
+// Use start=0 and limit=1000 for first page, then increment start by limit for subsequent pages.
+func (c *Client) GetPlayerPropsCompetitorMappings(start, limit int) ([]byte, error) {
 	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
@@ -491,6 +495,8 @@ func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
 	url := fmt.Sprintf("%s/competitors/mappings.json", c.getPlayerPropsBasePath())
 	resp, err := c.httpClient.R().
 		SetHeader("x-api-key", apiKey).
+		SetQueryParam("start", fmt.Sprintf("%d", start)).
+		SetQueryParam("limit", fmt.Sprintf("%d", limit)).
 		Get(url)
 
 	if err != nil {
@@ -504,8 +510,9 @@ func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
 	return resp.Body(), nil
 }
 
-// GetPlayerPropsPlayerMappings retrieves player mappings from the player props API
-func (c *Client) GetPlayerPropsPlayerMappings() ([]byte, error) {
+// GetPlayerPropsPlayerMappings retrieves player mappings from the player props API.
+// Use start=0 and limit=1000 for first page, then increment start by limit for subsequent pages.
+func (c *Client) GetPlayerPropsPlayerMappings(start, limit int) ([]byte, error) {
 	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
@@ -515,6 +522,8 @@ func (c *Client) GetPlayerPropsPlayerMappings() ([]byte, error) {
 	url := fmt.Sprintf("%s/players/mappings.json", c.getPlayerPropsBasePath())
 	resp, err := c.httpClient.R().
 		SetHeader("x-api-key", apiKey).
+		SetQueryParam("start", fmt.Sprintf("%d", start)).
+		SetQueryParam("limit", fmt.Sprintf("%d", limit)).
 		Get(url)
 
 	if err != nil {
