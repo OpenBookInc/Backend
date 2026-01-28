@@ -235,6 +235,10 @@ Every entity has two identifiers:
 
 **Why**: VendorID enables idempotent upserts (`ON CONFLICT (vendor_id) DO UPDATE`). ID is for foreign key relationships in database.
 
+### Singleton Registry for Reference Data
+
+See `shared/models/CLAUDE.md` for full registry documentation including thread safety and usage patterns.
+
 ### Struct Patterns for Store Operations
 
 **For WRITE operations** (Insert/Update), sport-specific store packages define internal structs:
