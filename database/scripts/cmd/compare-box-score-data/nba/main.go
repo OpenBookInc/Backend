@@ -105,7 +105,6 @@ func main() {
 		fmt.Printf("  Vendor ID: %s\n", gameVendorID)
 
 		// Fetch Sportradar game summary
-		sportradarClient.RateLimitWait()
 		summary, err := fetcher.FetchNBAGameSummary(sportradarClient, gameVendorID)
 		if err != nil {
 			fatal("Failed to fetch Sportradar game summary for game %s: %v", gameVendorID, err)

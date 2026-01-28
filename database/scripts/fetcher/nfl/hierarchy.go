@@ -88,14 +88,8 @@ func FetchNFLHierarchyData(apiClient *sportradar.Client, dataStore *fetcher.Refe
 		}
 	}
 
-	// Wait before starting roster fetches to respect rate limits
-	apiClient.RateLimitWait()
-
 	// Fetch rosters for each team
 	for _, teamVendorID := range teamVendorIDs {
-		// Rate limiting - wait before each API request
-		apiClient.RateLimitWait()
-
 		if err := FetchNFLTeamRoster(apiClient, dataStore, teamVendorID, nflLeague); err != nil {
 			return fmt.Errorf("failed to fetch roster for team %s: %w", teamVendorID, err)
 		}

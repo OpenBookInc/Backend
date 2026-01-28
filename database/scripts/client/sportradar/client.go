@@ -113,8 +113,9 @@ func NewClientWithConfig(config *ClientConfig) *Client {
 	}
 }
 
-// RateLimitWait waits for the configured rate limit delay
-func (c *Client) RateLimitWait() {
+// rateLimitWait waits for the configured rate limit delay.
+// Called automatically before each API request.
+func (c *Client) rateLimitWait() {
 	if c.config.RateLimitDelay > 0 {
 		time.Sleep(c.config.RateLimitDelay)
 	}
@@ -140,6 +141,7 @@ func formatAPIError(statusCode int, url string, body string) error {
 
 // GetNBATeams retrieves all NBA teams
 func (c *Client) GetNBATeams() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA teams: %w", err)
@@ -163,6 +165,7 @@ func (c *Client) GetNBATeams() ([]byte, error) {
 
 // GetNBATeamRoster retrieves roster for a specific NBA team
 func (c *Client) GetNBATeamRoster(teamID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA team roster: %w", err)
@@ -186,6 +189,7 @@ func (c *Client) GetNBATeamRoster(teamID string) ([]byte, error) {
 
 // GetNFLTeams retrieves all NFL teams
 func (c *Client) GetNFLTeams() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL teams: %w", err)
@@ -209,6 +213,7 @@ func (c *Client) GetNFLTeams() ([]byte, error) {
 
 // GetNFLTeamRoster retrieves roster for a specific NFL team
 func (c *Client) GetNFLTeamRoster(teamID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL team roster: %w", err)
@@ -232,6 +237,7 @@ func (c *Client) GetNFLTeamRoster(teamID string) ([]byte, error) {
 
 // GetNFLSeasonSchedule retrieves the schedule for the current NFL season
 func (c *Client) GetNFLSeasonSchedule(year int, seasonType string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL season schedule: %w", err)
@@ -255,6 +261,7 @@ func (c *Client) GetNFLSeasonSchedule(year int, seasonType string) ([]byte, erro
 
 // GetNFLWeeklyInjuries retrieves injury reports for a specific NFL week
 func (c *Client) GetNFLWeeklyInjuries(year int, seasonType string, week int) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL weekly injuries: %w", err)
@@ -278,6 +285,7 @@ func (c *Client) GetNFLWeeklyInjuries(year int, seasonType string, week int) ([]
 
 // GetNBASeasonSchedule retrieves the full NBA season schedule
 func (c *Client) GetNBASeasonSchedule(year int, seasonType string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA season schedule: %w", err)
@@ -301,6 +309,7 @@ func (c *Client) GetNBASeasonSchedule(year int, seasonType string) ([]byte, erro
 
 // GetNBAInjuries retrieves current NBA injury reports for all teams
 func (c *Client) GetNBAInjuries() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA injuries: %w", err)
@@ -324,6 +333,7 @@ func (c *Client) GetNBAInjuries() ([]byte, error) {
 
 // GetNFLPlayByPlay retrieves play-by-play data for a specific NFL game
 func (c *Client) GetNFLPlayByPlay(gameID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL play-by-play: %w", err)
@@ -347,6 +357,7 @@ func (c *Client) GetNFLPlayByPlay(gameID string) ([]byte, error) {
 
 // GetNBAPlayByPlay retrieves play-by-play data for a specific NBA game
 func (c *Client) GetNBAPlayByPlay(gameID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA play-by-play: %w", err)
@@ -370,6 +381,7 @@ func (c *Client) GetNBAPlayByPlay(gameID string) ([]byte, error) {
 
 // GetNFLPlayerProfile retrieves profile data for a specific NFL player
 func (c *Client) GetNFLPlayerProfile(playerID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL player profile: %w", err)
@@ -393,6 +405,7 @@ func (c *Client) GetNFLPlayerProfile(playerID string) ([]byte, error) {
 
 // GetNBAPlayerProfile retrieves profile data for a specific NBA player
 func (c *Client) GetNBAPlayerProfile(playerID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA player profile: %w", err)
@@ -416,6 +429,7 @@ func (c *Client) GetNBAPlayerProfile(playerID string) ([]byte, error) {
 
 // GetNFLGameStatistics retrieves game statistics for a specific NFL game
 func (c *Client) GetNFLGameStatistics(gameID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NFL game statistics: %w", err)
@@ -444,6 +458,7 @@ func (c *Client) getPlayerPropsBasePath() string {
 
 // GetPlayerPropsSportEventMappings retrieves sport event mappings from the player props API
 func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get player props sport event mappings: %w", err)
@@ -467,6 +482,7 @@ func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
 
 // GetPlayerPropsCompetitorMappings retrieves competitor mappings from the player props API
 func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get player props competitor mappings: %w", err)
@@ -490,6 +506,7 @@ func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
 
 // GetPlayerPropsPlayerMappings retrieves player mappings from the player props API
 func (c *Client) GetPlayerPropsPlayerMappings() ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get player props player mappings: %w", err)
@@ -513,6 +530,7 @@ func (c *Client) GetPlayerPropsPlayerMappings() ([]byte, error) {
 
 // GetNBAGameSummary retrieves game summary for a specific NBA game
 func (c *Client) GetNBAGameSummary(gameID string) ([]byte, error) {
+	c.rateLimitWait()
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NBA game summary: %w", err)

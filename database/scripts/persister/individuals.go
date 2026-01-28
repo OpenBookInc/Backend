@@ -72,7 +72,6 @@ func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiCli
 	}
 
 	// Individual not found - fetch and persist their profile
-	apiClient.RateLimitWait()
 
 	// Get league ID for the new individual
 	league, err := dbStore.GetLeagueByName(ctx, leagueName)

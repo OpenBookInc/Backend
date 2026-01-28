@@ -70,10 +70,6 @@ func main() {
 	}
 	fmt.Printf("Successfully fetched NFL data\n")
 
-	// Wait between NFL and NBA data fetching to respect rate limits
-	fmt.Println("\nWaiting before fetching NBA data...")
-	apiClient.RateLimitWait()
-
 	// Fetch NBA data
 	fmt.Println("\nFetching NBA data from Sportradar API...")
 	if err := fetcher_nba.FetchNBAHierarchyData(apiClient, dataStore); err != nil {
@@ -83,7 +79,6 @@ func main() {
 
 	// Fetch NFL game schedules
 	fmt.Println("\nFetching NFL game schedules...")
-	apiClient.RateLimitWait()
 	if err := fetcher.FetchNFLGames(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType); err != nil {
 		fatal("Failed to fetch NFL games: %v", err)
 	}
@@ -91,7 +86,6 @@ func main() {
 
 	// Fetch NBA game schedules
 	fmt.Println("\nFetching NBA game schedules...")
-	apiClient.RateLimitWait()
 	if err := fetcher.FetchNBAGames(apiClient, dataStore, cfg.NBASeasonStartYear, cfg.NBASeasonType); err != nil {
 		fatal("Failed to fetch NBA games: %v", err)
 	}
@@ -99,7 +93,6 @@ func main() {
 
 	// Fetch NFL player statuses (injuries)
 	fmt.Println("\nFetching NFL player statuses...")
-	apiClient.RateLimitWait()
 	if err := fetcher.FetchNFLPlayerStatuses(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType, cfg.NFLWeek); err != nil {
 		fatal("Failed to fetch NFL player statuses: %v", err)
 	}
@@ -107,7 +100,6 @@ func main() {
 
 	// Fetch NBA player statuses (injuries)
 	fmt.Println("\nFetching NBA player statuses...")
-	apiClient.RateLimitWait()
 	if err := fetcher.FetchNBAPlayerStatuses(apiClient, dataStore); err != nil {
 		fatal("Failed to fetch NBA player statuses: %v", err)
 	}

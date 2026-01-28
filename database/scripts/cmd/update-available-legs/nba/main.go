@@ -92,13 +92,13 @@ func main() {
 	if err != nil {
 		fatal("Failed to fetch sport event mappings: %v", err)
 	}
-	apiClient.RateLimitWait()
+
 
 	competitorMappings, err := fetcher.FetchPlayerPropsCompetitorMappings(apiClient)
 	if err != nil {
 		fatal("Failed to fetch competitor mappings: %v", err)
 	}
-	apiClient.RateLimitWait()
+
 
 	playerMappings, err := fetcher.FetchPlayerPropsPlayerMappings(apiClient)
 	if err != nil {
