@@ -76,14 +76,15 @@ func (d *Division) String() string {
 
 // Team represents a sports team
 type Team struct {
-	VendorID   string    // Sportradar UUID
-	Name       string    // Team name (e.g., "Cowboys")
-	Market     string    // City/region (e.g., "Dallas")
-	Alias      string    // Short name (e.g., "DAL")
-	VenueName  string    // Venue name
-	VenueCity  string    // Venue city
-	VenueState string    // Venue state
-	Division   *Division // Pointer to parent Division
+	VendorID        string    // Sportradar UUID
+	VendorUnifiedID string    // Sportradar unified ID (e.g., "sr:competitor:4418")
+	Name            string    // Team name (e.g., "Cowboys")
+	Market          string    // City/region (e.g., "Dallas")
+	Alias           string    // Short name (e.g., "DAL")
+	VenueName       string    // Venue name
+	VenueCity       string    // Venue city
+	VenueState      string    // Venue state
+	Division        *Division // Pointer to parent Division
 
 	// Set after persistence (for FK relationships)
 	ID int
@@ -93,7 +94,7 @@ type Team struct {
 func (t *Team) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s %s (%s)\n", t.Market, t.Name, t.Alias))
-	sb.WriteString(fmt.Sprintf("  ID: %d | Vendor ID: %s\n", t.ID, t.VendorID))
+	sb.WriteString(fmt.Sprintf("  ID: %d | Vendor ID: %s | Unified ID: %s\n", t.ID, t.VendorID, t.VendorUnifiedID))
 	if t.Division != nil {
 		sb.WriteString(fmt.Sprintf("  Division: %s", t.Division.Name))
 		if t.Division.Conference != nil {
@@ -110,6 +111,7 @@ func (t *Team) String() string {
 // Individual represents a player/individual athlete
 type Individual struct {
 	VendorID        string     // Sportradar UUID
+	VendorUnifiedID string     // Sportradar unified ID (e.g., "sr:player:2631629")
 	DisplayName     string     // Full display name
 	AbbreviatedName string     // Short name (e.g., "J.Smith")
 	DateOfBirth     *time.Time // Can be null
@@ -125,7 +127,7 @@ type Individual struct {
 func (i *Individual) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s (#%s) - %s\n", i.DisplayName, i.JerseyNumber, i.Position))
-	sb.WriteString(fmt.Sprintf("  ID: %d | Vendor ID: %s\n", i.ID, i.VendorID))
+	sb.WriteString(fmt.Sprintf("  ID: %d | Vendor ID: %s | Unified ID: %s\n", i.ID, i.VendorID, i.VendorUnifiedID))
 	if i.DateOfBirth != nil {
 		sb.WriteString(fmt.Sprintf("  Birth Date: %s\n", i.DateOfBirth.Format("2006-01-02")))
 	}

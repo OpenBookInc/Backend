@@ -17,6 +17,7 @@ type NFLTeamRosterResponse struct {
 	Alias   string `json:"alias"`
 	Players []struct {
 		ID          string      `json:"id"`
+		SrID        string      `json:"sr_id"`
 		Name        string      `json:"name"`
 		FirstName   string      `json:"first_name"`
 		LastName    string      `json:"last_name"`
@@ -70,6 +71,7 @@ func FetchNFLTeamRoster(apiClient *sportradar.Client, dataStore *fetcher.Referen
 
 		individual := &fetcher.Individual{
 			VendorID:        playerData.ID,
+			VendorUnifiedID: playerData.SrID,
 			DisplayName:     displayName,
 			AbbreviatedName: abbreviatedName,
 			DateOfBirth:     dateOfBirth,

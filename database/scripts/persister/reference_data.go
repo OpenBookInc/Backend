@@ -163,14 +163,15 @@ func persistTeams(ctx context.Context, dbStore *store.Store, dataStore *fetcher.
 		}
 
 		teamID, err := dbStore.UpsertTeam(ctx, &store.TeamForUpsert{
-			VendorID:   team.VendorID,
-			Name:       team.Name,
-			Market:     team.Market,
-			Alias:      team.Alias,
-			DivisionID: divisionID,
-			VenueName:  team.VenueName,
-			VenueCity:  team.VenueCity,
-			VenueState: team.VenueState,
+			VendorID:        team.VendorID,
+			VendorUnifiedID: team.VendorUnifiedID,
+			Name:            team.Name,
+			Market:          team.Market,
+			Alias:           team.Alias,
+			DivisionID:      divisionID,
+			VenueName:       team.VenueName,
+			VenueCity:       team.VenueCity,
+			VenueState:      team.VenueState,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to upsert team %s %s: %w", team.Market, team.Name, err)

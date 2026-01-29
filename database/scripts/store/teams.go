@@ -9,14 +9,15 @@ import (
 
 // TeamForUpsert contains the data needed to upsert a team
 type TeamForUpsert struct {
-	VendorID   string
-	Name       string
-	Market     string
-	Alias      string
-	DivisionID int
-	VenueName  string
-	VenueCity  string
-	VenueState string
+	VendorID        string
+	VendorUnifiedID string // Sportradar unified ID (e.g., "sr:competitor:4418")
+	Name            string
+	Market          string
+	Alias           string
+	DivisionID      int
+	VenueName       string
+	VenueCity       string
+	VenueState      string
 }
 
 // UpsertTeam inserts or updates a team in the database
@@ -24,13 +25,14 @@ type TeamForUpsert struct {
 // Returns the database ID of the team
 func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error) {
 	query := `
-		INSERT INTO teams (name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO teams (name, market, alias, vendor_id, vendor_unified_id, division_id, venue_name, venue_city, venue_state)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (vendor_id)
 		DO UPDATE SET
 			name = EXCLUDED.name,
 			market = EXCLUDED.market,
 			alias = EXCLUDED.alias,
+			vendor_unified_id = EXCLUDED.vendor_unified_id,
 			division_id = EXCLUDED.division_id,
 			venue_name = EXCLUDED.venue_name,
 			venue_city = EXCLUDED.venue_city,
@@ -44,6 +46,7 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error
 		team.Market,
 		team.Alias,
 		team.VendorID,
+		team.VendorUnifiedID,
 		team.DivisionID,
 		team.VenueName,
 		team.VenueCity,

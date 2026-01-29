@@ -16,8 +16,14 @@ import (
 // PersistNFLPlayerProfile persists an NFL player profile as an individual in the database.
 // Returns the database ID of the individual.
 func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nfl.PlayerProfile, leagueID int) (int, error) {
+	var vendorUnifiedID *string // default as null
+	if profile.SrID != "" {
+		vendorUnifiedID = &profile.SrID
+	}
+
 	individual := &store.IndividualForUpsert{
 		VendorID:        profile.ID,
+		VendorUnifiedID: vendorUnifiedID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
 		DateOfBirth:     profile.GetDateOfBirth(),
@@ -38,8 +44,14 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 // PersistNBAPlayerProfile persists an NBA player profile as an individual in the database.
 // Returns the database ID of the individual.
 func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nba.PlayerProfile, leagueID int) (int, error) {
+	var vendorUnifiedID *string // default as null
+	if profile.SrID != "" {
+		vendorUnifiedID = &profile.SrID
+	}
+
 	individual := &store.IndividualForUpsert{
 		VendorID:        profile.ID,
+		VendorUnifiedID: vendorUnifiedID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
 		DateOfBirth:     profile.GetDateOfBirth(),

@@ -11,6 +11,7 @@ import (
 // IndividualForUpsert contains the data needed to upsert an individual
 type IndividualForUpsert struct {
 	VendorID        string
+	VendorUnifiedID *string // Sportradar unified ID (e.g., "sr:player:2631629"), nil for NULL
 	DisplayName     string
 	AbbreviatedName string
 	DateOfBirth     *time.Time
@@ -24,13 +25,14 @@ type IndividualForUpsert struct {
 // Returns the database ID of the individual
 func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForUpsert) (int, error) {
 	query := `
-		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, vendor_unified_id, league_id, position, jersey_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (vendor_id)
 		DO UPDATE SET
 			display_name = EXCLUDED.display_name,
 			abbreviated_name = EXCLUDED.abbreviated_name,
 			date_of_birth = EXCLUDED.date_of_birth,
+			vendor_unified_id = EXCLUDED.vendor_unified_id,
 			league_id = EXCLUDED.league_id,
 			position = EXCLUDED.position,
 			jersey_number = EXCLUDED.jersey_number
@@ -43,6 +45,7 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 		individual.AbbreviatedName,
 		individual.DateOfBirth, // Can be nil for NULL
 		individual.VendorID,
+		individual.VendorUnifiedID,
 		individual.LeagueID,
 		individual.Position,
 		individual.JerseyNumber,
