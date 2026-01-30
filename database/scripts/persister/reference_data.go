@@ -3,6 +3,7 @@ package persister
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/openbook/population-scripts/client/sportradar"
 	"github.com/openbook/population-scripts/fetcher"
@@ -162,9 +163,12 @@ func persistTeams(ctx context.Context, dbStore *store.Store, dataStore *fetcher.
 			divisionID = team.Division.ID
 		}
 
+		// Transform vendor_unified_id from "sr:team:" to "sr:competitor:" format
+		vendorUnifiedID := normalizeTeamUnifiedID(team.VendorUnifiedID)
+
 		teamID, err := dbStore.UpsertTeam(ctx, &store.TeamForUpsert{
 			VendorID:        team.VendorID,
-			VendorUnifiedID: team.VendorUnifiedID,
+			VendorUnifiedID: vendorUnifiedID,
 			Name:            team.Name,
 			Market:          team.Market,
 			Alias:           team.Alias,
@@ -179,6 +183,14 @@ func persistTeams(ctx context.Context, dbStore *store.Store, dataStore *fetcher.
 		team.ID = teamID
 	}
 	return nil
+}
+
+// normalizeTeamUnifiedID converts "sr:team:" prefix to "sr:competitor:" prefix
+// for consistency with Sportradar's competitor ID format. Sportradar NBA teams
+// can be given in either format, so it's best to store it in our database as
+// the more prominent "sr:competitor:" format.
+func normalizeTeamUnifiedID(unifiedID string) string {
+	return strings.Replace(unifiedID, "sr:team:", "sr:competitor:", 1)
 }
 
 // persistRostersAndIndividuals upserts all rosters and their individuals.
@@ -302,4 +314,3 @@ func persistIndividualStatuses(ctx context.Context, dbStore *store.Store, dataSt
 	}
 	return nil
 }
-
