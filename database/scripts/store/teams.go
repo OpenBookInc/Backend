@@ -70,7 +70,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 
 	// Query database
 	query := `
-		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
+		SELECT id, name, market, alias, vendor_id, vendor_unified_id, division_id, venue_name, venue_city, venue_state
 		FROM teams
 		WHERE id = $1
 	`
@@ -82,6 +82,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 		&team.Market,
 		&team.Alias,
 		&team.VendorID,
+		&team.VendorUnifiedID,
 		&team.DivisionID,
 		&team.VenueName,
 		&team.VenueCity,
@@ -107,7 +108,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models.Team, error) {
 	// Query database to get the ID first
 	query := `
-		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
+		SELECT id, name, market, alias, vendor_id, vendor_unified_id, division_id, venue_name, venue_city, venue_state
 		FROM teams
 		WHERE vendor_id = $1
 	`
@@ -119,6 +120,7 @@ func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models
 		&team.Market,
 		&team.Alias,
 		&team.VendorID,
+		&team.VendorUnifiedID,
 		&team.DivisionID,
 		&team.VenueName,
 		&team.VenueCity,

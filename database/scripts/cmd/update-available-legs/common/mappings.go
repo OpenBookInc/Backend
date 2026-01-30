@@ -27,20 +27,18 @@ func (m *DatabaseToPropMappings) String() string {
 	return sb.String()
 }
 
-// BuildMappings maps database entities to Sportradar player props IDs using the three mapping responses.
+// BuildMappings maps database entities to Sportradar player props IDs.
+// Game mappings come from the sport event mappings API response.
+// Team and individual mappings come from the database vendor_unified_id fields.
 // Games and teams that cannot be mapped cause a fatal error (returned as error).
 // Individuals that cannot be mapped are returned in the unmappedIndividuals slice.
 func BuildMappings(
 	games []*models.Game,
 	rosters []*models.Roster,
 	sportEventMappings *fetcher.PlayerPropsMappingResponse,
-	competitorMappings *fetcher.PlayerPropsMappingResponse,
-	playerMappings *fetcher.PlayerPropsMappingResponse,
 ) (*DatabaseToPropMappings, []*models.Individual, error) {
-	// Build lookup maps from external_id → sr:id
+	// Build lookup map from external_id → sr:id for sport events
 	sportEventLookup := buildLookup(sportEventMappings.Mappings)
-	competitorLookup := buildLookup(competitorMappings.Mappings)
-	playerLookup := buildLookup(playerMappings.Mappings)
 
 	result := &DatabaseToPropMappings{
 		GameMappings:       make(map[*models.Game]string, len(games)),
@@ -48,7 +46,7 @@ func BuildMappings(
 		IndividualMappings: make(map[*models.Individual]string),
 	}
 
-	// Map games
+	// Map games using API sport event mappings
 	for _, game := range games {
 		propID, ok := sportEventLookup[game.VendorID]
 		if !ok {
@@ -57,39 +55,37 @@ func BuildMappings(
 		result.GameMappings[game] = propID
 	}
 
-	// Map teams (from games, deduplicated via pointer identity)
+	// Map teams using database vendor_unified_id (from games, deduplicated via pointer identity)
 	for _, game := range games {
 		if _, exists := result.TeamMappings[game.TeamA]; !exists {
-			propID, ok := competitorLookup[game.TeamA.VendorID]
-			if !ok {
-				return nil, nil, fmt.Errorf("team %d %s %s (vendor_id: %s) has no player props competitor mapping",
+			if game.TeamA.VendorUnifiedID == "" {
+				return nil, nil, fmt.Errorf("team %d %s %s (vendor_id: %s) has no vendor_unified_id in database",
 					game.TeamA.ID, game.TeamA.Market, game.TeamA.Name, game.TeamA.VendorID)
 			}
-			result.TeamMappings[game.TeamA] = propID
+			result.TeamMappings[game.TeamA] = game.TeamA.VendorUnifiedID
 		}
 		if _, exists := result.TeamMappings[game.TeamB]; !exists {
-			propID, ok := competitorLookup[game.TeamB.VendorID]
-			if !ok {
-				return nil, nil, fmt.Errorf("team %d %s %s (vendor_id: %s) has no player props competitor mapping",
+			if game.TeamB.VendorUnifiedID == "" {
+				return nil, nil, fmt.Errorf("team %d %s %s (vendor_id: %s) has no vendor_unified_id in database",
 					game.TeamB.ID, game.TeamB.Market, game.TeamB.Name, game.TeamB.VendorID)
 			}
-			result.TeamMappings[game.TeamB] = propID
+			result.TeamMappings[game.TeamB] = game.TeamB.VendorUnifiedID
 		}
 	}
 
-	// Map individuals from rosters
+	// Map individuals from rosters using database vendor_unified_id
 	var unmappedIndividuals []*models.Individual
 	for _, roster := range rosters {
 		for _, player := range roster.Players {
 			if _, exists := result.IndividualMappings[player]; exists {
 				continue
 			}
-			propID, ok := playerLookup[player.VendorID]
-			if !ok {
+			if !player.HasVendorUnifiedID() {
 				unmappedIndividuals = append(unmappedIndividuals, player)
 				continue
 			}
-			result.IndividualMappings[player] = propID
+			vendorUnifiedID, _ := player.VendorUnifiedID()
+			result.IndividualMappings[player] = vendorUnifiedID
 		}
 	}
 

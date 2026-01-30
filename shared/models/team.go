@@ -7,16 +7,17 @@ import (
 
 // Team represents a sports team
 type Team struct {
-	ID         int       `json:"id"`          // Database ID (auto-increment)
-	Name       string    `json:"name"`        // Team name (e.g., "Cowboys")
-	Market     string    `json:"market"`      // City/region (e.g., "Dallas")
-	Alias      string    `json:"alias"`       // Short name (e.g., "DAL")
-	VendorID   string    `json:"vendor_id"`   // Sportradar UUID
-	DivisionID int64     `json:"division_id"` // Foreign key to divisions table
-	VenueName  string    `json:"venue_name"`  // Venue name
-	VenueCity  string    `json:"venue_city"`  // Venue city
-	VenueState string    `json:"venue_state"` // Venue state
-	Division   *Division `json:"-"`           // Pointer to parent Division (not stored in DB)
+	ID              int       `json:"id"`                // Database ID (auto-increment)
+	Name            string    `json:"name"`              // Team name (e.g., "Cowboys")
+	Market          string    `json:"market"`            // City/region (e.g., "Dallas")
+	Alias           string    `json:"alias"`             // Short name (e.g., "DAL")
+	VendorID        string    `json:"vendor_id"`         // Sportradar UUID
+	VendorUnifiedID string    `json:"vendor_unified_id"` // Sportradar unified ID (e.g., "sr:competitor:4418")
+	DivisionID      int64     `json:"division_id"`       // Foreign key to divisions table
+	VenueName       string    `json:"venue_name"`        // Venue name
+	VenueCity       string    `json:"venue_city"`        // Venue city
+	VenueState      string    `json:"venue_state"`       // Venue state
+	Division        *Division `json:"-"`                 // Pointer to parent Division (not stored in DB)
 }
 
 // String returns a formatted string representation of the Team

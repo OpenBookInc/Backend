@@ -85,33 +85,20 @@ func main() {
 	}
 	apiClient := sportradar.NewClientWithConfig(clientConfig)
 
-	// Fetch the three mapping endpoints
-	fmt.Println("\nFetching player props mappings from Sportradar API...")
+	// Fetch sport event mappings from the API (team and player mappings come from database)
+	fmt.Println("\nFetching sport event mappings from Sportradar API...")
 
 	sportEventMappings, err := fetcher.FetchPlayerPropsSportEventMappings(apiClient)
 	if err != nil {
 		fatal("Failed to fetch sport event mappings: %v", err)
 	}
 
-
-	competitorMappings, err := fetcher.FetchPlayerPropsCompetitorMappings(apiClient)
-	if err != nil {
-		fatal("Failed to fetch competitor mappings: %v", err)
-	}
-
-
-	playerMappings, err := fetcher.FetchPlayerPropsPlayerMappings(apiClient)
-	if err != nil {
-		fatal("Failed to fetch player mappings: %v", err)
-	}
-
-	fmt.Printf("Fetched mappings: %d sport events, %d competitors, %d players\n",
-		len(sportEventMappings.Mappings), len(competitorMappings.Mappings), len(playerMappings.Mappings))
+	fmt.Printf("Fetched %d sport event mappings\n", len(sportEventMappings.Mappings))
 
 	// Build mappings from DB entities to player props IDs
 	fmt.Println("\nBuilding entity mappings...")
 	mappings, unmappedIndividuals, err := available_legs_common.BuildMappings(
-		games, rosters, sportEventMappings, competitorMappings, playerMappings,
+		games, rosters, sportEventMappings,
 	)
 	if err != nil {
 		fatal("Failed to build mappings: %v", err)
@@ -119,7 +106,7 @@ func main() {
 
 	// Print unmapped individuals as info
 	if len(unmappedIndividuals) > 0 {
-		fmt.Printf("\n%d player(s) could not be mapped to player props IDs:\n", len(unmappedIndividuals))
+		fmt.Printf("\n%d player(s) do not have vendor_unified_id in database:\n", len(unmappedIndividuals))
 		for _, individual := range unmappedIndividuals {
 			fmt.Printf("  - %s (vendor_id: %s)\n", individual.DisplayName, individual.VendorID)
 		}

@@ -76,27 +76,3 @@ func FetchPlayerPropsSportEventMappings(client *sportradar.Client) (*PlayerProps
 	}
 	return response, nil
 }
-
-// FetchPlayerPropsCompetitorMappings fetches all competitor mappings from the player props API.
-// Automatically paginates to retrieve all results.
-func FetchPlayerPropsCompetitorMappings(client *sportradar.Client) (*PlayerPropsMappingResponse, error) {
-	response, err := fetchAllPages(func(start, limit int) ([]byte, error) {
-		return client.GetPlayerPropsCompetitorMappings(start, limit)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch competitor mappings: %w", err)
-	}
-	return response, nil
-}
-
-// FetchPlayerPropsPlayerMappings fetches all player mappings from the player props API.
-// Automatically paginates to retrieve all results.
-func FetchPlayerPropsPlayerMappings(client *sportradar.Client) (*PlayerPropsMappingResponse, error) {
-	response, err := fetchAllPages(func(start, limit int) ([]byte, error) {
-		return client.GetPlayerPropsPlayerMappings(start, limit)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch player mappings: %w", err)
-	}
-	return response, nil
-}
