@@ -537,6 +537,70 @@ func (c *CompareBoxScoreConfig) Validate() error {
 	return nil
 }
 
+// AvailableLegsConfig holds configuration for the available legs mapping script
+type AvailableLegsConfig struct {
+	BaseConfig
+
+	// GameDate is the date to query games for (YYYY-MM-DD)
+	GameDate time.Time
+	// TimeZoneForDate is the IANA timezone name used to determine which calendar date a game falls on
+	TimeZoneForDate string
+}
+
+// LoadAvailableLegsConfigFromFile loads environment variables from the specified file, then reads configuration
+// If envFile is empty, it will load from .env in the current directory (required)
+// Validates that all required configuration variables are set
+func LoadAvailableLegsConfigFromFile(envFile string) (*AvailableLegsConfig, error) {
+	// Load .env file - fail if not found
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadAvailableLegsConfig()
+
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadAvailableLegsConfig reads available legs configuration from environment variables
+// Required fields: SPORTRADAR_API_KEYS, SPORTRADAR_ACCESS_LEVEL, SPORTRADAR_RATE_LIMIT_DELAY_MS,
+//
+//	PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, PG_KEY_PATH, GAME_DATE
+//
+// This does not load any .env files - use LoadAvailableLegsConfigFromFile for that
+func LoadAvailableLegsConfig() *AvailableLegsConfig {
+	return &AvailableLegsConfig{
+		BaseConfig:      loadBaseConfig(),
+		GameDate:        parseDate(os.Getenv("GAME_DATE")),
+		TimeZoneForDate: os.Getenv("TIME_ZONE_FOR_DATE"),
+	}
+}
+
+// Validate checks that all required available legs configuration fields are set
+func (c *AvailableLegsConfig) Validate() error {
+	// Validate base config first
+	if err := c.BaseConfig.Validate(); err != nil {
+		return err
+	}
+
+	if c.GameDate.IsZero() {
+		return fmt.Errorf("missing or invalid required environment variable: GAME_DATE (format: YYYY-MM-DD)")
+	}
+
+	if c.TimeZoneForDate == "" {
+		return fmt.Errorf("missing required environment variable: TIME_ZONE_FOR_DATE (IANA timezone, e.g. America/Los_Angeles)")
+	}
+	if _, err := time.LoadLocation(c.TimeZoneForDate); err != nil {
+		return fmt.Errorf("invalid TIME_ZONE_FOR_DATE '%s': %w", c.TimeZoneForDate, err)
+	}
+
+	return nil
+}
+
 // LoadBatchUpdateConfigFromFile loads environment variables from the specified file, then reads configuration
 // If envFile is empty, it will load from .env in the current directory (required)
 // Validates that all required configuration variables are set

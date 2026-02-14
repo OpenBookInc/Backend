@@ -437,6 +437,80 @@ func (c *Client) GetNFLGameStatistics(gameID string) ([]byte, error) {
 	return resp.Body(), nil
 }
 
+// getPlayerPropsBasePath returns the player props API base path for the configured access level
+func (c *Client) getPlayerPropsBasePath() string {
+	return fmt.Sprintf("/oddscomparison-player-props/%s/v2/en", c.config.AccessLevel)
+}
+
+// GetPlayerPropsSportEventMappings retrieves sport event mappings from the player props API
+func (c *Client) GetPlayerPropsSportEventMappings() ([]byte, error) {
+	apiKey, err := c.keyRotation.getKeyAndIncrement()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props sport event mappings: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/sport_events/mappings.json", c.getPlayerPropsBasePath())
+	resp, err := c.httpClient.R().
+		SetHeader("x-api-key", apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props sport event mappings: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
+// GetPlayerPropsCompetitorMappings retrieves competitor mappings from the player props API
+func (c *Client) GetPlayerPropsCompetitorMappings() ([]byte, error) {
+	apiKey, err := c.keyRotation.getKeyAndIncrement()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props competitor mappings: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/competitors/mappings.json", c.getPlayerPropsBasePath())
+	resp, err := c.httpClient.R().
+		SetHeader("x-api-key", apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props competitor mappings: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
+// GetPlayerPropsPlayerMappings retrieves player mappings from the player props API
+func (c *Client) GetPlayerPropsPlayerMappings() ([]byte, error) {
+	apiKey, err := c.keyRotation.getKeyAndIncrement()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props player mappings: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/players/mappings.json", c.getPlayerPropsBasePath())
+	resp, err := c.httpClient.R().
+		SetHeader("x-api-key", apiKey).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get player props player mappings: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), BaseURL+url, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
 // GetNBAGameSummary retrieves game summary for a specific NBA game
 func (c *Client) GetNBAGameSummary(gameID string) ([]byte, error) {
 	apiKey, err := c.keyRotation.getKeyAndIncrement()
