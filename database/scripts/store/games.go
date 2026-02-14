@@ -141,8 +141,11 @@ func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID int) (*models.G
 
 // GetGamesByLeagueAndDateRange retrieves games for a league within a date range (inclusive).
 // Uses the registry for caching and resolves nested Team pointers for each game.
+// The timeZone parameter is an IANA timezone name (e.g., "America/Los_Angeles") used to
+// interpret which calendar date a game falls on. This is necessary because a game stored
+// as e.g. 2026-01-27 02:00 UTC is actually on 2026-01-26 in Pacific time.
 // Returns games ordered by scheduled_start_time ascending.
-func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName string, startDate, endDate time.Time) ([]*models.Game, error) {
+func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName string, startDate, endDate time.Time, timeZone string) ([]*models.Game, error) {
 	query := `
 		SELECT g.id
 		FROM games g
@@ -151,15 +154,12 @@ func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName str
 		JOIN conferences c ON d.conference_id = c.id
 		JOIN leagues l ON c.league_id = l.id
 		WHERE l.name = $1
-		  AND g.scheduled_start_time >= $2
-		  AND g.scheduled_start_time < $3
+		  AND (g.scheduled_start_time AT TIME ZONE $4)::date >= $2
+		  AND (g.scheduled_start_time AT TIME ZONE $4)::date <= $3
 		ORDER BY g.scheduled_start_time ASC
 	`
 
-	// Add one day to end date to make it inclusive (query uses < for end)
-	endDateExclusive := endDate.AddDate(0, 0, 1)
-
-	rows, err := s.pool.Query(ctx, query, leagueName, startDate, endDateExclusive)
+	rows, err := s.pool.Query(ctx, query, leagueName, startDate, endDate, timeZone)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query games for league %s: %w", leagueName, err)
 	}

@@ -108,7 +108,7 @@ func processNFLGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 	fmt.Println("Processing NFL Games")
 	fmt.Println(strings.Repeat("-", 72))
 
-	games, err := dbStore.GetGamesByLeagueAndDateRange(ctx, "NFL", cfg.NFLGameDateStartInclusive, cfg.NFLGameDateEndInclusive)
+	games, err := dbStore.GetGamesByLeagueAndDateRange(ctx, "NFL", cfg.NFLGameDateStartInclusive, cfg.NFLGameDateEndInclusive, cfg.TimeZoneForDate)
 	if err != nil {
 		return fmt.Errorf("failed to query NFL games: %w", err)
 	}
@@ -213,7 +213,7 @@ func processNBAGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 	fmt.Println("Processing NBA Games")
 	fmt.Println(strings.Repeat("-", 72))
 
-	games, err := dbStore.GetGamesByLeagueAndDateRange(ctx, "NBA", cfg.NBAGameDateStartInclusive, cfg.NBAGameDateEndInclusive)
+	games, err := dbStore.GetGamesByLeagueAndDateRange(ctx, "NBA", cfg.NBAGameDateStartInclusive, cfg.NBAGameDateEndInclusive, cfg.TimeZoneForDate)
 	if err != nil {
 		return fmt.Errorf("failed to query NBA games: %w", err)
 	}
