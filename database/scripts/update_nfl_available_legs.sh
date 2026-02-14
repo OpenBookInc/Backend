@@ -1,3 +1,0 @@
-#!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
-run_go_script "update-available-legs/nfl" "Update NFL Available Legs"

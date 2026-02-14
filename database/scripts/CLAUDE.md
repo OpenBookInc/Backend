@@ -30,10 +30,6 @@ go build ./...
 ./compare_nfl_box_score_data.sh
 ./compare_nba_box_score_data.sh
 
-# Build player props mappings for games on a given date
-./update_nfl_available_legs.sh
-./update_nba_available_legs.sh
-
 # Download dependencies
 go mod download
 ```
@@ -483,7 +479,6 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `NBA_GAME_ID`: Database integer ID for NBA game (not vendor UUID)
 
 **Required (update_batch_play_by_play_and_box_scores):**
-- `TIME_ZONE_FOR_DATE`: IANA timezone for interpreting game dates (e.g. `America/Los_Angeles`)
 - At least one complete date range must be set:
   - `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
   - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
@@ -494,10 +489,6 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `SPORTRADAR_RATE_LIMIT_DELAY_MS`: Milliseconds between Sportradar API requests
 - `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
 - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
-
-**Required (update_*_available_legs):**
-- `GAME_DATE`: Date to query games for (YYYY-MM-DD)
-- `TIME_ZONE_FOR_DATE`: IANA timezone for interpreting game dates (e.g. `America/Los_Angeles`)
 
 ## API Endpoints
 
@@ -520,11 +511,6 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Weekly Injuries: `/nfl/official/trial/v7/en/seasons/{year}/{seasonType}/{week}/injuries.json`
 - Play-by-Play: `/nfl/official/trial/v7/en/games/{gameID}/pbp.json`
 - Game Statistics: `/nfl/official/trial/v7/en/games/{gameID}/statistics.json` (box score comparison)
-
-**Player Props (sport-agnostic, v2):**
-- Sport Event Mappings: `/oddscomparison-player-props/trial/v2/en/sport_events/mappings.json`
-- Competitor Mappings: `/oddscomparison-player-props/trial/v2/en/competitors/mappings.json`
-- Player Mappings: `/oddscomparison-player-props/trial/v2/en/players/mappings.json`
 
 **Error handling**: 404 errors include full URL in error message for debugging. All API errors include response body and status code.
 

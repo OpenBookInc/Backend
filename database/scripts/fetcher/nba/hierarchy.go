@@ -20,7 +20,6 @@ type NBAHierarchyResponse struct {
 			Alias string `json:"alias"`
 			Teams []struct {
 				ID     string `json:"id"`
-				SrID   string `json:"sr_id"`
 				Name   string `json:"name"`
 				Market string `json:"market"`
 				Alias  string `json:"alias"`
@@ -73,19 +72,15 @@ func FetchNBAHierarchyData(apiClient *sportradar.Client, dataStore *fetcher.Refe
 			dataStore.AddDivision(division)
 
 			for _, teamData := range divisionData.Teams {
-				if teamData.SrID == "" {
-					return fmt.Errorf("NBA team %s %s is missing sr_id", teamData.Market, teamData.Name)
-				}
 				team := &fetcher.Team{
-					Name:            teamData.Name,
-					Market:          teamData.Market,
-					Alias:           teamData.Alias,
-					VendorID:        teamData.ID,
-					VendorUnifiedID: teamData.SrID,
-					VenueName:       teamData.Venue.Name,
-					VenueCity:       teamData.Venue.City,
-					VenueState:      teamData.Venue.State,
-					Division:        division,
+					Name:       teamData.Name,
+					Market:     teamData.Market,
+					Alias:      teamData.Alias,
+					VendorID:   teamData.ID,
+					VenueName:  teamData.Venue.Name,
+					VenueCity:  teamData.Venue.City,
+					VenueState: teamData.Venue.State,
+					Division:   division,
 				}
 				dataStore.AddTeam(team)
 				teamVendorIDs = append(teamVendorIDs, teamData.ID)

@@ -12,7 +12,6 @@ import (
 // Only includes fields needed for individual persistence.
 type PlayerProfile struct {
 	ID        string `json:"id"`
-	SrID      string `json:"sr_id"`
 	Name      string `json:"name"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`

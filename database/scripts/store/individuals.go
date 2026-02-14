@@ -11,7 +11,6 @@ import (
 // IndividualForUpsert contains the data needed to upsert an individual
 type IndividualForUpsert struct {
 	VendorID        string
-	VendorUnifiedID *string // Sportradar unified ID (e.g., "sr:player:2631629"), nil for NULL
 	DisplayName     string
 	AbbreviatedName string
 	DateOfBirth     *time.Time
@@ -25,14 +24,13 @@ type IndividualForUpsert struct {
 // Returns the database ID of the individual
 func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForUpsert) (int, error) {
 	query := `
-		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, vendor_unified_id, league_id, position, jersey_number)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (vendor_id)
 		DO UPDATE SET
 			display_name = EXCLUDED.display_name,
 			abbreviated_name = EXCLUDED.abbreviated_name,
 			date_of_birth = EXCLUDED.date_of_birth,
-			vendor_unified_id = EXCLUDED.vendor_unified_id,
 			league_id = EXCLUDED.league_id,
 			position = EXCLUDED.position,
 			jersey_number = EXCLUDED.jersey_number
@@ -45,7 +43,6 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 		individual.AbbreviatedName,
 		individual.DateOfBirth, // Can be nil for NULL
 		individual.VendorID,
-		individual.VendorUnifiedID,
 		individual.LeagueID,
 		individual.Position,
 		individual.JerseyNumber,
@@ -68,29 +65,24 @@ func (s *Store) GetIndividualByID(ctx context.Context, id int) (*models.Individu
 
 	// Query database
 	query := `
-		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, vendor_unified_id, league_id, position, jersey_number
+		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number
 		FROM individuals
 		WHERE id = $1
 	`
 
 	var individual models.Individual
-	var vendorUnifiedID *string
 	err := s.pool.QueryRow(ctx, query, id).Scan(
 		&individual.ID,
 		&individual.DisplayName,
 		&individual.AbbreviatedName,
 		&individual.DateOfBirth,
 		&individual.VendorID,
-		&vendorUnifiedID,
 		&individual.LeagueID,
 		&individual.Position,
 		&individual.JerseyNumber,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get individual with id %d: %w", id, err)
-	}
-	if vendorUnifiedID != nil {
-		individual.SetVendorUnifiedID(*vendorUnifiedID)
 	}
 
 	// Resolve nested League pointer
@@ -109,29 +101,24 @@ func (s *Store) GetIndividualByID(ctx context.Context, id int) (*models.Individu
 func (s *Store) GetIndividualByVendorID(ctx context.Context, vendorID string) (*models.Individual, error) {
 	// Query database to get the ID first
 	query := `
-		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, vendor_unified_id, league_id, position, jersey_number
+		SELECT id, display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number
 		FROM individuals
 		WHERE vendor_id = $1
 	`
 
 	var individual models.Individual
-	var vendorUnifiedID *string
 	err := s.pool.QueryRow(ctx, query, vendorID).Scan(
 		&individual.ID,
 		&individual.DisplayName,
 		&individual.AbbreviatedName,
 		&individual.DateOfBirth,
 		&individual.VendorID,
-		&vendorUnifiedID,
 		&individual.LeagueID,
 		&individual.Position,
 		&individual.JerseyNumber,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get individual with vendor_id %s: %w", vendorID, err)
-	}
-	if vendorUnifiedID != nil {
-		individual.SetVendorUnifiedID(*vendorUnifiedID)
 	}
 
 	// Check if already registered (by ID)
