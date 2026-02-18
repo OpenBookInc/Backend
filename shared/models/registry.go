@@ -1,6 +1,10 @@
 package models
 
-import "sync"
+import (
+	"fmt"
+	"strings"
+	"sync"
+)
 
 // ModelRegistry provides thread-safe storage and retrieval of model instances.
 // It ensures that each entity (by database ID) has exactly one instance in memory,
@@ -292,4 +296,86 @@ func (r *ModelRegistry) RegisterIndividualStatus(status *IndividualStatus) *Indi
 	ptr := &r.individualStatuses[len(r.individualStatuses)-1]
 	r.individualStatusesByID[status.ID] = ptr
 	return ptr
+}
+
+// =============================================================================
+// String
+// =============================================================================
+
+// String returns a formatted string representation of all registered entities.
+func (r *ModelRegistry) String() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var sb strings.Builder
+
+	// Leagues
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString("LEAGUES\n")
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.leagues {
+		sb.WriteString(r.leagues[i].String())
+	}
+
+	// Conferences
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString("CONFERENCES\n")
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.conferences {
+		sb.WriteString(r.conferences[i].String())
+	}
+
+	// Divisions
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString("DIVISIONS\n")
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.divisions {
+		sb.WriteString(r.divisions[i].String())
+	}
+
+	// Teams
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString("TEAMS\n")
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.teams {
+		sb.WriteString(r.teams[i].String())
+	}
+
+	// Individuals (show first 10)
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString(fmt.Sprintf("INDIVIDUALS (showing first 10 of %d)\n", len(r.individuals)))
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.individuals {
+		if i >= 10 {
+			sb.WriteString(fmt.Sprintf("\n... and %d more individuals\n", len(r.individuals)-10))
+			break
+		}
+		sb.WriteString(r.individuals[i].String())
+	}
+
+	// Rosters
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString("ROSTERS\n")
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.rosters {
+		sb.WriteString(r.rosters[i].String())
+	}
+
+	// Games
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString(fmt.Sprintf("GAMES (showing all %d)\n", len(r.games)))
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.games {
+		sb.WriteString(r.games[i].String())
+	}
+
+	// Individual Statuses
+	sb.WriteString("\n" + strings.Repeat("=", 72) + "\n")
+	sb.WriteString(fmt.Sprintf("INDIVIDUAL STATUSES (showing all %d)\n", len(r.individualStatuses)))
+	sb.WriteString(strings.Repeat("=", 72) + "\n")
+	for i := range r.individualStatuses {
+		sb.WriteString(r.individualStatuses[i].String())
+	}
+
+	return sb.String()
 }

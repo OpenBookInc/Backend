@@ -19,10 +19,10 @@ type TeamForUpsert struct {
 	VenueState string
 }
 
-// UpsertTeam inserts or updates a team in the database
-// Uses vendor_id as the unique identifier (ON CONFLICT)
-// Returns the database ID of the team
-func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error) {
+// UpsertTeam inserts or updates a team in the database.
+// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Resolves the Division pointer and registers in the singleton registry.
+func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 	query := `
 		INSERT INTO teams (name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -50,11 +50,28 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (int, error
 		team.VenueState,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert team %s %s (vendor_id: %s): %w",
+		return fmt.Errorf("failed to upsert team %s %s (vendor_id: %s): %w",
 			team.Market, team.Name, team.VendorID, err)
 	}
 
-	return id, nil
+	division, err := s.GetDivisionByID(ctx, team.DivisionID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve division for team %s: %w", team.VendorID, err)
+	}
+
+	models.Registry.RegisterTeam(&models.Team{
+		ID:         id,
+		Name:       team.Name,
+		Market:     team.Market,
+		Alias:      team.Alias,
+		VendorID:   team.VendorID,
+		DivisionID: int64(team.DivisionID),
+		VenueName:  team.VenueName,
+		VenueCity:  team.VenueCity,
+		VenueState: team.VenueState,
+		Division:   division,
+	})
+	return nil
 }
 
 // GetTeamByID retrieves a team by database ID.

@@ -13,10 +13,10 @@ type LeagueForUpsert struct {
 	Name    string
 }
 
-// UpsertLeague inserts or updates a league in the database
-// Uses name as the unique identifier (ON CONFLICT)
-// Returns the database ID of the league
-func (s *Store) UpsertLeague(ctx context.Context, league *LeagueForUpsert) (int, error) {
+// UpsertLeague inserts or updates a league in the database.
+// Uses name as the unique identifier (ON CONFLICT).
+// Registers the league in the singleton registry.
+func (s *Store) UpsertLeague(ctx context.Context, league *LeagueForUpsert) error {
 	query := `
 		INSERT INTO leagues (sport_id, name)
 		VALUES ($1, $2)
@@ -28,10 +28,15 @@ func (s *Store) UpsertLeague(ctx context.Context, league *LeagueForUpsert) (int,
 	var id int
 	err := s.pool.QueryRow(ctx, query, league.SportID, league.Name).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert league %s: %w", league.Name, err)
+		return fmt.Errorf("failed to upsert league %s: %w", league.Name, err)
 	}
 
-	return id, nil
+	models.Registry.RegisterLeague(&models.League{
+		ID:      id,
+		SportID: int64(league.SportID),
+		Name:    league.Name,
+	})
+	return nil
 }
 
 // GetLeagueByID retrieves a league by database ID.

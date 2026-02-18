@@ -19,10 +19,10 @@ type IndividualForUpsert struct {
 	JerseyNumber    string
 }
 
-// UpsertIndividual inserts or updates an individual in the database
-// Uses vendor_id as the unique identifier (ON CONFLICT)
-// Returns the database ID of the individual
-func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForUpsert) (int, error) {
+// UpsertIndividual inserts or updates an individual in the database.
+// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Resolves the League pointer, registers in the singleton registry, and returns the individual.
+func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForUpsert) (*models.Individual, error) {
 	query := `
 		INSERT INTO individuals (display_name, abbreviated_name, date_of_birth, vendor_id, league_id, position, jersey_number)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -48,11 +48,26 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 		individual.JerseyNumber,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert individual %s (vendor_id: %s): %w",
+		return nil, fmt.Errorf("failed to upsert individual %s (vendor_id: %s): %w",
 			individual.DisplayName, individual.VendorID, err)
 	}
 
-	return id, nil
+	league, err := s.GetLeagueByID(ctx, individual.LeagueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for individual %s: %w", individual.VendorID, err)
+	}
+
+	return models.Registry.RegisterIndividual(&models.Individual{
+		ID:              id,
+		DisplayName:     individual.DisplayName,
+		AbbreviatedName: individual.AbbreviatedName,
+		DateOfBirth:     individual.DateOfBirth,
+		VendorID:        individual.VendorID,
+		LeagueID:        int64(individual.LeagueID),
+		Position:        individual.Position,
+		JerseyNumber:    individual.JerseyNumber,
+		League:          league,
+	}), nil
 }
 
 // GetIndividualByID retrieves an individual by database ID.

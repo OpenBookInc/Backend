@@ -54,9 +54,9 @@ go mod download
               ┌──────────┐   ┌───────────┐   ┌──────────┐
               │ client/  │   │  store/   │   │shared/   │
               │          │   │ fetcher/  │   │models    │
-              └──────────┘   └───────────┘   │(reads)   │
-                    │                        └──────────┘
-                    ▼
+              └──────────┘   └───────────┘   │(reads +  │
+                    │                        │ registry)│
+                    ▼                        └──────────┘
               ┌───────────┐
               │ decorator/│  (enriches fetcher output before persister)
               └───────────┘
@@ -73,7 +73,7 @@ go mod download
   - Sport-specific code organized in subdirectories (e.g., `decorator/nba/`)
   - Example: NBA heave events lack a statistics array when blocked, but the blocker is mentioned in the description. The decorator parses this and adds the block statistic.
 
-- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). NO dependency on shared/models. Takes fetcher structs (possibly decorated) and calls store methods. This is where the mapping from API field names to database column names happens.
+- **persister/**: Maps API structs → database entries. Handles enum transformation (API strings → DB enum strings). Takes fetcher structs (possibly decorated) and calls store methods. This is where the mapping from API field names to database column names happens. Does NOT interact with the singleton registry directly — registry registration is handled by store upsert methods.
   - Sport-specific code organized in subdirectories (e.g., `persister/nfl/`)
 
 - **reader/**: Reads data from the database for display and comparison. Returns shared/models types.
@@ -93,8 +93,8 @@ go mod download
 
 1. **fetcher/** → depends only on `client/` (no models/, no persister/, no decorator/)
 2. **decorator/** → depends only on `fetcher/` (enriches fetcher output, no models/, no persister/)
-3. **persister/** → depends on `fetcher/` and `store/` (no shared/models)
-4. **store/** → depends on shared/models for READs only; uses internal structs for WRITEs
+3. **persister/** → depends on `fetcher/` and `store/` (may import `shared/models` for return types, but does NOT interact with the registry)
+4. **store/** → depends on shared/models for READs and for registry registration during WRITEs; uses internal `ForUpsert` structs as write inputs
 5. **main.go** → depends on all packages but contains minimal logic
 
 ### Import Naming Conventions
@@ -129,7 +129,7 @@ import (
 
 **Reference Data:**
 ```
-Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transformation) → store/ → PostgreSQL
+Sportradar API → client/ → fetcher/ (raw API structs) → persister/ (transformation) → store/ (DB write + registry registration) → PostgreSQL
 ```
 
 **Play-by-Play:**
@@ -169,7 +169,7 @@ Comparison: cmd/compare-box-score-data/compare/ → success or discrepancy repor
 - Never log warnings and continue execution when data is suspect
 - If you want to skip certain data, explicitly code the skip condition (not a silent catch-all)
 
-**Exceptions**: Only known, intentional exclusions (via `fetcher/exclusions.go` and sport-specific files like `persister/nfl/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
+**Exceptions**: Only known, intentional exclusions (via persister exclusion files like `persister/exclusions.go`, `persister/nfl/exclusions.go`, `persister/nba/exclusions.go`) are silently skipped. These are documented business logic, not error conditions.
 
 ### Enum Transformation Pattern
 
@@ -213,13 +213,14 @@ VALUES ((SELECT id FROM individuals WHERE vendor_id = $1), ...)
 - Database resolves the FK inline
 - Good for play-by-play where you don't pre-load all entities
 
-**In-Memory Lookup** (pre-resolved):
+**Registry Lookup** (pre-resolved via singleton registry):
 ```go
-team := dataStore.Teams[vendorID]
+team := models.Registry.GetTeam(teamID)
 roster.TeamID = team.ID
 ```
-- Used when you've already loaded entities into memory
-- Good for reference data where you process hierarchically
+- Used when entities have already been registered in the singleton registry
+- Good for reference data where you process hierarchically and register as you go
+- Store getter methods (e.g., `GetTeamByVendorID`) check the registry before querying the database
 
 **Discretionary**: The choice between subquery vs. in-memory is left to the coder based on what's already available in context.
 
@@ -237,23 +238,18 @@ See `shared/models/CLAUDE.md` for full registry documentation including thread s
 
 ### Struct Patterns for Store Operations
 
-**For WRITE operations** (Insert/Update), sport-specific store packages define internal structs:
+**For WRITE operations** (Insert/Update), store packages use internal `ForUpsert` structs as input.
+Reference data upserts return `*models.Entity` (resolved with parent pointers and registered in the singleton registry).
+Sport-specific play-by-play upserts may use different return patterns:
 ```go
-// store/nfl/play_statistics.go
-package nfl
+// store/teams.go (reference data - returns registered model)
+func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) (*models.Team, error)
 
-type PlayStatisticForUpsert struct {
-    VendorPlayerID string  // Looked up via subquery
-    StatType       string  // DB enum as string
-    PassingYards   decimal.Decimal
-    // ... other fields
-}
-
-// Methods use *store.Store receiver to extend the Store type
+// store/nfl/play_statistics.go (play-by-play - uses *store.Store receiver)
 func (s *store.Store) ReplaceNFLPlayStatistics(ctx context.Context, ...) error
 ```
 
-**For READ operations**, store may use shared/models:
+**For READ operations**, store uses shared/models with registry caching:
 ```go
 // store/teams.go
 func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models.Team, error)
@@ -377,10 +373,10 @@ All deletion checks happen within the same transaction as the persist operations
 
 ### Data Exclusion Rules
 
-Exclusion logic is split between two files based on when filtering occurs:
+Exclusion logic lives in the persister layer, filtering data before writing to the database:
 
-**fetcher/exclusions.go** - Filters data during fetching (before adding to in-memory data store):
-- `shouldExcludeGame()`: Filters TBD teams (NBA Cup games with undetermined competitors)
+**persister/exclusions.go** - Filters games during persistence:
+- `shouldExcludeGame()`: Filters TBD teams (NBA Cup games with undetermined competitors) and games with empty team IDs (undetermined playoff matchups)
 
 **persister/nfl/exclusions.go** - Filters NFL data during persistence (before writing to database):
 - `shouldPersistDrive()`: Filters "event" type entries (timeouts, end-of-period markers)

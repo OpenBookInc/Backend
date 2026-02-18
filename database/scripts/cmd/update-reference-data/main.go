@@ -15,6 +15,7 @@ import (
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	"github.com/openbook/population-scripts/persister"
 	"github.com/openbook/population-scripts/store"
+	models "github.com/openbook/shared/models"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -24,20 +25,16 @@ func fatal(format string, args ...interface{}) {
 }
 
 func main() {
-	// Parse command-line flags
 	envFile := flag.String("env", "", "path to environment file (default: .env)")
 	flag.Parse()
 
-	// Load configuration from environment file and variables
 	cfg, err := config.LoadReferenceDataConfigFromFile(*envFile)
 	if err != nil {
 		fatal("Failed to load configuration: %v\nPlease set your Sportradar API key in .env file or as an environment variable", err)
 	}
 
-	// Create context for database operations
 	ctx := context.Background()
 
-	// Create database connection
 	fmt.Println("Connecting to database...")
 	dbStore, err := store.New(ctx, cfg.PGHost, cfg.PGPort, cfg.PGDatabase, cfg.PGUser, cfg.PGPassword, cfg.PGKeyPath)
 	if err != nil {
@@ -46,7 +43,6 @@ func main() {
 	defer dbStore.Close()
 	fmt.Println("Successfully connected to database")
 
-	// Create API client with configured rate limit and access level
 	clientConfig := &sportradar.ClientConfig{
 		AccessLevel:    cfg.SportradarAccessLevel,
 		RateLimitDelay: time.Duration(cfg.RateLimitDelayMilliseconds) * time.Millisecond,
@@ -55,159 +51,226 @@ func main() {
 	}
 	apiClient := sportradar.NewClientWithConfig(clientConfig)
 
-	// Create in-memory data store and add leagues
-	dataStore := fetcher.NewReferenceData()
-	dataStore.AddLeague(&fetcher.League{SportID: 1, Name: "NFL"})
-	dataStore.AddLeague(&fetcher.League{SportID: 2, Name: "NBA"})
-
 	fmt.Println("\nStarting data population...")
 	fmt.Println(strings.Repeat("=", 72))
 
-	// Fetch NFL data
-	fmt.Println("\nFetching NFL data from Sportradar API...")
-	if err := fetcher_nfl.FetchNFLHierarchyData(apiClient, dataStore); err != nil {
-		fatal("Failed to fetch NFL data: %v", err)
+	// Step 1: Persist leagues
+	fmt.Println("\nUpserting leagues...")
+	leagueCount, err := persister.PersistLeagues(ctx, dbStore)
+	if err != nil {
+		fatal("Failed to persist leagues: %v", err)
 	}
-	fmt.Printf("Successfully fetched NFL data\n")
+	fmt.Printf("  Upserted %d leagues\n", leagueCount)
 
-	// Fetch NBA data
-	fmt.Println("\nFetching NBA data from Sportradar API...")
-	if err := fetcher_nba.FetchNBAHierarchyData(apiClient, dataStore); err != nil {
-		fatal("Failed to fetch NBA data: %v", err)
+	// Step 2: Fetch hierarchies
+	fmt.Println("\nFetching NFL hierarchy from Sportradar API...")
+	nflHierarchy, err := fetcher_nfl.FetchNFLHierarchy(apiClient)
+	if err != nil {
+		fatal("Failed to fetch NFL hierarchy: %v", err)
 	}
-	fmt.Printf("Successfully fetched NBA data\n")
+	fmt.Println("Successfully fetched NFL hierarchy")
 
-	// Fetch NFL game schedules
+	fmt.Println("\nFetching NBA hierarchy from Sportradar API...")
+	nbaHierarchy, err := fetcher_nba.FetchNBAHierarchy(apiClient)
+	if err != nil {
+		fatal("Failed to fetch NBA hierarchy: %v", err)
+	}
+	fmt.Println("Successfully fetched NBA hierarchy")
+
+	// Step 3: Persist hierarchies (conferences, divisions, teams)
+	fmt.Println("\nUpserting NFL hierarchy...")
+	nflConfCount, nflDivCount, nflTeamCount, err := persister.PersistNFLHierarchy(ctx, dbStore, nflHierarchy)
+	if err != nil {
+		fatal("Failed to persist NFL hierarchy: %v", err)
+	}
+	fmt.Printf("  Upserted %d conferences, %d divisions, %d teams\n", nflConfCount, nflDivCount, nflTeamCount)
+
+	fmt.Println("\nUpserting NBA hierarchy...")
+	nbaConfCount, nbaDivCount, nbaTeamCount, err := persister.PersistNBAHierarchy(ctx, dbStore, nbaHierarchy)
+	if err != nil {
+		fatal("Failed to persist NBA hierarchy: %v", err)
+	}
+	fmt.Printf("  Upserted %d conferences, %d divisions, %d teams\n", nbaConfCount, nbaDivCount, nbaTeamCount)
+
+	// Step 4: Fetch rosters
+	fmt.Println("\nFetching NFL rosters from Sportradar API...")
+	nflRosters, err := fetchNFLRosters(apiClient, nflHierarchy)
+	if err != nil {
+		fatal("Failed to fetch NFL rosters: %v", err)
+	}
+	fmt.Printf("Successfully fetched %d NFL rosters\n", len(nflRosters))
+
+	fmt.Println("\nFetching NBA rosters from Sportradar API...")
+	nbaRosters, err := fetchNBARosters(apiClient, nbaHierarchy)
+	if err != nil {
+		fatal("Failed to fetch NBA rosters: %v", err)
+	}
+	fmt.Printf("Successfully fetched %d NBA rosters\n", len(nbaRosters))
+
+	// Step 5: Persist rosters and individuals
+	fmt.Println("\nUpserting NFL rosters and individuals...")
+	nflNewIndividuals, nflRosterCount, err := persister.PersistNFLRostersAndIndividuals(ctx, dbStore, apiClient, nflRosters)
+	if err != nil {
+		fatal("Failed to persist NFL rosters and individuals: %v", err)
+	}
+	fmt.Printf("  Created %d new individuals, upserted %d rosters\n", nflNewIndividuals, nflRosterCount)
+
+	fmt.Println("\nUpserting NBA rosters and individuals...")
+	nbaNewIndividuals, nbaRosterCount, err := persister.PersistNBARostersAndIndividuals(ctx, dbStore, apiClient, nbaRosters)
+	if err != nil {
+		fatal("Failed to persist NBA rosters and individuals: %v", err)
+	}
+	fmt.Printf("  Created %d new individuals, upserted %d rosters\n", nbaNewIndividuals, nbaRosterCount)
+
+	// Step 6: Fetch and persist games
 	fmt.Println("\nFetching NFL game schedules...")
-	if err := fetcher.FetchNFLGames(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType); err != nil {
+	nflSchedule, err := fetcher.FetchNFLGames(apiClient, cfg.NFLSeasonStartYear, cfg.NFLSeasonType)
+	if err != nil {
 		fatal("Failed to fetch NFL games: %v", err)
 	}
-	fmt.Printf("Successfully fetched NFL games\n")
+	fmt.Println("Successfully fetched NFL games")
 
-	// Fetch NBA game schedules
+	fmt.Println("\nUpserting NFL games...")
+	nflGameCount, err := persister.PersistNFLGames(ctx, dbStore, nflSchedule)
+	if err != nil {
+		fatal("Failed to persist NFL games: %v", err)
+	}
+	fmt.Printf("  Upserted %d games\n", nflGameCount)
+
 	fmt.Println("\nFetching NBA game schedules...")
-	if err := fetcher.FetchNBAGames(apiClient, dataStore, cfg.NBASeasonStartYear, cfg.NBASeasonType); err != nil {
+	nbaSchedule, err := fetcher.FetchNBAGames(apiClient, cfg.NBASeasonStartYear, cfg.NBASeasonType)
+	if err != nil {
 		fatal("Failed to fetch NBA games: %v", err)
 	}
-	fmt.Printf("Successfully fetched NBA games\n")
+	fmt.Println("Successfully fetched NBA games")
 
-	// Fetch NFL player statuses (injuries)
+	fmt.Println("\nUpserting NBA games...")
+	nbaGameCount, err := persister.PersistNBAGames(ctx, dbStore, nbaSchedule)
+	if err != nil {
+		fatal("Failed to persist NBA games: %v", err)
+	}
+	fmt.Printf("  Upserted %d games\n", nbaGameCount)
+
+	// Step 7: Fetch and persist player statuses
+	rosterPlayerVendorIDs := collectRosterPlayerVendorIDs(nflRosters, nbaRosters)
+
 	fmt.Println("\nFetching NFL player statuses...")
-	if err := fetcher.FetchNFLPlayerStatuses(apiClient, dataStore, cfg.NFLSeasonStartYear, cfg.NFLSeasonType, cfg.NFLWeek); err != nil {
+	nflInjuries, err := fetcher.FetchNFLPlayerStatuses(apiClient, cfg.NFLSeasonStartYear, cfg.NFLSeasonType, cfg.NFLWeek)
+	if err != nil {
 		fatal("Failed to fetch NFL player statuses: %v", err)
 	}
-	fmt.Printf("Successfully fetched NFL player statuses\n")
+	fmt.Println("Successfully fetched NFL player statuses")
 
-	// Fetch NBA player statuses (injuries)
+	fmt.Println("\nUpserting NFL player statuses...")
+	nflStatusVendorIDs, err := persister.PersistNFLPlayerStatuses(ctx, dbStore, nflInjuries, rosterPlayerVendorIDs)
+	if err != nil {
+		fatal("Failed to persist NFL player statuses: %v", err)
+	}
+	fmt.Printf("  Upserted %d injury statuses\n", len(nflStatusVendorIDs))
+
 	fmt.Println("\nFetching NBA player statuses...")
-	if err := fetcher.FetchNBAPlayerStatuses(apiClient, dataStore); err != nil {
+	nbaInjuries, err := fetcher.FetchNBAPlayerStatuses(apiClient)
+	if err != nil {
 		fatal("Failed to fetch NBA player statuses: %v", err)
 	}
-	fmt.Printf("Successfully fetched NBA player statuses\n")
+	fmt.Println("Successfully fetched NBA player statuses")
 
-	// Set default "Active" status for all players without an injury status
-	fmt.Println("\nSetting default active statuses for remaining players...")
-	fetcher.SetDefaultActiveStatuses(dataStore)
-	fmt.Printf("Successfully set default statuses\n")
-
-	// Persist data to database
-	fmt.Println("\nPersisting data to database...")
-	fmt.Println(strings.Repeat("=", 72))
-
-	if err := persister.PersistReferenceData(ctx, dbStore, dataStore, apiClient); err != nil {
-		fatal("Failed to persist data to database: %v", err)
+	fmt.Println("\nUpserting NBA player statuses...")
+	nbaStatusVendorIDs, err := persister.PersistNBAPlayerStatuses(ctx, dbStore, nbaInjuries, rosterPlayerVendorIDs)
+	if err != nil {
+		fatal("Failed to persist NBA player statuses: %v", err)
 	}
+	fmt.Printf("  Upserted %d injury statuses\n", len(nbaStatusVendorIDs))
+
+	// Step 8: Set default active statuses for remaining players
+	processedVendorIDs := mergeVendorIDSets(nflStatusVendorIDs, nbaStatusVendorIDs)
+
+	fmt.Println("\nSetting default active statuses for remaining players...")
+	activeCount, err := persister.PersistDefaultActiveStatuses(ctx, dbStore, rosterPlayerVendorIDs, processedVendorIDs)
+	if err != nil {
+		fatal("Failed to persist default active statuses: %v", err)
+	}
+	fmt.Printf("  Upserted %d active statuses\n", activeCount)
 
 	// Print summary
 	fmt.Println("\n" + strings.Repeat("=", 72))
 	fmt.Println("Data Population Summary:")
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Printf("Total Leagues: %d\n", len(dataStore.Leagues))
-	fmt.Printf("Total Conferences: %d\n", len(dataStore.Conferences))
-	fmt.Printf("Total Divisions: %d\n", len(dataStore.Divisions))
-	fmt.Printf("Total Teams: %d\n", len(dataStore.Teams))
-	fmt.Printf("Total Players: %d\n", len(dataStore.Individuals))
-	fmt.Printf("Total Rosters: %d\n", len(dataStore.Rosters))
-	fmt.Printf("Total Games: %d\n", len(dataStore.Games))
-	fmt.Printf("Total Player Statuses: %d\n", len(dataStore.IndividualStatuses))
+	fmt.Printf("Total Leagues: %d\n", leagueCount)
+	fmt.Printf("Total Conferences: %d\n", nflConfCount+nbaConfCount)
+	fmt.Printf("Total Divisions: %d\n", nflDivCount+nbaDivCount)
+	fmt.Printf("Total Teams: %d\n", nflTeamCount+nbaTeamCount)
+	fmt.Printf("Total New Players: %d\n", nflNewIndividuals+nbaNewIndividuals)
+	fmt.Printf("Total Rosters: %d\n", nflRosterCount+nbaRosterCount)
+	fmt.Printf("Total Games: %d\n", nflGameCount+nbaGameCount)
+	fmt.Printf("Total Player Statuses: %d\n", len(processedVendorIDs)+activeCount)
 
 	fmt.Println("\n" + strings.Repeat("=", 72))
 	fmt.Println("Data successfully persisted to database!")
 	fmt.Println(strings.Repeat("=", 72))
 
-	// Print all persisted data
-	printPersistedData(dataStore)
+	// Print all persisted data from the singleton registry
+	fmt.Print(models.Registry.String())
 }
 
-// printPersistedData prints all data that was persisted to the database
-func printPersistedData(dataStore *fetcher.ReferenceData) {
-	// Print Leagues
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("LEAGUES")
-	fmt.Println(strings.Repeat("=", 72))
-	for _, league := range dataStore.Leagues {
-		fmt.Print(league)
-	}
-
-	// Print Conferences
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("CONFERENCES")
-	fmt.Println(strings.Repeat("=", 72))
-	for _, conference := range dataStore.Conferences {
-		fmt.Print(conference)
-	}
-
-	// Print Divisions
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("DIVISIONS")
-	fmt.Println(strings.Repeat("=", 72))
-	for _, division := range dataStore.Divisions {
-		fmt.Print(division)
-	}
-
-	// Print Teams
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("TEAMS")
-	fmt.Println(strings.Repeat("=", 72))
-	for _, team := range dataStore.Teams {
-		fmt.Print(team)
-	}
-
-	// Print Individuals (sample - too many to print all)
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Printf("INDIVIDUALS (showing first 10 of %d)\n", len(dataStore.Individuals))
-	fmt.Println(strings.Repeat("=", 72))
-	count := 0
-	for _, individual := range dataStore.Individuals {
-		if count >= 10 {
-			fmt.Printf("\n... and %d more individuals\n", len(dataStore.Individuals)-10)
-			break
+// fetchNFLRosters fetches roster data for every team in the NFL hierarchy response.
+func fetchNFLRosters(apiClient *sportradar.Client, hierarchy *fetcher_nfl.NFLHierarchyResponse) (map[string]*fetcher_nfl.NFLTeamRosterResponse, error) {
+	rosters := make(map[string]*fetcher_nfl.NFLTeamRosterResponse)
+	for _, conf := range hierarchy.Conferences {
+		for _, div := range conf.Divisions {
+			for _, team := range div.Teams {
+				roster, err := fetcher_nfl.FetchNFLTeamRoster(apiClient, team.ID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to fetch roster for team %s: %w", team.ID, err)
+				}
+				rosters[team.ID] = roster
+			}
 		}
-		fmt.Print(individual)
-		count++
 	}
+	return rosters, nil
+}
 
-	// Print Rosters
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Println("ROSTERS")
-	fmt.Println(strings.Repeat("=", 72))
-	for _, roster := range dataStore.Rosters {
-		fmt.Print(roster)
+// fetchNBARosters fetches roster data for every team in the NBA hierarchy response.
+func fetchNBARosters(apiClient *sportradar.Client, hierarchy *fetcher_nba.NBAHierarchyResponse) (map[string]*fetcher_nba.NBATeamProfileResponse, error) {
+	rosters := make(map[string]*fetcher_nba.NBATeamProfileResponse)
+	for _, conf := range hierarchy.Conferences {
+		for _, div := range conf.Divisions {
+			for _, team := range div.Teams {
+				roster, err := fetcher_nba.FetchNBATeamRoster(apiClient, team.ID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to fetch roster for team %s: %w", team.ID, err)
+				}
+				rosters[team.ID] = roster
+			}
+		}
 	}
+	return rosters, nil
+}
 
-	// Print Games (showing all)
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Printf("GAMES (showing all %d)\n", len(dataStore.Games))
-	fmt.Println(strings.Repeat("=", 72))
-	for _, game := range dataStore.Games {
-		fmt.Print(game)
+// collectRosterPlayerVendorIDs builds a set of all player vendor IDs from roster responses.
+func collectRosterPlayerVendorIDs(nflRosters map[string]*fetcher_nfl.NFLTeamRosterResponse, nbaRosters map[string]*fetcher_nba.NBATeamProfileResponse) map[string]bool {
+	vendorIDs := make(map[string]bool)
+	for _, roster := range nflRosters {
+		for _, player := range roster.Players {
+			vendorIDs[player.ID] = true
+		}
 	}
+	for _, roster := range nbaRosters {
+		for _, player := range roster.Players {
+			vendorIDs[player.ID] = true
+		}
+	}
+	return vendorIDs
+}
 
-	// Print Individual Statuses (showing all)
-	fmt.Println("\n" + strings.Repeat("=", 72))
-	fmt.Printf("INDIVIDUAL STATUSES (showing all %d)\n", len(dataStore.IndividualStatuses))
-	fmt.Println(strings.Repeat("=", 72))
-	for _, status := range dataStore.IndividualStatuses {
-		fmt.Print(status)
+// mergeVendorIDSets combines two vendor ID sets into one.
+func mergeVendorIDSets(a, b map[string]bool) map[string]bool {
+	merged := make(map[string]bool, len(a)+len(b))
+	for k := range a {
+		merged[k] = true
 	}
+	for k := range b {
+		merged[k] = true
+	}
+	return merged
 }

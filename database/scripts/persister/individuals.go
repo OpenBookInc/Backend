@@ -16,7 +16,7 @@ import (
 // PersistNFLPlayerProfile persists an NFL player profile as an individual in the database.
 // Returns the database ID of the individual.
 func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nfl.PlayerProfile, leagueID int) (int, error) {
-	individual := &store.IndividualForUpsert{
+	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
 		VendorID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
@@ -24,21 +24,19 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		LeagueID:        leagueID,
 		Position:        profile.Position,
 		JerseyNumber:    profile.Jersey,
-	}
-
-	id, err := dbStore.UpsertIndividual(ctx, individual)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to persist NFL player profile %s (vendor_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 
-	return id, nil
+	return result.ID, nil
 }
 
 // PersistNBAPlayerProfile persists an NBA player profile as an individual in the database.
 // Returns the database ID of the individual.
 func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nba.PlayerProfile, leagueID int) (int, error) {
-	individual := &store.IndividualForUpsert{
+	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
 		VendorID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
@@ -46,15 +44,13 @@ func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		LeagueID:        leagueID,
 		Position:        profile.Position,
 		JerseyNumber:    profile.JerseyNumber,
-	}
-
-	id, err := dbStore.UpsertIndividual(ctx, individual)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to persist NBA player profile %s (vendor_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 
-	return id, nil
+	return result.ID, nil
 }
 
 // UpsertIndividualIfMissing checks if an individual exists by vendor ID.

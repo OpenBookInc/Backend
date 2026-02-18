@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	models "github.com/openbook/shared/models"
+	gen "github.com/openbook/shared/models/gen"
 )
 
 // IndividualStatusForUpsert contains the data needed to upsert an individual status
@@ -13,10 +14,10 @@ type IndividualStatusForUpsert struct {
 	Status       string // DB enum value as string (e.g., "active", "questionable")
 }
 
-// UpsertIndividualStatus inserts or updates an individual's status in the database
-// Uses individual_id as the unique identifier (ON CONFLICT) - one status per player
-// Returns the database ID of the individual status
-func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualStatusForUpsert) (int, error) {
+// UpsertIndividualStatus inserts or updates an individual's status in the database.
+// Uses individual_id as the unique identifier (ON CONFLICT) - one status per player.
+// Resolves the Individual pointer and registers in the singleton registry.
+func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualStatusForUpsert) error {
 	query := `
 		INSERT INTO individual_statuses (individual_id, status)
 		VALUES ($1, $2::individual_status_type)
@@ -32,10 +33,21 @@ func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualSt
 		status.Status,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert individual status (individual_id: %d): %w", status.IndividualID, err)
+		return fmt.Errorf("failed to upsert individual status (individual_id: %d): %w", status.IndividualID, err)
 	}
 
-	return id, nil
+	individual, err := s.GetIndividualByID(ctx, status.IndividualID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve individual for status (individual_id %d): %w", status.IndividualID, err)
+	}
+
+	models.Registry.RegisterIndividualStatus(&models.IndividualStatus{
+		ID:           id,
+		IndividualID: int64(status.IndividualID),
+		Status:       gen.IndividualStatus(status.Status),
+		Individual:   individual,
+	})
+	return nil
 }
 
 // GetIndividualStatusByID retrieves an individual status by database ID.

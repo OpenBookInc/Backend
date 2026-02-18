@@ -16,10 +16,10 @@ type GameForUpsert struct {
 	ScheduledStartTime time.Time
 }
 
-// UpsertGame inserts or updates a game in the database
-// Uses vendor_id as the unique identifier (ON CONFLICT)
-// Returns the database ID of the game
-func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) (int, error) {
+// UpsertGame inserts or updates a game in the database.
+// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Resolves the Team pointers and registers in the singleton registry.
+func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 	query := `
 		INSERT INTO games (contender_id_a, contender_id_b, vendor_id, scheduled_start_time)
 		VALUES ($1, $2, $3, $4)
@@ -39,10 +39,29 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) (int, error
 		game.ScheduledStartTime,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert game (vendor_id: %s): %w", game.VendorID, err)
+		return fmt.Errorf("failed to upsert game (vendor_id: %s): %w", game.VendorID, err)
 	}
 
-	return id, nil
+	teamA, err := s.GetTeamByID(ctx, game.HomeTeamID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve home team for game %s: %w", game.VendorID, err)
+	}
+
+	teamB, err := s.GetTeamByID(ctx, game.AwayTeamID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve away team for game %s: %w", game.VendorID, err)
+	}
+
+	models.Registry.RegisterGame(&models.Game{
+		ID:                 id,
+		ContenderIDA:       int64(game.HomeTeamID),
+		ContenderIDB:       int64(game.AwayTeamID),
+		VendorID:           game.VendorID,
+		ScheduledStartTime: game.ScheduledStartTime,
+		TeamA:              teamA,
+		TeamB:              teamB,
+	})
+	return nil
 }
 
 // GetGameByID retrieves a game by database ID.

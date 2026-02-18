@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/openbook/population-scripts/client/sportradar"
-	"github.com/openbook/population-scripts/fetcher"
 )
 
 // NFLHierarchyResponse represents the NFL league hierarchy API response
@@ -35,65 +34,17 @@ type NFLHierarchyResponse struct {
 	} `json:"conferences"`
 }
 
-// FetchNFLHierarchyData fetches all NFL teams and rosters
-func FetchNFLHierarchyData(apiClient *sportradar.Client, dataStore *fetcher.ReferenceData) error {
-	// Fetch teams
+// FetchNFLHierarchy fetches the NFL league hierarchy from the Sportradar API
+func FetchNFLHierarchy(apiClient *sportradar.Client) (*NFLHierarchyResponse, error) {
 	teamsData, err := apiClient.GetNFLTeams()
 	if err != nil {
-		return fmt.Errorf("failed to fetch NFL teams: %w", err)
+		return nil, fmt.Errorf("failed to fetch NFL teams: %w", err)
 	}
 
 	var hierarchyResp NFLHierarchyResponse
 	if err := json.Unmarshal(teamsData, &hierarchyResp); err != nil {
-		return fmt.Errorf("failed to parse NFL teams response: %w", err)
+		return nil, fmt.Errorf("failed to parse NFL teams response: %w", err)
 	}
 
-	// Get NFL league from dataStore (must be added by caller first)
-	nflLeague := dataStore.GetLeagueByName("NFL")
-
-	// Process conferences, divisions, and teams
-	teamVendorIDs := []string{}
-	for _, conferenceData := range hierarchyResp.Conferences {
-		conference := &fetcher.Conference{
-			Name:     conferenceData.Name,
-			VendorID: conferenceData.ID,
-			Alias:    conferenceData.Alias,
-			League:   nflLeague,
-		}
-		dataStore.AddConference(conference)
-
-		for _, divisionData := range conferenceData.Divisions {
-			division := &fetcher.Division{
-				Name:       divisionData.Name,
-				VendorID:   divisionData.ID,
-				Alias:      divisionData.Alias,
-				Conference: conference,
-			}
-			dataStore.AddDivision(division)
-
-			for _, teamData := range divisionData.Teams {
-				team := &fetcher.Team{
-					Name:       teamData.Name,
-					Market:     teamData.Market,
-					Alias:      teamData.Alias,
-					VendorID:   teamData.ID,
-					VenueName:  teamData.Venue.Name,
-					VenueCity:  teamData.Venue.City,
-					VenueState: teamData.Venue.State,
-					Division:   division,
-				}
-				dataStore.AddTeam(team)
-				teamVendorIDs = append(teamVendorIDs, teamData.ID)
-			}
-		}
-	}
-
-	// Fetch rosters for each team
-	for _, teamVendorID := range teamVendorIDs {
-		if err := FetchNFLTeamRoster(apiClient, dataStore, teamVendorID, nflLeague); err != nil {
-			return fmt.Errorf("failed to fetch roster for team %s: %w", teamVendorID, err)
-		}
-	}
-
-	return nil
+	return &hierarchyResp, nil
 }

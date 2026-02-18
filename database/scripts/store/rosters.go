@@ -13,11 +13,11 @@ type RosterForUpsert struct {
 	IndividualIDs []int64
 }
 
-// UpsertRoster inserts or updates a roster in the database
-// Uses team_id as the unique identifier (ON CONFLICT)
-// Only stores the latest roster for each team (no historical tracking)
-// Returns the database ID of the roster
-func (s *Store) UpsertRoster(ctx context.Context, roster *RosterForUpsert) (int, error) {
+// UpsertRoster inserts or updates a roster in the database.
+// Uses team_id as the unique identifier (ON CONFLICT).
+// Only stores the latest roster for each team (no historical tracking).
+// Resolves the Team pointer and registers in the singleton registry.
+func (s *Store) UpsertRoster(ctx context.Context, roster *RosterForUpsert) error {
 	query := `
 		INSERT INTO rosters (team_id, individual_ids)
 		VALUES ($1, $2)
@@ -29,10 +29,21 @@ func (s *Store) UpsertRoster(ctx context.Context, roster *RosterForUpsert) (int,
 	var id int
 	err := s.pool.QueryRow(ctx, query, roster.TeamID, roster.IndividualIDs).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert roster for team_id %d: %w", roster.TeamID, err)
+		return fmt.Errorf("failed to upsert roster for team_id %d: %w", roster.TeamID, err)
 	}
 
-	return id, nil
+	team, err := s.GetTeamByID(ctx, roster.TeamID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve team for roster (team_id %d): %w", roster.TeamID, err)
+	}
+
+	models.Registry.RegisterRoster(&models.Roster{
+		ID:            id,
+		TeamID:        int64(roster.TeamID),
+		IndividualIDs: roster.IndividualIDs,
+		Team:          team,
+	})
+	return nil
 }
 
 // GetRosterByID retrieves a roster by database ID.

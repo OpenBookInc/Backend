@@ -15,10 +15,10 @@ type DivisionForUpsert struct {
 	Alias        string
 }
 
-// UpsertDivision inserts or updates a division in the database
-// Uses vendor_id as the unique identifier (ON CONFLICT)
-// Returns the database ID of the division
-func (s *Store) UpsertDivision(ctx context.Context, division *DivisionForUpsert) (int, error) {
+// UpsertDivision inserts or updates a division in the database.
+// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Resolves the Conference pointer, registers in the singleton registry, and returns the division.
+func (s *Store) UpsertDivision(ctx context.Context, division *DivisionForUpsert) (*models.Division, error) {
 	query := `
 		INSERT INTO divisions (name, conference_id, vendor_id, alias)
 		VALUES ($1, $2, $3, $4)
@@ -38,11 +38,23 @@ func (s *Store) UpsertDivision(ctx context.Context, division *DivisionForUpsert)
 		division.Alias,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert division %s (vendor_id: %s): %w",
+		return nil, fmt.Errorf("failed to upsert division %s (vendor_id: %s): %w",
 			division.Name, division.VendorID, err)
 	}
 
-	return id, nil
+	conference, err := s.GetConferenceByID(ctx, division.ConferenceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve conference for division %s: %w", division.VendorID, err)
+	}
+
+	return models.Registry.RegisterDivision(&models.Division{
+		ID:           id,
+		Name:         division.Name,
+		ConferenceID: int64(division.ConferenceID),
+		VendorID:     division.VendorID,
+		Alias:        division.Alias,
+		Conference:   conference,
+	}), nil
 }
 
 // GetDivisionByID retrieves a division by database ID.

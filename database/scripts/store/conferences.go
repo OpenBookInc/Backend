@@ -15,10 +15,10 @@ type ConferenceForUpsert struct {
 	Alias    string
 }
 
-// UpsertConference inserts or updates a conference in the database
-// Uses vendor_id as the unique identifier (ON CONFLICT)
-// Returns the database ID of the conference
-func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForUpsert) (int, error) {
+// UpsertConference inserts or updates a conference in the database.
+// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Resolves the League pointer, registers in the singleton registry, and returns the conference.
+func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForUpsert) (*models.Conference, error) {
 	query := `
 		INSERT INTO conferences (name, league_id, vendor_id, alias)
 		VALUES ($1, $2, $3, $4)
@@ -38,11 +38,23 @@ func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForU
 		conference.Alias,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert conference %s (vendor_id: %s): %w",
+		return nil, fmt.Errorf("failed to upsert conference %s (vendor_id: %s): %w",
 			conference.Name, conference.VendorID, err)
 	}
 
-	return id, nil
+	league, err := s.GetLeagueByID(ctx, conference.LeagueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", conference.VendorID, err)
+	}
+
+	return models.Registry.RegisterConference(&models.Conference{
+		ID:       id,
+		Name:     conference.Name,
+		LeagueID: int64(conference.LeagueID),
+		VendorID: conference.VendorID,
+		Alias:    conference.Alias,
+		League:   league,
+	}), nil
 }
 
 // GetConferenceByID retrieves a conference by database ID.
