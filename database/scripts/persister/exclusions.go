@@ -1,5 +1,11 @@
 package persister
 
+import (
+	"errors"
+
+	"github.com/openbook/population-scripts/store"
+)
+
 // Exclusion rules for filtering API data during persistence.
 // These exclusions prevent data from being written to the database.
 // For sport-specific persistence exclusions, see persister/nfl/exclusions.go
@@ -19,4 +25,13 @@ func shouldExcludeGame(homeID, awayID, homeAlias, awayAlias string) bool {
 	}
 
 	return false
+}
+
+// shouldExcludeGameForTeamLookupErr checks whether a team lookup error indicates
+// the team doesn't exist in our database. The hierarchy and team profile
+// Sportradar endpoints don't include special teams (e.g., All-Star teams), so
+// we can't persist them to the database and thus can't persist games that
+// reference those teams either.
+func shouldExcludeGameForTeamLookupErr(err error) bool {
+	return errors.Is(err, store.ErrTeamNotFound)
 }

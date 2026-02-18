@@ -28,7 +28,10 @@ func PersistNFLGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 
 			homeTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Home.ID)
 			if err != nil {
-				return 0, fmt.Errorf("home team not found for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
+				if shouldExcludeGameForTeamLookupErr(err) {
+					continue
+				}
+				return 0, fmt.Errorf("failed to look up home team for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
 					gameData.ID, scheduledTime.Format("2006-01-02 15:04 MST"),
 					gameData.Home.Market, gameData.Home.Name, gameData.Home.ID, gameData.Home.Alias,
 					gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)
@@ -36,7 +39,10 @@ func PersistNFLGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 
 			awayTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Away.ID)
 			if err != nil {
-				return 0, fmt.Errorf("away team not found for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
+				if shouldExcludeGameForTeamLookupErr(err) {
+					continue
+				}
+				return 0, fmt.Errorf("failed to look up away team for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
 					gameData.ID, scheduledTime.Format("2006-01-02 15:04 MST"),
 					gameData.Home.Market, gameData.Home.Name, gameData.Home.ID, gameData.Home.Alias,
 					gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)
@@ -77,7 +83,10 @@ func PersistNBAGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 
 		homeTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Home.ID)
 		if err != nil {
-			return 0, fmt.Errorf("home team not found for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
+			if shouldExcludeGameForTeamLookupErr(err) {
+				continue
+			}
+			return 0, fmt.Errorf("failed to look up home team for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
 				gameData.ID, scheduledTime.Format("2006-01-02 15:04 MST"),
 				gameData.Home.Market, gameData.Home.Name, gameData.Home.ID, gameData.Home.Alias,
 				gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)
@@ -85,7 +94,10 @@ func PersistNBAGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 
 		awayTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Away.ID)
 		if err != nil {
-			return 0, fmt.Errorf("away team not found for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
+			if shouldExcludeGameForTeamLookupErr(err) {
+				continue
+			}
+			return 0, fmt.Errorf("failed to look up away team for game %s (scheduled: %s)\n  Home: %s %s (ID: %s, Alias: %s)\n  Away: %s %s (ID: %s, Alias: %s): %w",
 				gameData.ID, scheduledTime.Format("2006-01-02 15:04 MST"),
 				gameData.Home.Market, gameData.Home.Name, gameData.Home.ID, gameData.Home.Alias,
 				gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)

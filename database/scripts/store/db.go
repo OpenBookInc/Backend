@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrTeamNotFound is returned when a queried team does not exist in the database.
+var ErrTeamNotFound = errors.New("team not found")
 
 // Store provides database operations
 type Store struct {

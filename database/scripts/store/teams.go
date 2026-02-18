@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	models "github.com/openbook/shared/models"
 )
 
@@ -139,6 +141,9 @@ func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models
 		&team.VenueState,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("failed to get team with vendor_id %s: %w", vendorID, ErrTeamNotFound)
+		}
 		return nil, fmt.Errorf("failed to get team with vendor_id %s: %w", vendorID, err)
 	}
 
