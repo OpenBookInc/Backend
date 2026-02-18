@@ -23,7 +23,7 @@ import (
 // statDiscrepancyKey uniquely identifies a known stat discrepancy
 type statDiscrepancyKey struct {
 	GameID         int
-	PlayerVendorID string
+	PlayerSportradarID string
 	FieldName      string // PascalCase field name (e.g., "PassingYards")
 }
 
@@ -32,16 +32,16 @@ type statDiscrepancyKey struct {
 // match their official box score/statistics summary.
 var knownStatDiscrepancies = map[statDiscrepancyKey]string{
 	// Add NFL exclusions here as needed, following this format:
-	// {GameID: 123, PlayerVendorID: "uuid-here", FieldName: "field_name"}: "Reason for exclusion",
+	// {GameID: 123, PlayerSportradarID: "uuid-here", FieldName: "field_name"}: "Reason for exclusion",
 }
 
 // shouldExcludeStatDiscrepancy returns true if the given stat discrepancy is a known
 // Sportradar data inconsistency that should be ignored.
-func shouldExcludeStatDiscrepancy(gameID int, playerVendorID string, fieldName string) bool {
+func shouldExcludeStatDiscrepancy(gameID int, playerSportradarID string, fieldName string) bool {
 	key := statDiscrepancyKey{
-		GameID:         gameID,
-		PlayerVendorID: playerVendorID,
-		FieldName:      fieldName,
+		GameID:             gameID,
+		PlayerSportradarID: playerSportradarID,
+		FieldName:          fieldName,
 	}
 	_, exists := knownStatDiscrepancies[key]
 	return exists

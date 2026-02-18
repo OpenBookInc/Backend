@@ -7,7 +7,7 @@ type Conference struct {
 	ID       int      `json:"id"`        // Database ID (auto-increment)
 	Name     string   `json:"name"`      // e.g., "AFC", "NFC"
 	LeagueID int64    `json:"league_id"` // Foreign key to leagues table
-	VendorID string   `json:"vendor_id"` // Sportradar UUID
+	SportradarID string `json:"sportradar_id"` // Sportradar UUID
 	Alias    string   `json:"alias"`     // Short name
 	League   *League  `json:"-"`         // Pointer to parent League (not stored in DB)
 }
@@ -18,6 +18,6 @@ func (c *Conference) String() string {
 	if c.League != nil {
 		leagueName = c.League.Name
 	}
-	return fmt.Sprintf("\n%s (%s) - League: %s\n  DB ID: %d | Vendor ID: %s\n",
-		c.Name, c.Alias, leagueName, c.ID, c.VendorID)
+	return fmt.Sprintf("\n%s (%s) - League: %s\n  DB ID: %d | Sportradar ID: %s\n",
+		c.Name, c.Alias, leagueName, c.ID, c.SportradarID)
 }

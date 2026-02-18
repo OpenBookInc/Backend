@@ -8,15 +8,15 @@ import (
 )
 
 // FetchNFLGameStatistics fetches and parses NFL game statistics from Sportradar
-func FetchNFLGameStatistics(client *sportradar.Client, gameVendorID string) (*NFLGameStatistics, error) {
-	data, err := client.GetNFLGameStatistics(gameVendorID)
+func FetchNFLGameStatistics(client *sportradar.Client, gameSportradarID string) (*NFLGameStatistics, error) {
+	data, err := client.GetNFLGameStatistics(gameSportradarID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch NFL game statistics for game %s: %w", gameVendorID, err)
+		return nil, fmt.Errorf("failed to fetch NFL game statistics for game %s: %w", gameSportradarID, err)
 	}
 
 	var stats NFLGameStatistics
 	if err := json.Unmarshal(data, &stats); err != nil {
-		return nil, fmt.Errorf("failed to parse NFL game statistics for game %s: %w", gameVendorID, err)
+		return nil, fmt.Errorf("failed to parse NFL game statistics for game %s: %w", gameSportradarID, err)
 	}
 
 	return &stats, nil

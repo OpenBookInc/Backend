@@ -23,7 +23,7 @@ import (
 // Design principles:
 // - Single transaction: All operations succeed together or fail together
 // - Database validation: Enums and foreign keys validated by database constraints
-// - Subquery lookups: Foreign keys resolved inline via vendor_id lookups
+// - Subquery lookups: Foreign keys resolved inline via sportradar_id lookups
 // - Fault-intolerant: Any constraint violation causes full transaction rollback
 //
 // Key difference from NFL: NBA has no drives - plays are directly under periods.
@@ -71,7 +71,7 @@ func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, 
 	for _, period := range pbp.Periods {
 		for _, event := range period.Events {
 			if err := persistPlay(ctx, dbStore, tx, gameID, &period, &event); err != nil {
-				return fmt.Errorf("failed to persist play (vendor_id: %s): %w", event.ID, err)
+				return fmt.Errorf("failed to persist play (sportradar_id: %s): %w", event.ID, err)
 			}
 		}
 	}
@@ -105,7 +105,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID in
 	// Upsert the play
 	play := &store_nba.NBAPlayForUpsert{
 		GameID:          gameID,
-		VendorID:        event.ID,
+		SportradarID:    event.ID,
 		VendorSequence:  decimal.NewFromInt(event.Sequence),
 		PeriodType:      periodType,
 		PeriodNumber:    period.Number,
@@ -210,14 +210,14 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID in
 // exist in the database. For any missing players, it fetches their profile from the
 // Sportradar API and persists them.
 func persistMissingIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nba.PlayByPlayResponse) error {
-	// Extract all unique player vendor IDs from persistable statistics
-	playerVendorIDs := ExtractPlayerVendorIDs(pbp)
+	// Extract all unique player sportradar IDs from persistable statistics
+	playerSportradarIDs := ExtractPlayerSportradarIDs(pbp)
 
 	// Check each player and fetch/persist if missing
-	for _, vendorID := range playerVendorIDs {
-		individual, created, err := persister.UpsertIndividualIfMissing(ctx, dbStore, apiClient, vendorID, "NBA")
+	for _, sportradarID := range playerSportradarIDs {
+		individual, created, err := persister.UpsertIndividualIfMissing(ctx, dbStore, apiClient, sportradarID, "NBA")
 		if err != nil {
-			return fmt.Errorf("failed to ensure player exists (vendor_id: %s): %w", vendorID, err)
+			return fmt.Errorf("failed to ensure player exists (sportradar_id: %s): %w", sportradarID, err)
 		}
 		if created {
 			fmt.Printf("  Persisted missing player: %s\n", individual.DisplayName)
@@ -252,14 +252,14 @@ func CheckAndUpdateNBAPlayByPlayDeletions(ctx context.Context, dbStore *store.St
 		for _, event := range period.Events {
 			if event.Deleted {
 				// Look up the play in the database (only finds non-deleted plays)
-				existingPlay, err := store_nba.GetNBAPlayByVendorID(dbStore, ctx, gameID, event.ID)
+				existingPlay, err := store_nba.GetNBAPlayBySportradarID(dbStore, ctx, gameID, event.ID)
 				if err != nil {
 					// Play doesn't exist or is already deleted - nothing to do
 					continue
 				}
 				// Mark the play as deleted
 				if err := store_nba.MarkNBAPlayDeleted(dbStore, ctx, tx, existingPlay.ID); err != nil {
-					return fmt.Errorf("failed to mark play as deleted (vendor_id: %s): %w", event.ID, err)
+					return fmt.Errorf("failed to mark play as deleted (sportradar_id: %s): %w", event.ID, err)
 				}
 			}
 		}

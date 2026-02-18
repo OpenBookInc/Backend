@@ -10,27 +10,27 @@ import (
 )
 
 // UpsertNFLDrive inserts or updates an NFL drive in the database.
-// Uses (game_id, vendor_id) as the unique constraint for ON CONFLICT.
+// Uses (game_id, sportradar_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the drive for use as a foreign key in plays.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-// The vendorTeamID is looked up via subquery to get the possession_team_id.
+// The sportradarTeamID is looked up via subquery to get the possession_team_id.
 // Sets vendor_deleted = FALSE on both insert and update.
-func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, vendorDriveID string, sequence interface{}, vendorTeamID string) (int, error) {
+func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, sportradarDriveID string, sequence interface{}, sportradarTeamID string) (int, error) {
 	query := `
 		INSERT INTO nfl_drives (
-			game_id, vendor_id, vendor_sequence, possession_team_id,
+			game_id, sportradar_id, vendor_sequence, possession_team_id,
 			vendor_deleted, created_at, updated_at
 		)
 		VALUES (
 			$1,
 			$2,
 			$3,
-			(SELECT id FROM teams WHERE vendor_id = $4),
+			(SELECT id FROM teams WHERE sportradar_id = $4),
 			FALSE,
 			NOW(),
 			NOW()
 		)
-		ON CONFLICT (game_id, vendor_id)
+		ON CONFLICT (game_id, sportradar_id)
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,
 			possession_team_id = EXCLUDED.possession_team_id,
@@ -42,39 +42,39 @@ func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, 
 	var id int
 	err := tx.QueryRow(ctx, query,
 		gameID,
-		vendorDriveID,
+		sportradarDriveID,
 		sequence,
-		vendorTeamID,
+		sportradarTeamID,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert NFL drive (vendor_id: %s, vendor_team_id: %s - team may not exist in database): %w", vendorDriveID, vendorTeamID, err)
+		return 0, fmt.Errorf("failed to upsert NFL drive (sportradar_id: %s, sportradar_team_id: %s - team may not exist in database): %w", sportradarDriveID, sportradarTeamID, err)
 	}
 
 	return id, nil
 }
 
-// GetNFLDriveByVendorID retrieves an NFL drive by game_id and vendor_id.
+// GetNFLDriveBySportradarID retrieves an NFL drive by game_id and sportradar_id.
 // Only returns drives where vendor_deleted = FALSE.
-func GetNFLDriveByVendorID(s *store.Store, ctx context.Context, gameID int, vendorID string) (*models_nfl.Drive, error) {
+func GetNFLDriveBySportradarID(s *store.Store, ctx context.Context, gameID int, sportradarID string) (*models_nfl.Drive, error) {
 	query := `
-		SELECT id, game_id, vendor_id, vendor_sequence, possession_team_id,
+		SELECT id, game_id, sportradar_id, vendor_sequence, possession_team_id,
 		       created_at, updated_at
 		FROM nfl_drives
-		WHERE game_id = $1 AND vendor_id = $2 AND vendor_deleted = FALSE
+		WHERE game_id = $1 AND sportradar_id = $2 AND vendor_deleted = FALSE
 	`
 
 	var drive models_nfl.Drive
-	err := s.Pool().QueryRow(ctx, query, gameID, vendorID).Scan(
+	err := s.Pool().QueryRow(ctx, query, gameID, sportradarID).Scan(
 		&drive.ID,
 		&drive.GameID,
-		&drive.VendorID,
+		&drive.SportradarID,
 		&drive.VendorSequence,
 		&drive.PossessionTeamID,
 		&drive.CreatedAt,
 		&drive.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NFL drive with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get NFL drive with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	return &drive, nil

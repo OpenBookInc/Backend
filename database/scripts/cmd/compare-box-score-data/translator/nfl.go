@@ -38,7 +38,7 @@ type nflPlayerStats struct {
 // TranslateNFLBoxScore translates Sportradar NFL game statistics to an NFLBoxScore model.
 // It aggregates stats from both home and away teams across all stat categories.
 func TranslateNFLBoxScore(ctx context.Context, game *models.Game, stats *fetcher.NFLGameStatistics, dbStore *store.Store) (*models_nfl.NFLBoxScore, error) {
-	// Aggregate stats by player vendor ID from both teams
+	// Aggregate stats by player sportradar ID from both teams
 	playerStats := make(map[string]*nflPlayerStats)
 
 	// Process home team
@@ -50,10 +50,10 @@ func TranslateNFLBoxScore(ctx context.Context, game *models.Game, stats *fetcher
 	// Build box score with individual lookups
 	var players []*models_nfl.IndividualBoxScore
 
-	for vendorID, pStats := range playerStats {
-		individual, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+	for sportradarID, pStats := range playerStats {
+		individual, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to look up individual with vendor ID %s: %w", vendorID, err)
+			return nil, fmt.Errorf("failed to look up individual with sportradar ID %s: %w", sportradarID, err)
 		}
 
 		nflStats := &models_nfl.NFLStats{
@@ -153,11 +153,11 @@ func aggregateNFLTeamStats(team *fetcher.NFLTeamStatistics, playerStats map[stri
 }
 
 // getOrCreatePlayerStats returns existing stats for a player or creates new ones
-func getOrCreatePlayerStats(playerStats map[string]*nflPlayerStats, vendorID string) *nflPlayerStats {
-	if stats, exists := playerStats[vendorID]; exists {
+func getOrCreatePlayerStats(playerStats map[string]*nflPlayerStats, sportradarID string) *nflPlayerStats {
+	if stats, exists := playerStats[sportradarID]; exists {
 		return stats
 	}
 	stats := &nflPlayerStats{}
-	playerStats[vendorID] = stats
+	playerStats[sportradarID] = stats
 	return stats
 }

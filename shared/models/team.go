@@ -11,7 +11,7 @@ type Team struct {
 	Name       string    `json:"name"`        // Team name (e.g., "Cowboys")
 	Market     string    `json:"market"`      // City/region (e.g., "Dallas")
 	Alias      string    `json:"alias"`       // Short name (e.g., "DAL")
-	VendorID   string    `json:"vendor_id"`   // Sportradar UUID
+	SportradarID string  `json:"sportradar_id"` // Sportradar UUID
 	DivisionID int64     `json:"division_id"` // Foreign key to divisions table
 	VenueName  string    `json:"venue_name"`  // Venue name
 	VenueCity  string    `json:"venue_city"`  // Venue city
@@ -23,7 +23,7 @@ type Team struct {
 func (t *Team) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s %s (%s)\n", t.Market, t.Name, t.Alias))
-	sb.WriteString(fmt.Sprintf("  DB ID: %d | Vendor ID: %s\n", t.ID, t.VendorID))
+	sb.WriteString(fmt.Sprintf("  DB ID: %d | Sportradar ID: %s\n", t.ID, t.SportradarID))
 	if t.Division != nil {
 		sb.WriteString(fmt.Sprintf("  Division: %s", t.Division.Name))
 		if t.Division.Conference != nil {

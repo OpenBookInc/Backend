@@ -9,20 +9,20 @@ import (
 
 // ConferenceForUpsert contains the data needed to upsert a conference
 type ConferenceForUpsert struct {
-	VendorID string
-	Name     string
-	LeagueID int
-	Alias    string
+	SportradarID string
+	Name         string
+	LeagueID     int
+	Alias        string
 }
 
 // UpsertConference inserts or updates a conference in the database.
-// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Uses sportradar_id as the unique identifier (ON CONFLICT).
 // Resolves the League pointer, registers in the singleton registry, and returns the conference.
 func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForUpsert) (*models.Conference, error) {
 	query := `
-		INSERT INTO conferences (name, league_id, vendor_id, alias)
+		INSERT INTO conferences (name, league_id, sportradar_id, alias)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (vendor_id)
+		ON CONFLICT (sportradar_id)
 		DO UPDATE SET
 			name = EXCLUDED.name,
 			league_id = EXCLUDED.league_id,
@@ -34,26 +34,26 @@ func (s *Store) UpsertConference(ctx context.Context, conference *ConferenceForU
 	err := s.pool.QueryRow(ctx, query,
 		conference.Name,
 		conference.LeagueID,
-		conference.VendorID,
+		conference.SportradarID,
 		conference.Alias,
 	).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to upsert conference %s (vendor_id: %s): %w",
-			conference.Name, conference.VendorID, err)
+		return nil, fmt.Errorf("failed to upsert conference %s (sportradar_id: %s): %w",
+			conference.Name, conference.SportradarID, err)
 	}
 
 	league, err := s.GetLeagueByID(ctx, conference.LeagueID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", conference.VendorID, err)
+		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", conference.SportradarID, err)
 	}
 
 	return models.Registry.RegisterConference(&models.Conference{
-		ID:       id,
-		Name:     conference.Name,
-		LeagueID: int64(conference.LeagueID),
-		VendorID: conference.VendorID,
-		Alias:    conference.Alias,
-		League:   league,
+		ID:           id,
+		Name:         conference.Name,
+		LeagueID:     int64(conference.LeagueID),
+		SportradarID: conference.SportradarID,
+		Alias:        conference.Alias,
+		League:       league,
 	}), nil
 }
 
@@ -66,14 +66,14 @@ func (s *Store) GetConferenceByID(ctx context.Context, id int) (*models.Conferen
 	}
 
 	// Query database
-	query := `SELECT id, name, league_id, vendor_id, alias FROM conferences WHERE id = $1`
+	query := `SELECT id, name, league_id, sportradar_id, alias FROM conferences WHERE id = $1`
 
 	var conference models.Conference
 	err := s.pool.QueryRow(ctx, query, id).Scan(
 		&conference.ID,
 		&conference.Name,
 		&conference.LeagueID,
-		&conference.VendorID,
+		&conference.SportradarID,
 		&conference.Alias,
 	)
 	if err != nil {
@@ -91,22 +91,22 @@ func (s *Store) GetConferenceByID(ctx context.Context, id int) (*models.Conferen
 	return models.Registry.RegisterConference(&conference), nil
 }
 
-// GetConferenceByVendorID retrieves a conference by vendor_id.
+// GetConferenceBySportradarID retrieves a conference by sportradar_id.
 // Uses the registry for caching and resolves the nested League pointer.
-func (s *Store) GetConferenceByVendorID(ctx context.Context, vendorID string) (*models.Conference, error) {
+func (s *Store) GetConferenceBySportradarID(ctx context.Context, sportradarID string) (*models.Conference, error) {
 	// Query database to get the ID first
-	query := `SELECT id, name, league_id, vendor_id, alias FROM conferences WHERE vendor_id = $1`
+	query := `SELECT id, name, league_id, sportradar_id, alias FROM conferences WHERE sportradar_id = $1`
 
 	var conference models.Conference
-	err := s.pool.QueryRow(ctx, query, vendorID).Scan(
+	err := s.pool.QueryRow(ctx, query, sportradarID).Scan(
 		&conference.ID,
 		&conference.Name,
 		&conference.LeagueID,
-		&conference.VendorID,
+		&conference.SportradarID,
 		&conference.Alias,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get conference with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get conference with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	// Check if already registered (by ID)
@@ -117,7 +117,7 @@ func (s *Store) GetConferenceByVendorID(ctx context.Context, vendorID string) (*
 	// Resolve nested League pointer
 	league, err := s.GetLeagueByID(ctx, int(conference.LeagueID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to resolve league for conference %s: %w", sportradarID, err)
 	}
 	conference.League = league
 

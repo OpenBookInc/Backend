@@ -17,10 +17,10 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 	newIndividualCount := 0
 	rosterCount := 0
 
-	for teamVendorID, roster := range rosters {
-		team, err := dbStore.GetTeamByVendorID(ctx, teamVendorID)
+	for teamSportradarID, roster := range rosters {
+		team, err := dbStore.GetTeamBySportradarID(ctx, teamSportradarID)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to get team %s: %w", teamVendorID, err)
+			return 0, 0, fmt.Errorf("failed to get team %s: %w", teamSportradarID, err)
 		}
 
 		leagueName := team.Division.Conference.League.Name
@@ -69,10 +69,10 @@ func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 	newIndividualCount := 0
 	rosterCount := 0
 
-	for teamVendorID, roster := range rosters {
-		team, err := dbStore.GetTeamByVendorID(ctx, teamVendorID)
+	for teamSportradarID, roster := range rosters {
+		team, err := dbStore.GetTeamBySportradarID(ctx, teamSportradarID)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to get team %s: %w", teamVendorID, err)
+			return 0, 0, fmt.Errorf("failed to get team %s: %w", teamSportradarID, err)
 		}
 
 		leagueName := team.Division.Conference.League.Name

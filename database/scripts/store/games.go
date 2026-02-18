@@ -10,20 +10,20 @@ import (
 
 // GameForUpsert contains the data needed to upsert a game
 type GameForUpsert struct {
-	VendorID           string
+	SportradarID       string
 	HomeTeamID         int
 	AwayTeamID         int
 	ScheduledStartTime time.Time
 }
 
 // UpsertGame inserts or updates a game in the database.
-// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Uses sportradar_id as the unique identifier (ON CONFLICT).
 // Resolves the Team pointers and registers in the singleton registry.
 func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 	query := `
-		INSERT INTO games (contender_id_a, contender_id_b, vendor_id, scheduled_start_time)
+		INSERT INTO games (contender_id_a, contender_id_b, sportradar_id, scheduled_start_time)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (vendor_id)
+		ON CONFLICT (sportradar_id)
 		DO UPDATE SET
 			contender_id_a = EXCLUDED.contender_id_a,
 			contender_id_b = EXCLUDED.contender_id_b,
@@ -35,28 +35,28 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 	err := s.pool.QueryRow(ctx, query,
 		game.HomeTeamID,
 		game.AwayTeamID,
-		game.VendorID,
+		game.SportradarID,
 		game.ScheduledStartTime,
 	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to upsert game (vendor_id: %s): %w", game.VendorID, err)
+		return fmt.Errorf("failed to upsert game (sportradar_id: %s): %w", game.SportradarID, err)
 	}
 
 	teamA, err := s.GetTeamByID(ctx, game.HomeTeamID)
 	if err != nil {
-		return fmt.Errorf("failed to resolve home team for game %s: %w", game.VendorID, err)
+		return fmt.Errorf("failed to resolve home team for game %s: %w", game.SportradarID, err)
 	}
 
 	teamB, err := s.GetTeamByID(ctx, game.AwayTeamID)
 	if err != nil {
-		return fmt.Errorf("failed to resolve away team for game %s: %w", game.VendorID, err)
+		return fmt.Errorf("failed to resolve away team for game %s: %w", game.SportradarID, err)
 	}
 
 	models.Registry.RegisterGame(&models.Game{
 		ID:                 id,
 		ContenderIDA:       int64(game.HomeTeamID),
 		ContenderIDB:       int64(game.AwayTeamID),
-		VendorID:           game.VendorID,
+		SportradarID:       game.SportradarID,
 		ScheduledStartTime: game.ScheduledStartTime,
 		TeamA:              teamA,
 		TeamB:              teamB,
@@ -74,7 +74,7 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 
 	// Query database
 	query := `
-		SELECT id, contender_id_a, contender_id_b, vendor_id, scheduled_start_time
+		SELECT id, contender_id_a, contender_id_b, sportradar_id, scheduled_start_time
 		FROM games
 		WHERE id = $1
 	`
@@ -84,7 +84,7 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 		&game.ID,
 		&game.ContenderIDA,
 		&game.ContenderIDB,
-		&game.VendorID,
+		&game.SportradarID,
 		&game.ScheduledStartTime,
 	)
 	if err != nil {
@@ -108,26 +108,26 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 	return models.Registry.RegisterGame(&game), nil
 }
 
-// GetGameByVendorID retrieves a game by vendor_id.
+// GetGameBySportradarID retrieves a game by sportradar_id.
 // Uses the registry for caching and resolves the nested Team pointers.
-func (s *Store) GetGameByVendorID(ctx context.Context, vendorID string) (*models.Game, error) {
+func (s *Store) GetGameBySportradarID(ctx context.Context, sportradarID string) (*models.Game, error) {
 	// Query database to get the ID first
 	query := `
-		SELECT id, contender_id_a, contender_id_b, vendor_id, scheduled_start_time
+		SELECT id, contender_id_a, contender_id_b, sportradar_id, scheduled_start_time
 		FROM games
-		WHERE vendor_id = $1
+		WHERE sportradar_id = $1
 	`
 
 	var game models.Game
-	err := s.pool.QueryRow(ctx, query, vendorID).Scan(
+	err := s.pool.QueryRow(ctx, query, sportradarID).Scan(
 		&game.ID,
 		&game.ContenderIDA,
 		&game.ContenderIDB,
-		&game.VendorID,
+		&game.SportradarID,
 		&game.ScheduledStartTime,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get game with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get game with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	// Check if already registered (by ID)
@@ -138,13 +138,13 @@ func (s *Store) GetGameByVendorID(ctx context.Context, vendorID string) (*models
 	// Resolve nested Team pointers
 	teamA, err := s.GetTeamByID(ctx, int(game.ContenderIDA))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve team A for game %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to resolve team A for game %s: %w", sportradarID, err)
 	}
 	game.TeamA = teamA
 
 	teamB, err := s.GetTeamByID(ctx, int(game.ContenderIDB))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve team B for game %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to resolve team B for game %s: %w", sportradarID, err)
 	}
 	game.TeamB = teamB
 

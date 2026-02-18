@@ -56,13 +56,13 @@ func main() {
 	}
 	defer dbStore.Close()
 
-	// Lookup game by database ID to get vendor_id for API call
+	// Lookup game by database ID to get sportradar_id for API call
 	fmt.Println("\nLooking up game in database...")
 	game, err := dbStore.GetGameByID(ctx, cfg.NFLGameID)
 	if err != nil {
 		fatal("Failed to lookup game with id %d: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NFLGameID, err)
 	}
-	fmt.Printf("Found game with vendor_id: %s\n", game.VendorID)
+	fmt.Printf("Found game with sportradar_id: %s\n", game.SportradarID)
 
 	// Create API client with configured rate limit and access level
 	clientConfig := &sportradar.ClientConfig{
@@ -75,15 +75,15 @@ func main() {
 
 	// Fetch play-by-play data
 	fmt.Println("\nFetching play-by-play data from Sportradar API...")
-	playByPlay, err := fetcher_nfl.FetchNFLPlayByPlay(apiClient, game.VendorID)
+	playByPlay, err := fetcher_nfl.FetchNFLPlayByPlay(apiClient, game.SportradarID)
 	if err != nil {
 		fatal("Failed to fetch play-by-play data: %v", err)
 	}
 	fmt.Println("Successfully fetched play-by-play data!")
 
 	// Validate that API response matches our expected game
-	if playByPlay.ID != game.VendorID {
-		fatal("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
+	if playByPlay.ID != game.SportradarID {
+		fatal("API response sportradar_id mismatch: expected %s, got %s", game.SportradarID, playByPlay.ID)
 	}
 
 	// Decorate the fetched data with derived statistics (currently a no-op for NFL)

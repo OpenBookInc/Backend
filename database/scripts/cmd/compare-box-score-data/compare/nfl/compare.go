@@ -18,9 +18,9 @@ import (
 // NFLDiscrepancy represents a single stat discrepancy
 type NFLDiscrepancy struct {
 	GameID            int
-	GameVendorID      string
+	GameSportradarID      string
 	PlayerName        string
-	PlayerVendorID    string
+	PlayerSportradarID    string
 	Field             string
 	DBValue           decimal.Decimal
 	SportradarValue   decimal.Decimal
@@ -28,26 +28,26 @@ type NFLDiscrepancy struct {
 
 func (d *NFLDiscrepancy) Error() string {
 	return fmt.Sprintf("Discrepancy found for game %d (vendor: %s)\n  Player: %s (vendor: %s)\n  Field: %s\n    Database: %s\n    Sportradar: %s",
-		d.GameID, d.GameVendorID, d.PlayerName, d.PlayerVendorID, d.Field, d.DBValue.String(), d.SportradarValue.String())
+		d.GameID, d.GameSportradarID, d.PlayerName, d.PlayerSportradarID, d.Field, d.DBValue.String(), d.SportradarValue.String())
 }
 
 // NFLMissingPlayerError represents a player missing from one source
 type NFLMissingPlayerError struct {
 	GameID         int
-	GameVendorID   string
+	GameSportradarID   string
 	PlayerName     string
-	PlayerVendorID string
+	PlayerSportradarID string
 	MissingIn      string // "database" or "sportradar"
 }
 
 func (e *NFLMissingPlayerError) Error() string {
 	return fmt.Sprintf("Player mismatch for game %d (vendor: %s)\n  Player: %s (vendor: %s)\n  Missing in: %s",
-		e.GameID, e.GameVendorID, e.PlayerName, e.PlayerVendorID, e.MissingIn)
+		e.GameID, e.GameSportradarID, e.PlayerName, e.PlayerSportradarID, e.MissingIn)
 }
 
 // CompareNFLBoxScores compares database box score with Sportradar box score
 // Returns nil if all stats match, otherwise returns the first discrepancy found
-func CompareNFLBoxScores(gameID int, gameVendorID string, dbBoxScore *models_nfl.NFLBoxScore, sportradarBoxScore *models_nfl.NFLBoxScore) error {
+func CompareNFLBoxScores(gameID int, gameSportradarID string, dbBoxScore *models_nfl.NFLBoxScore, sportradarBoxScore *models_nfl.NFLBoxScore) error {
 	// Build map of Sportradar players by vendor ID
 	sportradarPlayers := make(map[string]*models_nfl.IndividualBoxScore)
 	for _, player := range sportradarBoxScore.Players {
@@ -57,7 +57,7 @@ func CompareNFLBoxScores(gameID int, gameVendorID string, dbBoxScore *models_nfl
 		if shouldExcludeSportradarPlayer(player.Stats) {
 			continue
 		}
-		sportradarPlayers[player.Individual.VendorID] = player
+		sportradarPlayers[player.Individual.SportradarID] = player
 	}
 
 	// Track which Sportradar players we've matched
@@ -73,40 +73,40 @@ func CompareNFLBoxScores(gameID int, gameVendorID string, dbBoxScore *models_nfl
 			continue
 		}
 
-		vendorID := dbPlayer.Individual.VendorID
+		sportradarID := dbPlayer.Individual.SportradarID
 		playerName := dbPlayer.Individual.DisplayName
 
-		sportradarPlayer, found := sportradarPlayers[vendorID]
+		sportradarPlayer, found := sportradarPlayers[sportradarID]
 		if !found {
 			return &NFLMissingPlayerError{
-				GameID:         gameID,
-				GameVendorID:   gameVendorID,
-				PlayerName:     playerName,
-				PlayerVendorID: vendorID,
-				MissingIn:      "sportradar",
+				GameID:             gameID,
+				GameSportradarID:   gameSportradarID,
+				PlayerName:         playerName,
+				PlayerSportradarID: sportradarID,
+				MissingIn:          "sportradar",
 			}
 		}
 
-		matchedSportradarPlayers[vendorID] = true
+		matchedSportradarPlayers[sportradarID] = true
 
-		if err := compareNFLPlayerStats(gameID, gameVendorID, playerName, vendorID, dbPlayer.Stats, sportradarPlayer.Stats); err != nil {
+		if err := compareNFLPlayerStats(gameID, gameSportradarID, playerName, sportradarID, dbPlayer.Stats, sportradarPlayer.Stats); err != nil {
 			return err
 		}
 	}
 
 	// Check for Sportradar players not in database
-	for vendorID, player := range sportradarPlayers {
-		if !matchedSportradarPlayers[vendorID] {
+	for sportradarID, player := range sportradarPlayers {
+		if !matchedSportradarPlayers[sportradarID] {
 			playerName := ""
 			if player.Individual != nil {
 				playerName = player.Individual.DisplayName
 			}
 			return &NFLMissingPlayerError{
-				GameID:         gameID,
-				GameVendorID:   gameVendorID,
-				PlayerName:     playerName,
-				PlayerVendorID: vendorID,
-				MissingIn:      "database",
+				GameID:             gameID,
+				GameSportradarID:   gameSportradarID,
+				PlayerName:         playerName,
+				PlayerSportradarID: sportradarID,
+				MissingIn:          "database",
 			}
 		}
 	}
@@ -117,7 +117,7 @@ func CompareNFLBoxScores(gameID int, gameVendorID string, dbBoxScore *models_nfl
 // compareNFLPlayerStats compares individual player stats using reflection to iterate
 // over all Decimal fields. This makes the comparison future-proof when new statistical
 // fields are added to NFLStats.
-func compareNFLPlayerStats(gameID int, gameVendorID string, playerName string, playerVendorID string, dbStats *models_nfl.NFLStats, srStats *models_nfl.NFLStats) error {
+func compareNFLPlayerStats(gameID int, gameSportradarID string, playerName string, playerSportradarID string, dbStats *models_nfl.NFLStats, srStats *models_nfl.NFLStats) error {
 	dbVal := reflect.ValueOf(*dbStats)
 	srVal := reflect.ValueOf(*srStats)
 	dbType := dbVal.Type()
@@ -138,15 +138,15 @@ func compareNFLPlayerStats(gameID int, gameVendorID string, playerName string, p
 		srDecimal := srVal.Field(i).Interface().(decimal.Decimal)
 
 		if !dbDecimal.Equal(srDecimal) {
-			if shouldExcludeStatDiscrepancy(gameID, playerVendorID, field.Name) {
+			if shouldExcludeStatDiscrepancy(gameID, playerSportradarID, field.Name) {
 				continue
 			}
 
 			return &NFLDiscrepancy{
 				GameID:          gameID,
-				GameVendorID:    gameVendorID,
+				GameSportradarID:    gameSportradarID,
 				PlayerName:      playerName,
-				PlayerVendorID:  playerVendorID,
+				PlayerSportradarID:  playerSportradarID,
 				Field:           field.Name,
 				DBValue:         dbDecimal,
 				SportradarValue: srDecimal,
@@ -157,7 +157,7 @@ func compareNFLPlayerStats(gameID int, gameVendorID string, playerName string, p
 	// Compare sacks using combined credits. Sportradar reports a single sack total where
 	// each assist counts as 0.5 credits, while our database tracks them separately.
 	// e.g., DB: 2 sacks + 2 assists = Sportradar: 3.0 (2 + 2*0.5)
-	if err := compareSackCredits(gameID, gameVendorID, playerName, playerVendorID, dbStats, srStats); err != nil {
+	if err := compareSackCredits(gameID, gameSportradarID, playerName, playerSportradarID, dbStats, srStats); err != nil {
 		return err
 	}
 
@@ -175,7 +175,7 @@ func shouldExcludeFieldFromComparison(fieldName string) bool {
 // compareSackCredits compares sack stats using combined "sack credits".
 // Sportradar counts each sack assist as 0.5 of a sack, so we compare totals rather
 // than individual components since Sportradar doesn't separate them.
-func compareSackCredits(gameID int, gameVendorID string, playerName string, playerVendorID string, dbStats *models_nfl.NFLStats, srStats *models_nfl.NFLStats) error {
+func compareSackCredits(gameID int, gameSportradarID string, playerName string, playerSportradarID string, dbStats *models_nfl.NFLStats, srStats *models_nfl.NFLStats) error {
 	half := decimal.NewFromFloat(0.5)
 
 	// Calculate combined sack credits: sacks_made + 0.5 * sack_assists_made
@@ -187,9 +187,9 @@ func compareSackCredits(gameID int, gameVendorID string, playerName string, play
 	if !dbSackCredits.Equal(srSackCredits) {
 		return &NFLDiscrepancy{
 			GameID:          gameID,
-			GameVendorID:    gameVendorID,
+			GameSportradarID:    gameSportradarID,
 			PlayerName:      playerName,
-			PlayerVendorID:  playerVendorID,
+			PlayerSportradarID:  playerSportradarID,
 			Field:           "sack_credits (sacks_made + 0.5*sack_assists_made)",
 			DBValue:         dbSackCredits,
 			SportradarValue: srSackCredits,

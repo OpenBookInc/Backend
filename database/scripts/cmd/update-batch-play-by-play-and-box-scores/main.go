@@ -117,7 +117,7 @@ func processNFLGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 
 	for i, game := range games {
 		fmt.Printf("\n[%d/%d] Processing NFL game %d (vendor: %s, scheduled: %s)\n",
-			i+1, len(games), game.ID, game.VendorID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
+			i+1, len(games), game.ID, game.SportradarID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
 
 		if err := processNFLGame(ctx, dbStore, apiClient, game); err != nil {
 			return fmt.Errorf("failed to process NFL game %d: %w", game.ID, err)
@@ -132,14 +132,14 @@ func processNFLGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, game *models.Game) error {
 	// Fetch play-by-play data from API
 	fmt.Printf("  Fetching play-by-play data from Sportradar API...\n")
-	playByPlay, err := fetcher_nfl.FetchNFLPlayByPlay(apiClient, game.VendorID)
+	playByPlay, err := fetcher_nfl.FetchNFLPlayByPlay(apiClient, game.SportradarID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch play-by-play: %w", err)
 	}
 
 	// Validate API response matches expected game
-	if playByPlay.ID != game.VendorID {
-		return fmt.Errorf("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
+	if playByPlay.ID != game.SportradarID {
+		return fmt.Errorf("API response sportradar_id mismatch: expected %s, got %s", game.SportradarID, playByPlay.ID)
 	}
 
 	// Decorate the fetched data with derived statistics (currently a no-op for NFL)
@@ -222,7 +222,7 @@ func processNBAGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 
 	for i, game := range games {
 		fmt.Printf("\n[%d/%d] Processing NBA game %d (vendor: %s, scheduled: %s)\n",
-			i+1, len(games), game.ID, game.VendorID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
+			i+1, len(games), game.ID, game.SportradarID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
 
 		if err := processNBAGame(ctx, dbStore, apiClient, game); err != nil {
 			return fmt.Errorf("failed to process NBA game %d: %w", game.ID, err)
@@ -237,14 +237,14 @@ func processNBAGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, game *models.Game) error {
 	// Fetch play-by-play data from API
 	fmt.Printf("  Fetching play-by-play data from Sportradar API...\n")
-	playByPlay, err := fetcher_nba.FetchNBAPlayByPlay(apiClient, game.VendorID)
+	playByPlay, err := fetcher_nba.FetchNBAPlayByPlay(apiClient, game.SportradarID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch play-by-play: %w", err)
 	}
 
 	// Validate API response matches expected game
-	if playByPlay.ID != game.VendorID {
-		return fmt.Errorf("API response vendor_id mismatch: expected %s, got %s", game.VendorID, playByPlay.ID)
+	if playByPlay.ID != game.SportradarID {
+		return fmt.Errorf("API response sportradar_id mismatch: expected %s, got %s", game.SportradarID, playByPlay.ID)
 	}
 
 	// Decorate the fetched data with derived statistics (e.g., heave blocks)

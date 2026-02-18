@@ -49,8 +49,8 @@ func (p *PlayerProfile) GetDateOfBirth() *time.Time {
 }
 
 // FetchPlayerProfile fetches profile data for a specific NBA player
-func FetchPlayerProfile(apiClient *sportradar.Client, playerVendorID string) (*PlayerProfile, error) {
-	data, err := apiClient.GetNBAPlayerProfile(playerVendorID)
+func FetchPlayerProfile(apiClient *sportradar.Client, playerSportradarID string) (*PlayerProfile, error) {
+	data, err := apiClient.GetNBAPlayerProfile(playerSportradarID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch NBA player profile: %w", err)
 	}

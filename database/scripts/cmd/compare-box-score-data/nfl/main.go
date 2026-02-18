@@ -98,28 +98,28 @@ func main() {
 		game := dbBoxScore.Game
 		homeTeam := game.TeamA.Alias
 		awayTeam := game.TeamB.Alias
-		gameVendorID := game.VendorID
+		gameSportradarID := game.SportradarID
 		gameDate := game.ScheduledStartTime
 
 		fmt.Printf("  Game: %s @ %s on %s\n", awayTeam, homeTeam, gameDate.Format("2006-01-02"))
-		fmt.Printf("  Vendor ID: %s\n", gameVendorID)
+		fmt.Printf("  Sportradar ID: %s\n", gameSportradarID)
 
 		// Fetch Sportradar game statistics
-		stats, err := fetcher.FetchNFLGameStatistics(sportradarClient, gameVendorID)
+		stats, err := fetcher.FetchNFLGameStatistics(sportradarClient, gameSportradarID)
 		if err != nil {
-			fatal("Failed to fetch Sportradar game statistics for game %s: %v", gameVendorID, err)
+			fatal("Failed to fetch Sportradar game statistics for game %s: %v", gameSportradarID, err)
 		}
 
 		// Translate Sportradar response to NFLBoxScore model
 		sportradarBoxScore, err := translator.TranslateNFLBoxScore(ctx, game, stats, dbStore)
 		if err != nil {
-			fatal("Failed to translate Sportradar box score for game %s: %v", gameVendorID, err)
+			fatal("Failed to translate Sportradar box score for game %s: %v", gameSportradarID, err)
 		}
 
 		fmt.Printf("  Database players: %d, Sportradar players: %d\n", len(dbBoxScore.Players), len(sportradarBoxScore.Players))
 
 		// Compare box scores
-		if err := compare_nfl.CompareNFLBoxScores(gameID, gameVendorID, dbBoxScore, sportradarBoxScore); err != nil {
+		if err := compare_nfl.CompareNFLBoxScores(gameID, gameSportradarID, dbBoxScore, sportradarBoxScore); err != nil {
 			fatal("%v", err)
 		}
 

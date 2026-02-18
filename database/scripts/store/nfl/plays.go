@@ -14,7 +14,7 @@ import (
 // NFLPlayForUpsert contains the data needed to upsert an NFL play
 type NFLPlayForUpsert struct {
 	DriveID         int
-	VendorID        string
+	SportradarID    string
 	VendorSequence  decimal.Decimal
 	PeriodType      string // DB enum value as string (e.g., "quarter", "overtime")
 	PeriodNumber    int
@@ -25,20 +25,20 @@ type NFLPlayForUpsert struct {
 }
 
 // UpsertNFLPlay inserts or updates an NFL play in the database.
-// Uses (drive_id, vendor_id) as the unique constraint for ON CONFLICT.
+// Uses (drive_id, sportradar_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the play for use as a foreign key in statistics.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
 // Sets vendor_deleted = FALSE on both insert and update.
 func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nfl_plays (
-			drive_id, vendor_id, vendor_sequence,
+			drive_id, sportradar_id, vendor_sequence,
 			period_type, period_number,
 			description, nullified,
 			vendor_deleted, vendor_created_at, vendor_updated_at, created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4::period_type, $5, $6, $7, FALSE, $8, $9, NOW(), NOW())
-		ON CONFLICT (drive_id, vendor_id)
+		ON CONFLICT (drive_id, sportradar_id)
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,
 			period_type = EXCLUDED.period_type,
@@ -55,7 +55,7 @@ func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlay
 	var id int
 	err := tx.QueryRow(ctx, query,
 		play.DriveID,
-		play.VendorID,
+		play.SportradarID,
 		play.VendorSequence,
 		play.PeriodType,
 		play.PeriodNumber,
@@ -65,31 +65,31 @@ func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlay
 		play.VendorUpdatedAt,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert NFL play (vendor_id: %s): %w", play.VendorID, err)
+		return 0, fmt.Errorf("failed to upsert NFL play (sportradar_id: %s): %w", play.SportradarID, err)
 	}
 
 	return id, nil
 }
 
-// GetNFLPlayByVendorID retrieves an NFL play by drive_id and vendor_id.
+// GetNFLPlayBySportradarID retrieves an NFL play by drive_id and sportradar_id.
 // Only returns plays where vendor_deleted = FALSE and the parent drive is not deleted.
-func GetNFLPlayByVendorID(s *store.Store, ctx context.Context, driveID int, vendorID string) (*models_nfl.Play, error) {
+func GetNFLPlayBySportradarID(s *store.Store, ctx context.Context, driveID int, sportradarID string) (*models_nfl.Play, error) {
 	query := `
-		SELECT p.id, p.drive_id, p.vendor_id, p.vendor_sequence,
+		SELECT p.id, p.drive_id, p.sportradar_id, p.vendor_sequence,
 		       p.period_type, p.period_number,
 		       p.description, p.nullified,
 		       p.vendor_created_at, p.vendor_updated_at, p.created_at, p.updated_at
 		FROM nfl_plays p
 		JOIN nfl_drives d ON p.drive_id = d.id
-		WHERE p.drive_id = $1 AND p.vendor_id = $2
+		WHERE p.drive_id = $1 AND p.sportradar_id = $2
 		  AND p.vendor_deleted = FALSE AND d.vendor_deleted = FALSE
 	`
 
 	var play models_nfl.Play
-	err := s.Pool().QueryRow(ctx, query, driveID, vendorID).Scan(
+	err := s.Pool().QueryRow(ctx, query, driveID, sportradarID).Scan(
 		&play.ID,
 		&play.DriveID,
-		&play.VendorID,
+		&play.SportradarID,
 		&play.VendorSequence,
 		&play.PeriodType,
 		&play.PeriodNumber,
@@ -101,7 +101,7 @@ func GetNFLPlayByVendorID(s *store.Store, ctx context.Context, driveID int, vend
 		&play.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NFL play with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get NFL play with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	return &play, nil

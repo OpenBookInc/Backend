@@ -29,10 +29,10 @@ type NFLTeamRosterResponse struct {
 }
 
 // FetchNFLTeamRoster fetches roster data for a single NFL team
-func FetchNFLTeamRoster(apiClient *sportradar.Client, teamVendorID string) (*NFLTeamRosterResponse, error) {
-	rosterData, err := apiClient.GetNFLTeamRoster(teamVendorID)
+func FetchNFLTeamRoster(apiClient *sportradar.Client, teamSportradarID string) (*NFLTeamRosterResponse, error) {
+	rosterData, err := apiClient.GetNFLTeamRoster(teamSportradarID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch NFL team roster for %s: %w", teamVendorID, err)
+		return nil, fmt.Errorf("failed to fetch NFL team roster for %s: %w", teamSportradarID, err)
 	}
 
 	var rosterResp NFLTeamRosterResponse

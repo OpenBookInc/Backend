@@ -11,24 +11,24 @@ import (
 
 // TeamForUpsert contains the data needed to upsert a team
 type TeamForUpsert struct {
-	VendorID   string
-	Name       string
-	Market     string
-	Alias      string
-	DivisionID int
-	VenueName  string
-	VenueCity  string
-	VenueState string
+	SportradarID string
+	Name         string
+	Market       string
+	Alias        string
+	DivisionID   int
+	VenueName    string
+	VenueCity    string
+	VenueState   string
 }
 
 // UpsertTeam inserts or updates a team in the database.
-// Uses vendor_id as the unique identifier (ON CONFLICT).
+// Uses sportradar_id as the unique identifier (ON CONFLICT).
 // Resolves the Division pointer and registers in the singleton registry.
 func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 	query := `
-		INSERT INTO teams (name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state)
+		INSERT INTO teams (name, market, alias, sportradar_id, division_id, venue_name, venue_city, venue_state)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (vendor_id)
+		ON CONFLICT (sportradar_id)
 		DO UPDATE SET
 			name = EXCLUDED.name,
 			market = EXCLUDED.market,
@@ -45,33 +45,33 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 		team.Name,
 		team.Market,
 		team.Alias,
-		team.VendorID,
+		team.SportradarID,
 		team.DivisionID,
 		team.VenueName,
 		team.VenueCity,
 		team.VenueState,
 	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to upsert team %s %s (vendor_id: %s): %w",
-			team.Market, team.Name, team.VendorID, err)
+		return fmt.Errorf("failed to upsert team %s %s (sportradar_id: %s): %w",
+			team.Market, team.Name, team.SportradarID, err)
 	}
 
 	division, err := s.GetDivisionByID(ctx, team.DivisionID)
 	if err != nil {
-		return fmt.Errorf("failed to resolve division for team %s: %w", team.VendorID, err)
+		return fmt.Errorf("failed to resolve division for team %s: %w", team.SportradarID, err)
 	}
 
 	models.Registry.RegisterTeam(&models.Team{
-		ID:         id,
-		Name:       team.Name,
-		Market:     team.Market,
-		Alias:      team.Alias,
-		VendorID:   team.VendorID,
-		DivisionID: int64(team.DivisionID),
-		VenueName:  team.VenueName,
-		VenueCity:  team.VenueCity,
-		VenueState: team.VenueState,
-		Division:   division,
+		ID:           id,
+		Name:         team.Name,
+		Market:       team.Market,
+		Alias:        team.Alias,
+		SportradarID: team.SportradarID,
+		DivisionID:   int64(team.DivisionID),
+		VenueName:    team.VenueName,
+		VenueCity:    team.VenueCity,
+		VenueState:   team.VenueState,
+		Division:     division,
 	})
 	return nil
 }
@@ -86,7 +86,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 
 	// Query database
 	query := `
-		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
+		SELECT id, name, market, alias, sportradar_id, division_id, venue_name, venue_city, venue_state
 		FROM teams
 		WHERE id = $1
 	`
@@ -97,7 +97,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 		&team.Name,
 		&team.Market,
 		&team.Alias,
-		&team.VendorID,
+		&team.SportradarID,
 		&team.DivisionID,
 		&team.VenueName,
 		&team.VenueCity,
@@ -118,23 +118,23 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 	return models.Registry.RegisterTeam(&team), nil
 }
 
-// GetTeamByVendorID retrieves a team by vendor_id.
+// GetTeamBySportradarID retrieves a team by sportradar_id.
 // Uses the registry for caching and resolves the nested Division pointer.
-func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models.Team, error) {
+func (s *Store) GetTeamBySportradarID(ctx context.Context, sportradarID string) (*models.Team, error) {
 	// Query database to get the ID first
 	query := `
-		SELECT id, name, market, alias, vendor_id, division_id, venue_name, venue_city, venue_state
+		SELECT id, name, market, alias, sportradar_id, division_id, venue_name, venue_city, venue_state
 		FROM teams
-		WHERE vendor_id = $1
+		WHERE sportradar_id = $1
 	`
 
 	var team models.Team
-	err := s.pool.QueryRow(ctx, query, vendorID).Scan(
+	err := s.pool.QueryRow(ctx, query, sportradarID).Scan(
 		&team.ID,
 		&team.Name,
 		&team.Market,
 		&team.Alias,
-		&team.VendorID,
+		&team.SportradarID,
 		&team.DivisionID,
 		&team.VenueName,
 		&team.VenueCity,
@@ -142,9 +142,9 @@ func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("failed to get team with vendor_id %s: %w", vendorID, ErrTeamNotFound)
+			return nil, fmt.Errorf("failed to get team with sportradar_id %s: %w", sportradarID, ErrTeamNotFound)
 		}
-		return nil, fmt.Errorf("failed to get team with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get team with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	// Check if already registered (by ID)
@@ -155,7 +155,7 @@ func (s *Store) GetTeamByVendorID(ctx context.Context, vendorID string) (*models
 	// Resolve nested Division pointer
 	division, err := s.GetDivisionByID(ctx, int(team.DivisionID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve division for team %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to resolve division for team %s: %w", sportradarID, err)
 	}
 	team.Division = division
 

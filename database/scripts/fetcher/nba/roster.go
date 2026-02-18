@@ -29,10 +29,10 @@ type NBATeamProfileResponse struct {
 }
 
 // FetchNBATeamRoster fetches roster data for a single NBA team
-func FetchNBATeamRoster(apiClient *sportradar.Client, teamVendorID string) (*NBATeamProfileResponse, error) {
-	rosterData, err := apiClient.GetNBATeamRoster(teamVendorID)
+func FetchNBATeamRoster(apiClient *sportradar.Client, teamSportradarID string) (*NBATeamProfileResponse, error) {
+	rosterData, err := apiClient.GetNBATeamRoster(teamSportradarID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch NBA team roster for %s: %w", teamVendorID, err)
+		return nil, fmt.Errorf("failed to fetch NBA team roster for %s: %w", teamSportradarID, err)
 	}
 
 	var profileResp NBATeamProfileResponse

@@ -26,7 +26,7 @@ func PersistNFLGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 					gameData.ID, gameData.Home.Market, gameData.Home.Name, gameData.Away.Market, gameData.Away.Name, err)
 			}
 
-			homeTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Home.ID)
+			homeTeam, err := dbStore.GetTeamBySportradarID(ctx, gameData.Home.ID)
 			if err != nil {
 				if shouldExcludeGameForTeamLookupErr(err) {
 					continue
@@ -37,7 +37,7 @@ func PersistNFLGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 					gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)
 			}
 
-			awayTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Away.ID)
+			awayTeam, err := dbStore.GetTeamBySportradarID(ctx, gameData.Away.ID)
 			if err != nil {
 				if shouldExcludeGameForTeamLookupErr(err) {
 					continue
@@ -49,7 +49,7 @@ func PersistNFLGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 			}
 
 			err = dbStore.UpsertGame(ctx, &store.GameForUpsert{
-				VendorID:           gameData.ID,
+				SportradarID:           gameData.ID,
 				HomeTeamID:         homeTeam.ID,
 				AwayTeamID:         awayTeam.ID,
 				ScheduledStartTime: scheduledTime,
@@ -81,7 +81,7 @@ func PersistNBAGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 				gameData.ID, gameData.Home.Market, gameData.Home.Name, gameData.Away.Market, gameData.Away.Name, err)
 		}
 
-		homeTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Home.ID)
+		homeTeam, err := dbStore.GetTeamBySportradarID(ctx, gameData.Home.ID)
 		if err != nil {
 			if shouldExcludeGameForTeamLookupErr(err) {
 				continue
@@ -92,7 +92,7 @@ func PersistNBAGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 				gameData.Away.Market, gameData.Away.Name, gameData.Away.ID, gameData.Away.Alias, err)
 		}
 
-		awayTeam, err := dbStore.GetTeamByVendorID(ctx, gameData.Away.ID)
+		awayTeam, err := dbStore.GetTeamBySportradarID(ctx, gameData.Away.ID)
 		if err != nil {
 			if shouldExcludeGameForTeamLookupErr(err) {
 				continue
@@ -104,7 +104,7 @@ func PersistNBAGames(ctx context.Context, dbStore *store.Store, schedule *fetche
 		}
 
 		err = dbStore.UpsertGame(ctx, &store.GameForUpsert{
-			VendorID:           gameData.ID,
+			SportradarID:           gameData.ID,
 			HomeTeamID:         homeTeam.ID,
 			AwayTeamID:         awayTeam.ID,
 			ScheduledStartTime: scheduledTime,

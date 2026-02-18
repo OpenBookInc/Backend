@@ -33,7 +33,7 @@ type GameStatusType = genEnums.GameStatus
 type Drive struct {
 	ID               int             // Database ID (auto-increment)
 	GameID           int             // Foreign key to games table
-	VendorID         string          // Sportradar drive UUID
+	SportradarID     string          // Sportradar drive UUID
 	VendorSequence   decimal.Decimal // Drive sequence for ordering
 	PossessionTeamID int             // Foreign key to teams table
 	CreatedAt        time.Time       // Record creation time
@@ -44,7 +44,7 @@ type Drive struct {
 type Play struct {
 	ID                     int             // Database ID (auto-increment)
 	DriveID                int             // Foreign key to nfl_drives table
-	VendorID               string          // Sportradar event UUID
+	SportradarID           string          // Sportradar event UUID
 	VendorSequence         decimal.Decimal // Play sequence for ordering
 	PeriodType   PeriodType // quarter or overtime
 	PeriodNumber int        // 1-4 for quarters, 5+ for overtime

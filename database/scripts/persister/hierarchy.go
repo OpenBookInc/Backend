@@ -23,7 +23,7 @@ func PersistNFLHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 	for _, confData := range hierarchy.Conferences {
 		conference, err := dbStore.UpsertConference(ctx, &store.ConferenceForUpsert{
-			VendorID: confData.ID,
+			SportradarID: confData.ID,
 			Name:     confData.Name,
 			LeagueID: league.ID,
 			Alias:    confData.Alias,
@@ -35,7 +35,7 @@ func PersistNFLHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 		for _, divData := range confData.Divisions {
 			division, err := dbStore.UpsertDivision(ctx, &store.DivisionForUpsert{
-				VendorID:     divData.ID,
+				SportradarID:     divData.ID,
 				Name:         divData.Name,
 				ConferenceID: conference.ID,
 				Alias:        divData.Alias,
@@ -47,7 +47,7 @@ func PersistNFLHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 			for _, teamData := range divData.Teams {
 				err := dbStore.UpsertTeam(ctx, &store.TeamForUpsert{
-					VendorID:   teamData.ID,
+					SportradarID:   teamData.ID,
 					Name:       teamData.Name,
 					Market:     teamData.Market,
 					Alias:      teamData.Alias,
@@ -81,7 +81,7 @@ func PersistNBAHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 	for _, confData := range hierarchy.Conferences {
 		conference, err := dbStore.UpsertConference(ctx, &store.ConferenceForUpsert{
-			VendorID: confData.ID,
+			SportradarID: confData.ID,
 			Name:     confData.Name,
 			LeagueID: league.ID,
 			Alias:    confData.Alias,
@@ -93,7 +93,7 @@ func PersistNBAHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 		for _, divData := range confData.Divisions {
 			division, err := dbStore.UpsertDivision(ctx, &store.DivisionForUpsert{
-				VendorID:     divData.ID,
+				SportradarID:     divData.ID,
 				Name:         divData.Name,
 				ConferenceID: conference.ID,
 				Alias:        divData.Alias,
@@ -105,7 +105,7 @@ func PersistNBAHierarchy(ctx context.Context, dbStore *store.Store, hierarchy *f
 
 			for _, teamData := range divData.Teams {
 				err := dbStore.UpsertTeam(ctx, &store.TeamForUpsert{
-					VendorID:   teamData.ID,
+					SportradarID:   teamData.ID,
 					Name:       teamData.Name,
 					Market:     teamData.Market,
 					Alias:      teamData.Alias,

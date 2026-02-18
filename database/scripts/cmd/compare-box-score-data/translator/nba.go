@@ -46,7 +46,7 @@ func translateNBATeamPlayers(ctx context.Context, game *models.Game, players []f
 			continue
 		}
 
-		individual, err := dbStore.GetIndividualByVendorID(ctx, p.ID)
+		individual, err := dbStore.GetIndividualBySportradarID(ctx, p.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to look up individual %s (%s): %w", p.FullName, p.ID, err)
 		}

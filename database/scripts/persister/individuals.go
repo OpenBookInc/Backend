@@ -17,7 +17,7 @@ import (
 // Returns the database ID of the individual.
 func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nfl.PlayerProfile, leagueID int) (int, error) {
 	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
-		VendorID:        profile.ID,
+		SportradarID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
 		DateOfBirth:     profile.GetDateOfBirth(),
@@ -26,7 +26,7 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		JerseyNumber:    profile.Jersey,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to persist NFL player profile %s (vendor_id: %s): %w",
+		return 0, fmt.Errorf("failed to persist NFL player profile %s (sportradar_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 
@@ -37,7 +37,7 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 // Returns the database ID of the individual.
 func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nba.PlayerProfile, leagueID int) (int, error) {
 	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
-		VendorID:        profile.ID,
+		SportradarID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
 		AbbreviatedName: profile.GetAbbreviatedName(),
 		DateOfBirth:     profile.GetDateOfBirth(),
@@ -46,19 +46,19 @@ func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		JerseyNumber:    profile.JerseyNumber,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to persist NBA player profile %s (vendor_id: %s): %w",
+		return 0, fmt.Errorf("failed to persist NBA player profile %s (sportradar_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 
 	return result.ID, nil
 }
 
-// UpsertIndividualIfMissing checks if an individual exists by vendor ID.
+// UpsertIndividualIfMissing checks if an individual exists by Sportradar ID.
 // If missing, fetches their profile from the API and persists them.
 // Returns the individual (existing or newly created) and whether it was created.
-func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, vendorID string, leagueName string) (*models.Individual, bool, error) {
+func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, sportradarID string, leagueName string) (*models.Individual, bool, error) {
 	// Check if individual already exists
-	existing, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+	existing, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
 	if err == nil {
 		// Individual exists, return it
 		return existing, false, nil
@@ -77,7 +77,7 @@ func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiCli
 
 	switch leagueName {
 	case "NFL":
-		profile, err := fetcher_nfl.FetchPlayerProfile(apiClient, vendorID)
+		profile, err := fetcher_nfl.FetchPlayerProfile(apiClient, sportradarID)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to fetch NFL player profile: %w", err)
 		}
@@ -86,7 +86,7 @@ func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiCli
 			return nil, false, err
 		}
 	case "NBA":
-		profile, err := fetcher_nba.FetchPlayerProfile(apiClient, vendorID)
+		profile, err := fetcher_nba.FetchPlayerProfile(apiClient, sportradarID)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to fetch NBA player profile: %w", err)
 		}
@@ -99,7 +99,7 @@ func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiCli
 	}
 
 	// Retrieve the newly created individual
-	individual, err := dbStore.GetIndividualByVendorID(ctx, vendorID)
+	individual, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to retrieve newly created individual: %w", err)
 	}

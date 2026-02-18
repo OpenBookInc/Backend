@@ -13,7 +13,7 @@ import (
 // NBAPlayForUpsert contains the data needed to upsert an NBA play
 type NBAPlayForUpsert struct {
 	GameID          int
-	VendorID        string
+	SportradarID    string
 	VendorSequence  decimal.Decimal
 	PeriodType      string // DB enum value as string (e.g., "quarter", "overtime")
 	PeriodNumber    int
@@ -23,20 +23,20 @@ type NBAPlayForUpsert struct {
 }
 
 // UpsertNBAPlay inserts or updates an NBA play in the database.
-// Uses (game_id, vendor_id) as the unique constraint for ON CONFLICT.
+// Uses (game_id, sportradar_id) as the unique constraint for ON CONFLICT.
 // Returns the database ID of the play for use as a foreign key in statistics.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
 // Sets vendor_deleted = FALSE on both insert and update.
 func UpsertNBAPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NBAPlayForUpsert) (int, error) {
 	query := `
 		INSERT INTO nba_plays (
-			game_id, vendor_id, vendor_sequence,
+			game_id, sportradar_id, vendor_sequence,
 			period_type, period_number,
 			description,
 			vendor_deleted, vendor_created_at, vendor_updated_at, created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4::period_type, $5, $6, FALSE, $7, $8, NOW(), NOW())
-		ON CONFLICT (game_id, vendor_id)
+		ON CONFLICT (game_id, sportradar_id)
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,
 			period_type = EXCLUDED.period_type,
@@ -52,7 +52,7 @@ func UpsertNBAPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NBAPlay
 	var id int
 	err := tx.QueryRow(ctx, query,
 		play.GameID,
-		play.VendorID,
+		play.SportradarID,
 		play.VendorSequence,
 		play.PeriodType,
 		play.PeriodNumber,
@@ -61,7 +61,7 @@ func UpsertNBAPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NBAPlay
 		play.VendorUpdatedAt,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert NBA play (vendor_id: %s): %w", play.VendorID, err)
+		return 0, fmt.Errorf("failed to upsert NBA play (sportradar_id: %s): %w", play.SportradarID, err)
 	}
 
 	return id, nil
@@ -72,19 +72,19 @@ type NBAPlayBasic struct {
 	ID int
 }
 
-// GetNBAPlayByVendorID retrieves an NBA play by game_id and vendor_id.
+// GetNBAPlayBySportradarID retrieves an NBA play by game_id and sportradar_id.
 // Only returns plays where vendor_deleted = FALSE.
-func GetNBAPlayByVendorID(s *store.Store, ctx context.Context, gameID int, vendorID string) (*NBAPlayBasic, error) {
+func GetNBAPlayBySportradarID(s *store.Store, ctx context.Context, gameID int, sportradarID string) (*NBAPlayBasic, error) {
 	query := `
 		SELECT id
 		FROM nba_plays
-		WHERE game_id = $1 AND vendor_id = $2 AND vendor_deleted = FALSE
+		WHERE game_id = $1 AND sportradar_id = $2 AND vendor_deleted = FALSE
 	`
 
 	var play NBAPlayBasic
-	err := s.Pool().QueryRow(ctx, query, gameID, vendorID).Scan(&play.ID)
+	err := s.Pool().QueryRow(ctx, query, gameID, sportradarID).Scan(&play.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NBA play with vendor_id %s: %w", vendorID, err)
+		return nil, fmt.Errorf("failed to get NBA play with sportradar_id %s: %w", sportradarID, err)
 	}
 
 	return &play, nil

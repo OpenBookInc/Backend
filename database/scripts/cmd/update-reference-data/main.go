@@ -152,7 +152,7 @@ func main() {
 	fmt.Printf("  Upserted %d games\n", nbaGameCount)
 
 	// Step 7: Fetch and persist player statuses
-	rosterPlayerVendorIDs := collectRosterPlayerVendorIDs(nflRosters, nbaRosters)
+	rosterPlayerSportradarIDs := collectRosterPlayerSportradarIDs(nflRosters, nbaRosters)
 
 	fmt.Println("\nFetching NFL player statuses...")
 	nflInjuries, err := fetcher.FetchNFLPlayerStatuses(apiClient, cfg.NFLSeasonStartYear, cfg.NFLSeasonType, cfg.NFLWeek)
@@ -162,11 +162,11 @@ func main() {
 	fmt.Println("Successfully fetched NFL player statuses")
 
 	fmt.Println("\nUpserting NFL player statuses...")
-	nflStatusVendorIDs, err := persister.PersistNFLPlayerStatuses(ctx, dbStore, nflInjuries, rosterPlayerVendorIDs)
+	nflStatusSportradarIDs, err := persister.PersistNFLPlayerStatuses(ctx, dbStore, nflInjuries, rosterPlayerSportradarIDs)
 	if err != nil {
 		fatal("Failed to persist NFL player statuses: %v", err)
 	}
-	fmt.Printf("  Upserted %d injury statuses\n", len(nflStatusVendorIDs))
+	fmt.Printf("  Upserted %d injury statuses\n", len(nflStatusSportradarIDs))
 
 	fmt.Println("\nFetching NBA player statuses...")
 	nbaInjuries, err := fetcher.FetchNBAPlayerStatuses(apiClient)
@@ -176,17 +176,17 @@ func main() {
 	fmt.Println("Successfully fetched NBA player statuses")
 
 	fmt.Println("\nUpserting NBA player statuses...")
-	nbaStatusVendorIDs, err := persister.PersistNBAPlayerStatuses(ctx, dbStore, nbaInjuries, rosterPlayerVendorIDs)
+	nbaStatusSportradarIDs, err := persister.PersistNBAPlayerStatuses(ctx, dbStore, nbaInjuries, rosterPlayerSportradarIDs)
 	if err != nil {
 		fatal("Failed to persist NBA player statuses: %v", err)
 	}
-	fmt.Printf("  Upserted %d injury statuses\n", len(nbaStatusVendorIDs))
+	fmt.Printf("  Upserted %d injury statuses\n", len(nbaStatusSportradarIDs))
 
 	// Step 8: Set default active statuses for remaining players
-	processedVendorIDs := mergeVendorIDSets(nflStatusVendorIDs, nbaStatusVendorIDs)
+	processedSportradarIDs := mergeSportradarIDSets(nflStatusSportradarIDs, nbaStatusSportradarIDs)
 
 	fmt.Println("\nSetting default active statuses for remaining players...")
-	activeCount, err := persister.PersistDefaultActiveStatuses(ctx, dbStore, rosterPlayerVendorIDs, processedVendorIDs)
+	activeCount, err := persister.PersistDefaultActiveStatuses(ctx, dbStore, rosterPlayerSportradarIDs, processedSportradarIDs)
 	if err != nil {
 		fatal("Failed to persist default active statuses: %v", err)
 	}
@@ -203,7 +203,7 @@ func main() {
 	fmt.Printf("Total New Players: %d\n", nflNewIndividuals+nbaNewIndividuals)
 	fmt.Printf("Total Rosters: %d\n", nflRosterCount+nbaRosterCount)
 	fmt.Printf("Total Games: %d\n", nflGameCount+nbaGameCount)
-	fmt.Printf("Total Player Statuses: %d\n", len(processedVendorIDs)+activeCount)
+	fmt.Printf("Total Player Statuses: %d\n", len(processedSportradarIDs)+activeCount)
 
 	fmt.Println("\n" + strings.Repeat("=", 72))
 	fmt.Println("Data successfully persisted to database!")
@@ -247,24 +247,24 @@ func fetchNBARosters(apiClient *sportradar.Client, hierarchy *fetcher_nba.NBAHie
 	return rosters, nil
 }
 
-// collectRosterPlayerVendorIDs builds a set of all player vendor IDs from roster responses.
-func collectRosterPlayerVendorIDs(nflRosters map[string]*fetcher_nfl.NFLTeamRosterResponse, nbaRosters map[string]*fetcher_nba.NBATeamProfileResponse) map[string]bool {
-	vendorIDs := make(map[string]bool)
+// collectRosterPlayerSportradarIDs builds a set of all player sportradar IDs from roster responses.
+func collectRosterPlayerSportradarIDs(nflRosters map[string]*fetcher_nfl.NFLTeamRosterResponse, nbaRosters map[string]*fetcher_nba.NBATeamProfileResponse) map[string]bool {
+	sportradarIDs := make(map[string]bool)
 	for _, roster := range nflRosters {
 		for _, player := range roster.Players {
-			vendorIDs[player.ID] = true
+			sportradarIDs[player.ID] = true
 		}
 	}
 	for _, roster := range nbaRosters {
 		for _, player := range roster.Players {
-			vendorIDs[player.ID] = true
+			sportradarIDs[player.ID] = true
 		}
 	}
-	return vendorIDs
+	return sportradarIDs
 }
 
-// mergeVendorIDSets combines two vendor ID sets into one.
-func mergeVendorIDSets(a, b map[string]bool) map[string]bool {
+// mergeSportradarIDSets combines two sportradar ID sets into one.
+func mergeSportradarIDSets(a, b map[string]bool) map[string]bool {
 	merged := make(map[string]bool, len(a)+len(b))
 	for k := range a {
 		merged[k] = true

@@ -92,7 +92,7 @@ func ReplaceNFLPlayStatistics(s *store.Store, ctx context.Context, tx pgx.Tx, pl
 		)
 		VALUES (
 			$1,
-			(SELECT id FROM individuals WHERE vendor_id = $2),
+			(SELECT id FROM individuals WHERE sportradar_id = $2),
 			$3::nfl_stat_type,
 			$4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
 		)

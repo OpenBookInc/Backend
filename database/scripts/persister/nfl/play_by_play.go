@@ -23,7 +23,7 @@ import (
 // Design principles:
 // - Single transaction: All operations succeed together or fail together
 // - Database validation: Enums and foreign keys validated by database constraints
-// - Subquery lookups: Foreign keys resolved inline via vendor_id lookups
+// - Subquery lookups: Foreign keys resolved inline via sportradar_id lookups
 // - Fault-intolerant: Any constraint violation causes full transaction rollback
 // =============================================================================
 
@@ -69,7 +69,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, 
 	for _, period := range pbp.Periods {
 		for _, drive := range period.PBP {
 			if err := persistDrive(ctx, dbStore, tx, gameID, &period, &drive); err != nil {
-				return fmt.Errorf("failed to persist drive (vendor_id: %s): %w", drive.ID, err)
+				return fmt.Errorf("failed to persist drive (sportradar_id: %s): %w", drive.ID, err)
 			}
 		}
 	}
@@ -93,9 +93,9 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 	// occur after special teams touchdowns (punt/kick returns) where there's no
 	// traditional "offensive drive". In this case, we use start_situation.possession
 	// which indicates the team attempting the PAT or two-point conversion.
-	var vendorOffensiveTeamID string
+	var sportradarOffensiveTeamID string
 	if drive.OffensiveTeam != nil {
-		vendorOffensiveTeamID = drive.OffensiveTeam.ID
+		sportradarOffensiveTeamID = drive.OffensiveTeam.ID
 	} else if drive.IsStandalonePlayDrive() {
 		// Standalone PAT or two-point conversion after a special teams touchdown.
 		// The offensive_team is nil because this isn't a traditional drive, but the
@@ -103,7 +103,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		if drive.StartSituation == nil || drive.StartSituation.Possession == nil {
 			return fmt.Errorf("standalone play missing start_situation.possession information")
 		}
-		vendorOffensiveTeamID = drive.StartSituation.Possession.ID
+		sportradarOffensiveTeamID = drive.StartSituation.Possession.ID
 	} else {
 		return fmt.Errorf("drive missing offensive team information")
 	}
@@ -115,7 +115,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 		gameID,
 		drive.ID,
 		decimal.NewFromFloat(drive.Sequence),
-		vendorOffensiveTeamID,
+		sportradarOffensiveTeamID,
 	)
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 	if drive.IsStandalonePlayDrive() {
 		event := drive.AsEvent()
 		if err := persistPlay(ctx, dbStore, tx, driveID, period, event); err != nil {
-			return fmt.Errorf("failed to persist standalone play (vendor_id: %s): %w", drive.ID, err)
+			return fmt.Errorf("failed to persist standalone play (sportradar_id: %s): %w", drive.ID, err)
 		}
 		return nil
 	}
@@ -143,7 +143,7 @@ func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID i
 	// Process each event in the drive (for regular drives with nested events)
 	for _, event := range drive.Events {
 		if err := persistPlay(ctx, dbStore, tx, driveID, period, &event); err != nil {
-			return fmt.Errorf("failed to persist play (vendor_id: %s): %w", event.ID, err)
+			return fmt.Errorf("failed to persist play (sportradar_id: %s): %w", event.ID, err)
 		}
 	}
 
@@ -185,7 +185,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 	// Upsert the play
 	play := &store_nfl.NFLPlayForUpsert{
 		DriveID:         driveID,
-		VendorID:        event.ID,
+		SportradarID:    event.ID,
 		VendorSequence:  decimal.NewFromFloat(event.Sequence),
 		PeriodType:      periodType,
 		PeriodNumber:    period.Number,
@@ -216,7 +216,7 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 
 		// Create the base statistic struct
 		playStatistic := &store_nfl.PlayStatisticForUpsert{
-			VendorPlayerID: stat.Player.ID, // This is vendor_id, not db id
+			VendorPlayerID: stat.Player.ID, // This is sportradar_id, not db id
 			StatType:       statType,
 			Nullified:      stat.Nullified,
 			// Initialize all stat-type-specific fields to 0
@@ -295,14 +295,14 @@ func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, driveID i
 // exist in the database. For any missing players, it fetches their profile from the
 // Sportradar API and persists them.
 func persistMissingIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, pbp *fetcher_nfl.PlayByPlayResponse) error {
-	// Extract all unique player vendor IDs from persistable statistics
-	playerVendorIDs := ExtractPlayerVendorIDs(pbp)
+	// Extract all unique player sportradar IDs from persistable statistics
+	playerSportradarIDs := ExtractPlayerSportradarIDs(pbp)
 
 	// Check each player and fetch/persist if missing
-	for _, vendorID := range playerVendorIDs {
-		individual, created, err := persister.UpsertIndividualIfMissing(ctx, dbStore, apiClient, vendorID, "NFL")
+	for _, sportradarID := range playerSportradarIDs {
+		individual, created, err := persister.UpsertIndividualIfMissing(ctx, dbStore, apiClient, sportradarID, "NFL")
 		if err != nil {
-			return fmt.Errorf("failed to ensure player exists (vendor_id: %s): %w", vendorID, err)
+			return fmt.Errorf("failed to ensure player exists (sportradar_id: %s): %w", sportradarID, err)
 		}
 		if created {
 			fmt.Printf("  Persisted missing player: %s\n", individual.DisplayName)
@@ -339,14 +339,14 @@ func CheckAndUpdateNFLPlayByPlayDeletions(ctx context.Context, dbStore *store.St
 			// Check if the drive is marked as deleted
 			if drive.Deleted {
 				// Look up the drive in the database (only finds non-deleted drives)
-				existingDrive, err := store_nfl.GetNFLDriveByVendorID(dbStore, ctx, gameID, drive.ID)
+				existingDrive, err := store_nfl.GetNFLDriveBySportradarID(dbStore, ctx, gameID, drive.ID)
 				if err != nil {
 					// Drive doesn't exist or is already deleted - nothing to do
 					continue
 				}
 				// Mark the drive as deleted (cascades to plays)
 				if err := store_nfl.MarkNFLDriveDeleted(dbStore, ctx, tx, existingDrive.ID); err != nil {
-					return fmt.Errorf("failed to mark drive as deleted (vendor_id: %s): %w", drive.ID, err)
+					return fmt.Errorf("failed to mark drive as deleted (sportradar_id: %s): %w", drive.ID, err)
 				}
 				continue
 			}
@@ -355,20 +355,20 @@ func CheckAndUpdateNFLPlayByPlayDeletions(ctx context.Context, dbStore *store.St
 			for _, event := range drive.Events {
 				if event.Deleted {
 					// Look up the drive first to get its database ID
-					existingDrive, err := store_nfl.GetNFLDriveByVendorID(dbStore, ctx, gameID, drive.ID)
+					existingDrive, err := store_nfl.GetNFLDriveBySportradarID(dbStore, ctx, gameID, drive.ID)
 					if err != nil {
 						// Drive doesn't exist or is deleted - play can't be marked deleted
 						continue
 					}
 					// Look up the play in the database (only finds non-deleted plays)
-					existingPlay, err := store_nfl.GetNFLPlayByVendorID(dbStore, ctx, existingDrive.ID, event.ID)
+					existingPlay, err := store_nfl.GetNFLPlayBySportradarID(dbStore, ctx, existingDrive.ID, event.ID)
 					if err != nil {
 						// Play doesn't exist or is already deleted - nothing to do
 						continue
 					}
 					// Mark the play as deleted
 					if err := store_nfl.MarkNFLPlayDeleted(dbStore, ctx, tx, existingPlay.ID); err != nil {
-						return fmt.Errorf("failed to mark play as deleted (vendor_id: %s): %w", event.ID, err)
+						return fmt.Errorf("failed to mark play as deleted (sportradar_id: %s): %w", event.ID, err)
 					}
 				}
 			}
