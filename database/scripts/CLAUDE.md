@@ -30,6 +30,9 @@ go build ./...
 ./compare_nfl_box_score_data.sh
 ./compare_nba_box_score_data.sh
 
+# Map OddsBlaze entity IDs to existing database entities (writes to entity_vendor_ids)
+./update_odds_blaze_reference_data.sh
+
 # Download dependencies
 go mod download
 ```
@@ -64,10 +67,11 @@ go mod download
 
 **Package Roles:**
 
-- **client/**: Communicates with Sportradar API. Handles HTTP requests, rate limiting, error handling.
+- **client/**: Communicates with external APIs (Sportradar, OddsBlaze). Handles HTTP requests, rate limiting, error handling. Each vendor has its own subdirectory (e.g., `client/sportradar/`, `client/oddsblaze/`).
 
-- **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the Sportradar API response format exactly. **CRITICAL**: Field names in fetcher structs MUST match the JSON field names from the API exactly (e.g., `Sequence`, not `VendorSequence`), even if the database uses different column names. The fetcher is a pure representation of the API response.
+- **fetcher/**: Returns raw API response structs. NO dependency on models/ or persister/. Defines its own structs that mirror the API response format exactly. **CRITICAL**: Field names in fetcher structs MUST match the JSON field names from the API exactly (e.g., `Sequence`, not `VendorSequence`), even if the database uses different column names. The fetcher is a pure representation of the API response.
   - Sport-specific code organized in subdirectories (e.g., `fetcher/nfl/`)
+  - Vendor-specific code organized in subdirectories (e.g., `fetcher/oddsblaze/`)
 
 - **decorator/**: Enriches fetcher output with derived data that is missing from the raw API response. Accepts fetcher structs and returns the same type with additional data filled in. This sits between fetcher and persister in the data flow: `fetch → decorate → persist`. The decorator keeps the fetcher pure while allowing the persister to process data normally without special cases.
   - Sport-specific code organized in subdirectories (e.g., `decorator/nba/`)
@@ -83,9 +87,13 @@ go mod download
   - Sport-specific code organized in subdirectories (e.g., `store/nfl/`)
   - Methods in sport subdirectories use `*store.Store` receiver to extend the Store type
 
+- **reducer/**: Extracts unique entities from vendor API responses into simple POD structs. Deduplicates by vendor ID. Vendor-specific code in subdirectories (e.g., `reducer/oddsblaze/`).
+
+- **matcher/**: Matches vendor entities against existing database entities. Fatal on first unmatched entity (fault-intolerant). Vendor-specific code in subdirectories (e.g., `matcher/oddsblaze/`).
+
 - **config/**: Environment-based configuration (API keys, database credentials, rate limits, season parameters).
 
-- **main.go**: Simple wrapper that orchestrates fetcher → decorator → persister flow. Should contain minimal logic.
+- **main.go**: Simple wrapper that orchestrates the data flow. Should contain minimal logic.
 
 ### Dependency Rules
 
@@ -118,6 +126,16 @@ import (
 )
 ```
 
+**Vendor-specific packages** (use underscore separator):
+```go
+import (
+    fetcher_oddsblaze "github.com/openbook/population-scripts/fetcher/oddsblaze"
+    reducer_oddsblaze "github.com/openbook/population-scripts/reducer/oddsblaze"
+    matcher_oddsblaze "github.com/openbook/population-scripts/matcher/oddsblaze"
+    store_oddsblaze "github.com/openbook/population-scripts/store/oddsblaze"
+)
+```
+
 **Why explicit aliases?**:
 - Prevents naming conflicts between parent and child packages
 - Makes code more readable (clear which package types/functions come from)
@@ -140,6 +158,11 @@ Sportradar API → client/ → fetcher/ (raw API structs) → decorator/ (enrich
 **Box Scores (aggregated from play-by-play):**
 ```
 PostgreSQL → reader/nfl/ or reader/nba/ (read play stats) → persister/nfl/ or persister/nba/ (aggregation) → store/nfl/ or store/nba/ → PostgreSQL
+```
+
+**OddsBlaze Reference Data Mapping:**
+```
+OddsBlaze API → client/oddsblaze/ → fetcher/oddsblaze/ (raw API structs) → reducer/oddsblaze/ (unique entities) → matcher/oddsblaze/ (match to DB) → store/oddsblaze/ → entity_vendor_ids table
 ```
 
 **Box Score Comparison (validates database against Sportradar):**
@@ -231,6 +254,21 @@ Every entity has two identifiers:
 - **ID** (int): PostgreSQL auto-increment primary key, set ONLY after database upsert
 
 **Why**: VendorID enables idempotent upserts (`ON CONFLICT (vendor_id) DO UPDATE`). ID is for foreign key relationships in database.
+
+### Alternate Vendor ID Mapping (entity_vendor_ids)
+
+The `entity_vendor_ids` table maps IDs from alternate vendors (e.g., OddsBlaze) to existing entities in the database. This allows looking up entities by vendor-specific identifiers beyond the primary Sportradar vendor ID stored on each entity.
+
+**Schema:**
+- `entity_type` (entity_type enum): The type of entity (e.g., team, individual, game)
+- `entity_id` (int): The database primary key ID of the entity
+- `vendor` (vendor_type enum): The vendor providing the alternate ID (e.g., OddsBlaze)
+- `vendor_id` (varchar): The vendor's identifier for the entity
+
+**Constraints:**
+- Primary key: `(entity_type, entity_id, vendor)` — one vendor ID per entity per vendor
+- Unique: `(entity_type, vendor, vendor_id)` — vendor IDs are unique within a vendor+entity_type combination
+- Index: `(entity_type, entity_id)` — fast lookups by entity
 
 ### Singleton Registry for Reference Data
 
@@ -479,6 +517,13 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
   - `NFL_GAME_DATE_START_INCLUSIVE`, `NFL_GAME_DATE_END_INCLUSIVE`: NFL date range (YYYY-MM-DD)
   - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
 
+**Required (update_odds_blaze_reference_data):**
+- `ODDS_BLAZE_API_KEY`: OddsBlaze API key
+- `ODDS_BLAZE_SPORTSBOOKS`: Comma-separated sportsbooks (allowed: `draftkings`, `fanatics`)
+- `ODDS_BLAZE_LEAGUE`: League to fetch (one of: `nba`, `nfl`, `nhl`, `mlb`)
+- `ODDS_BLAZE_RATE_LIMIT_DELAY_MS`: Milliseconds between OddsBlaze API requests (must be positive)
+- `ODDS_BLAZE_TIMESTAMP`: *(optional)* Timestamp for historical data via rewind endpoint
+
 **Required (compare_*_box_score_data):**
 - `SPORTRADAR_API_KEYS`: Sportradar API keys (same as other Sportradar scripts)
 - `SPORTRADAR_ACCESS_LEVEL`: API access level (trial, production)
@@ -507,6 +552,10 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 - Weekly Injuries: `/nfl/official/trial/v7/en/seasons/{year}/{seasonType}/{week}/injuries.json`
 - Play-by-Play: `/nfl/official/trial/v7/en/games/{gameID}/pbp.json`
 - Game Statistics: `/nfl/official/trial/v7/en/games/{gameID}/statistics.json` (box score comparison)
+
+**OddsBlaze:**
+- Odds (live): `https://odds.oddsblaze.com?key={key}&sportsbook={sportsbook}&league={league}&price=decimal`
+- Odds (historical): `https://rewind.odds.oddsblaze.com?key={key}&sportsbook={sportsbook}&league={league}&price=decimal&timestamp={timestamp}`
 
 **Error handling**: 404 errors include full URL in error message for debugging. All API errors include response body and status code.
 

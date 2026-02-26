@@ -111,6 +111,49 @@ func (s *Store) GetIndividualByID(ctx context.Context, id int) (*models.Individu
 	return models.Registry.RegisterIndividual(&individual), nil
 }
 
+// GetIndividualsByLeague retrieves all individuals for a given league name in a single query.
+// JOINs through leagues and fetches all columns inline, registering in the registry.
+func (s *Store) GetIndividualsByLeague(ctx context.Context, leagueName string) ([]*models.Individual, error) {
+	query := `
+		SELECT
+			i.id, i.display_name, i.abbreviated_name, i.date_of_birth, i.sportradar_id,
+			i.league_id, i.position, i.jersey_number,
+			l.id, l.sport_id, l.name
+		FROM individuals i
+		JOIN leagues l ON i.league_id = l.id
+		WHERE l.name = $1
+		ORDER BY i.id ASC
+	`
+
+	rows, err := s.pool.Query(ctx, query, leagueName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query individuals for league %s: %w", leagueName, err)
+	}
+	defer rows.Close()
+
+	var individuals []*models.Individual
+	for rows.Next() {
+		var ind models.Individual
+		var league models.League
+
+		if err := rows.Scan(
+			&ind.ID, &ind.DisplayName, &ind.AbbreviatedName, &ind.DateOfBirth, &ind.SportradarID,
+			&ind.LeagueID, &ind.Position, &ind.JerseyNumber,
+			&league.ID, &league.SportID, &league.Name,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan individual row: %w", err)
+		}
+
+		ind.League = models.Registry.RegisterLeague(&league)
+		individuals = append(individuals, models.Registry.RegisterIndividual(&ind))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating individual rows: %w", err)
+	}
+
+	return individuals, nil
+}
+
 // GetIndividualBySportradarID retrieves an individual by sportradar_id.
 // Uses the registry for caching and resolves the nested League pointer.
 func (s *Store) GetIndividualBySportradarID(ctx context.Context, sportradarID string) (*models.Individual, error) {

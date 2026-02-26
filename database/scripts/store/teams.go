@@ -118,6 +118,65 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 	return models.Registry.RegisterTeam(&team), nil
 }
 
+// GetTeamsByLeague retrieves all teams for a given league name in a single query.
+// JOINs through divisions → conferences → leagues and fetches all columns inline,
+// registering the full hierarchy (league, conference, division, team) in the registry.
+func (s *Store) GetTeamsByLeague(ctx context.Context, leagueName string) ([]*models.Team, error) {
+	query := `
+		SELECT
+			t.id, t.name, t.market, t.alias, t.sportradar_id, t.division_id,
+			t.venue_name, t.venue_city, t.venue_state,
+			d.id, d.name, d.conference_id, d.sportradar_id, d.alias,
+			c.id, c.name, c.league_id, c.sportradar_id, c.alias,
+			l.id, l.sport_id, l.name
+		FROM teams t
+		JOIN divisions d ON t.division_id = d.id
+		JOIN conferences c ON d.conference_id = c.id
+		JOIN leagues l ON c.league_id = l.id
+		WHERE l.name = $1
+		ORDER BY t.id ASC
+	`
+
+	rows, err := s.pool.Query(ctx, query, leagueName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query teams for league %s: %w", leagueName, err)
+	}
+	defer rows.Close()
+
+	var teams []*models.Team
+	for rows.Next() {
+		var team models.Team
+		var div models.Division
+		var conf models.Conference
+		var league models.League
+
+		if err := rows.Scan(
+			&team.ID, &team.Name, &team.Market, &team.Alias, &team.SportradarID, &team.DivisionID,
+			&team.VenueName, &team.VenueCity, &team.VenueState,
+			&div.ID, &div.Name, &div.ConferenceID, &div.SportradarID, &div.Alias,
+			&conf.ID, &conf.Name, &conf.LeagueID, &conf.SportradarID, &conf.Alias,
+			&league.ID, &league.SportID, &league.Name,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan team row: %w", err)
+		}
+
+		// Register hierarchy bottom-up so pointers resolve
+		regLeague := models.Registry.RegisterLeague(&league)
+		conf.League = regLeague
+		regConf := models.Registry.RegisterConference(&conf)
+		div.Conference = regConf
+		regDiv := models.Registry.RegisterDivision(&div)
+		team.Division = regDiv
+
+		teams = append(teams, models.Registry.RegisterTeam(&team))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating team rows: %w", err)
+	}
+
+	return teams, nil
+}
+
 // GetTeamBySportradarID retrieves a team by sportradar_id.
 // Uses the registry for caching and resolves the nested Division pointer.
 func (s *Store) GetTeamBySportradarID(ctx context.Context, sportradarID string) (*models.Team, error) {

@@ -642,3 +642,129 @@ func (c *BatchUpdateConfig) HasNFLDateRange() bool {
 func (c *BatchUpdateConfig) HasNBADateRange() bool {
 	return !c.NBAGameDateStartInclusive.IsZero() && !c.NBAGameDateEndInclusive.IsZero()
 }
+
+// OddsBlazeConfig holds configuration for the OddsBlaze reference data mapping script
+type OddsBlazeConfig struct {
+	// Database Configuration
+	PGHost     string
+	PGPort     string
+	PGDatabase string
+	PGUser     string
+	PGPassword string
+	PGKeyPath  string
+
+	// OddsBlaze API Configuration
+	OddsBlazeAPIKey                    string
+	OddsBlazeRateLimitDelayMilliseconds int
+	OddsBlazeSportsbooks               []string // e.g., ["draftkings", "fanatics"]
+	OddsBlazeLeague                    string   // e.g., "nba", "nfl", "nhl", "mlb"
+	OddsBlazeTimestamp                 string   // optional, for historical data via rewind endpoint
+}
+
+// validOddsBlazeSportsbooks is the set of allowed sportsbook values
+var validOddsBlazeSportsbooks = map[string]bool{
+	"draftkings": true,
+	"fanatics":   true,
+}
+
+// validOddsBlazeLeagues is the set of allowed league values
+var validOddsBlazeLeagues = map[string]bool{
+	"nba": true,
+	"nfl": true,
+	"nhl": true,
+	"mlb": true,
+}
+
+// LoadOddsBlazeConfigFromFile loads environment variables from the specified file, then reads configuration.
+// If envFile is empty, it will load from .env in the current directory (required).
+// Validates that all required configuration variables are set.
+func LoadOddsBlazeConfigFromFile(envFile string) (*OddsBlazeConfig, error) {
+	if err := envloader.LoadEnvFile(envFile); err != nil {
+		return nil, err
+	}
+
+	cfg := LoadOddsBlazeConfig()
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// LoadOddsBlazeConfig reads OddsBlaze configuration from environment variables.
+// This does not load any .env files - use LoadOddsBlazeConfigFromFile for that.
+func LoadOddsBlazeConfig() *OddsBlazeConfig {
+	var sportsbooks []string
+	if raw := os.Getenv("ODDS_BLAZE_SPORTSBOOKS"); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				sportsbooks = append(sportsbooks, strings.ToLower(s))
+			}
+		}
+	}
+
+	return &OddsBlazeConfig{
+		PGHost:                              os.Getenv("PG_HOST"),
+		PGPort:                              os.Getenv("PG_PORT"),
+		PGDatabase:                          os.Getenv("PG_DATABASE"),
+		PGUser:                              os.Getenv("PG_USER"),
+		PGPassword:                          os.Getenv("PG_PASSWORD"),
+		PGKeyPath:                           os.Getenv("PG_KEY_PATH"),
+		OddsBlazeAPIKey:                     os.Getenv("ODDS_BLAZE_API_KEY"),
+		OddsBlazeRateLimitDelayMilliseconds: envloader.GetEnvAsIntWithDefault("ODDS_BLAZE_RATE_LIMIT_DELAY_MS", 0),
+		OddsBlazeSportsbooks:                sportsbooks,
+		OddsBlazeLeague:                     strings.ToLower(os.Getenv("ODDS_BLAZE_LEAGUE")),
+		OddsBlazeTimestamp:                  os.Getenv("ODDS_BLAZE_TIMESTAMP"),
+	}
+}
+
+// Validate checks that all required OddsBlaze configuration fields are set
+func (c *OddsBlazeConfig) Validate() error {
+	// Database configuration validation
+	if c.PGHost == "" {
+		return fmt.Errorf("missing required environment variable: PG_HOST")
+	}
+	if c.PGPort == "" {
+		return fmt.Errorf("missing required environment variable: PG_PORT")
+	}
+	if c.PGDatabase == "" {
+		return fmt.Errorf("missing required environment variable: PG_DATABASE")
+	}
+	if c.PGUser == "" {
+		return fmt.Errorf("missing required environment variable: PG_USER")
+	}
+	if c.PGPassword == "" {
+		return fmt.Errorf("missing required environment variable: PG_PASSWORD")
+	}
+	if c.PGKeyPath == "" {
+		return fmt.Errorf("missing required environment variable: PG_KEY_PATH")
+	}
+
+	// OddsBlaze API configuration validation
+	if c.OddsBlazeAPIKey == "" {
+		return fmt.Errorf("missing required environment variable: ODDS_BLAZE_API_KEY")
+	}
+	if c.OddsBlazeRateLimitDelayMilliseconds <= 0 {
+		return fmt.Errorf("missing or invalid required environment variable: ODDS_BLAZE_RATE_LIMIT_DELAY_MS (must be a positive integer)")
+	}
+
+	if len(c.OddsBlazeSportsbooks) == 0 {
+		return fmt.Errorf("missing required environment variable: ODDS_BLAZE_SPORTSBOOKS (comma-separated, e.g., draftkings,fanatics)")
+	}
+	for _, sb := range c.OddsBlazeSportsbooks {
+		if !validOddsBlazeSportsbooks[sb] {
+			return fmt.Errorf("invalid sportsbook %q in ODDS_BLAZE_SPORTSBOOKS: must be one of: draftkings, fanatics", sb)
+		}
+	}
+
+	if c.OddsBlazeLeague == "" {
+		return fmt.Errorf("missing required environment variable: ODDS_BLAZE_LEAGUE")
+	}
+	if !validOddsBlazeLeagues[c.OddsBlazeLeague] {
+		return fmt.Errorf("invalid ODDS_BLAZE_LEAGUE %q: must be one of: nba, nfl, nhl, mlb", c.OddsBlazeLeague)
+	}
+
+	return nil
+}

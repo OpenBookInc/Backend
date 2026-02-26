@@ -40,6 +40,15 @@ const (
 	ContenderTeam Contender = "team"
 )
 
+// Entity represents the entity_type database enum
+type Entity string
+
+const (
+	EntityTeam Entity = "team"
+	EntityIndividual Entity = "individual"
+	EntityGame Entity = "game"
+)
+
 // Event represents the event_type database enum
 type Event string
 
@@ -103,5 +112,13 @@ type Side string
 const (
 	SideBid Side = "bid"
 	SideAsk Side = "ask"
+)
+
+// Vendor represents the vendor_type database enum
+type Vendor string
+
+const (
+	VendorSportradar Vendor = "sportradar"
+	VendorOddsBlaze Vendor = "odds_blaze"
 )
 

@@ -88,6 +88,44 @@ func (s *Store) GetRosterByID(ctx context.Context, id int) (*models.Roster, erro
 	return models.Registry.RegisterRoster(&roster), nil
 }
 
+// GetRostersByLeague retrieves all rosters for a given league name in a single query.
+// JOINs through teams → divisions → conferences → leagues to filter by league.
+// Resolves Team pointers from registry (teams should already be loaded).
+// Does NOT resolve Players pointers — caller can use IndividualIDs directly.
+func (s *Store) GetRostersByLeague(ctx context.Context, leagueName string) ([]*models.Roster, error) {
+	query := `
+		SELECT r.id, r.team_id, r.individual_ids
+		FROM rosters r
+		JOIN teams t ON r.team_id = t.id
+		JOIN divisions d ON t.division_id = d.id
+		JOIN conferences c ON d.conference_id = c.id
+		JOIN leagues l ON c.league_id = l.id
+		WHERE l.name = $1
+		ORDER BY r.id ASC
+	`
+
+	rows, err := s.pool.Query(ctx, query, leagueName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query rosters for league %s: %w", leagueName, err)
+	}
+	defer rows.Close()
+
+	var rosters []*models.Roster
+	for rows.Next() {
+		var roster models.Roster
+		if err := rows.Scan(&roster.ID, &roster.TeamID, &roster.IndividualIDs); err != nil {
+			return nil, fmt.Errorf("failed to scan roster row: %w", err)
+		}
+		roster.Team = models.Registry.GetTeam(int(roster.TeamID))
+		rosters = append(rosters, models.Registry.RegisterRoster(&roster))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating roster rows: %w", err)
+	}
+
+	return rosters, nil
+}
+
 // GetRosterByTeamID retrieves a roster by team_id.
 // Uses the registry for caching and resolves nested Team and Players pointers.
 func (s *Store) GetRosterByTeamID(ctx context.Context, teamID int64) (*models.Roster, error) {

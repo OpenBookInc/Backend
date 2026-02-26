@@ -158,6 +158,50 @@ func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID int) (*models.G
 	return s.GetGameByID(ctx, gameID)
 }
 
+// GetGamesByLeague retrieves all games for a given league name in a single query.
+// JOINs through teams → divisions → conferences → leagues and fetches all game columns inline.
+// Expects teams to already be registered in the registry (call GetTeamsByLeague first).
+func (s *Store) GetGamesByLeague(ctx context.Context, leagueName string) ([]*models.Game, error) {
+	query := `
+		SELECT g.id, g.contender_id_a, g.contender_id_b, g.sportradar_id, g.scheduled_start_time
+		FROM games g
+		JOIN teams t ON g.contender_id_a = t.id
+		JOIN divisions d ON t.division_id = d.id
+		JOIN conferences c ON d.conference_id = c.id
+		JOIN leagues l ON c.league_id = l.id
+		WHERE l.name = $1
+		ORDER BY g.scheduled_start_time ASC
+	`
+
+	rows, err := s.pool.Query(ctx, query, leagueName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query games for league %s: %w", leagueName, err)
+	}
+	defer rows.Close()
+
+	var games []*models.Game
+	for rows.Next() {
+		var game models.Game
+		if err := rows.Scan(
+			&game.ID, &game.ContenderIDA, &game.ContenderIDB,
+			&game.SportradarID, &game.ScheduledStartTime,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan game row: %w", err)
+		}
+
+		// Resolve team pointers from registry (teams should already be loaded)
+		game.TeamA = models.Registry.GetTeam(int(game.ContenderIDA))
+		game.TeamB = models.Registry.GetTeam(int(game.ContenderIDB))
+
+		games = append(games, models.Registry.RegisterGame(&game))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating game rows: %w", err)
+	}
+
+	return games, nil
+}
+
 // GetGamesByLeagueAndDateRange retrieves games for a league within a date range (inclusive).
 // Uses the registry for caching and resolves nested Team pointers for each game.
 // The timeZone parameter is an IANA timezone name (e.g., "America/Los_Angeles") used to
