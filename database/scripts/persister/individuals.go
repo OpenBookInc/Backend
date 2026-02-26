@@ -53,23 +53,50 @@ func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 	return result.ID, nil
 }
 
+// RosterPlayerData contains roster-level fields used to detect stale individual data.
+type RosterPlayerData struct {
+	JerseyNumber string
+	Position     string
+}
+
+// isIndividualStale checks whether the database individual's data differs from the roster data.
+func isIndividualStale(existing *models.Individual, rosterData *RosterPlayerData) bool {
+	return existing.JerseyNumber != rosterData.JerseyNumber || existing.Position != rosterData.Position
+}
+
 // UpsertIndividualIfMissing checks if an individual exists by Sportradar ID.
 // If missing, fetches their profile from the API and persists them.
-// Returns the individual (existing or newly created) and whether it was created.
+// Returns the individual and whether a profile was fetched from the API.
 func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, sportradarID string, leagueName string) (*models.Individual, bool, error) {
-	// Check if individual already exists
 	existing, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
 	if err == nil {
-		// Individual exists, return it
 		return existing, false, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, fmt.Errorf("failed to check if individual exists: %w", err)
 	}
 
-	// Individual not found - fetch and persist their profile
+	return fetchAndPersistIndividual(ctx, dbStore, apiClient, sportradarID, leagueName)
+}
 
-	// Get league ID for the new individual
+// UpsertIndividualIfMissingOrInvalid checks if an individual exists by Sportradar ID.
+// If missing, or if the existing record is stale compared to roster data, fetches
+// their profile from the API and persists them.
+// Returns the individual and whether a profile was fetched from the API.
+func UpsertIndividualIfMissingOrInvalid(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, sportradarID string, leagueName string, rosterData RosterPlayerData) (*models.Individual, bool, error) {
+	existing, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
+	if err == nil && !isIndividualStale(existing, &rosterData) {
+		return existing, false, nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, fmt.Errorf("failed to check if individual exists: %w", err)
+	}
+
+	return fetchAndPersistIndividual(ctx, dbStore, apiClient, sportradarID, leagueName)
+}
+
+// fetchAndPersistIndividual fetches a player profile from the API and persists it.
+func fetchAndPersistIndividual(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, sportradarID string, leagueName string) (*models.Individual, bool, error) {
 	league, err := dbStore.GetLeagueByName(ctx, leagueName)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get %s league: %w", leagueName, err)
@@ -98,10 +125,9 @@ func UpsertIndividualIfMissing(ctx context.Context, dbStore *store.Store, apiCli
 		return nil, false, fmt.Errorf("unexpected league %q", leagueName)
 	}
 
-	// Retrieve the newly created individual
 	individual, err := dbStore.GetIndividualBySportradarID(ctx, sportradarID)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to retrieve newly created individual: %w", err)
+		return nil, false, fmt.Errorf("failed to retrieve individual after upsert: %w", err)
 	}
 
 	return individual, true, nil

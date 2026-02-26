@@ -11,8 +11,8 @@ import (
 )
 
 // PersistNFLRostersAndIndividuals persists all NFL individuals and rosters from roster responses.
-// For each player, checks if they exist in the database; if missing, fetches their profile
-// from the API and persists them. Returns the count of new individuals created and rosters upserted.
+// For each player, checks if they exist in the database; if missing or stale, fetches their profile
+// from the API and persists them. Returns the count of API-fetched individuals and rosters upserted.
 func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, rosters map[string]*fetcher_nfl.NFLTeamRosterResponse) (int, int, error) {
 	newIndividualCount := 0
 	rosterCount := 0
@@ -31,13 +31,16 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		var individualIDs []int64
 		teamNewCount := 0
 		for i, player := range roster.Players {
-			individual, created, err := UpsertIndividualIfMissing(ctx, dbStore, apiClient, player.ID, leagueName)
+			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{
+				JerseyNumber: player.JerseyNum,
+				Position:     player.Position,
+			})
 			if err != nil {
 				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.ID, err)
 			}
 
 			individualIDs = append(individualIDs, int64(individual.ID))
-			if created {
+			if fetched {
 				newIndividualCount++
 				teamNewCount++
 			}
@@ -63,8 +66,8 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 }
 
 // PersistNBARostersAndIndividuals persists all NBA individuals and rosters from roster responses.
-// For each player, checks if they exist in the database; if missing, fetches their profile
-// from the API and persists them. Returns the count of new individuals created and rosters upserted.
+// For each player, checks if they exist in the database; if missing or stale, fetches their profile
+// from the API and persists them. Returns the count of API-fetched individuals and rosters upserted.
 func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, apiClient *sportradar.Client, rosters map[string]*fetcher_nba.NBATeamProfileResponse) (int, int, error) {
 	newIndividualCount := 0
 	rosterCount := 0
@@ -83,13 +86,16 @@ func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		var individualIDs []int64
 		teamNewCount := 0
 		for i, player := range roster.Players {
-			individual, created, err := UpsertIndividualIfMissing(ctx, dbStore, apiClient, player.ID, leagueName)
+			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{
+				JerseyNumber: player.JerseyNum,
+				Position:     player.Position,
+			})
 			if err != nil {
 				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.ID, err)
 			}
 
 			individualIDs = append(individualIDs, int64(individual.ID))
-			if created {
+			if fetched {
 				newIndividualCount++
 				teamNewCount++
 			}
