@@ -14,7 +14,7 @@ import (
 	fetcher_oddsblaze "github.com/openbook/population-scripts/fetcher/oddsblaze"
 	matcher_oddsblaze "github.com/openbook/population-scripts/matcher/oddsblaze"
 	reducer_oddsblaze "github.com/openbook/population-scripts/reducer/oddsblaze"
-	store_oddsblaze "github.com/openbook/population-scripts/store/oddsblaze"
+	persister_oddsblaze "github.com/openbook/population-scripts/persister/oddsblaze"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -102,7 +102,7 @@ func main() {
 
 		// Step 4: Persist to entity_vendor_ids
 		fmt.Printf("  Persisting entity vendor IDs...\n")
-		teams, individuals, games, err := store_oddsblaze.PersistMatchedEntities(dbStore, ctx, matched)
+		teams, individuals, games, err := persister_oddsblaze.PersistMatchedEntities(dbStore, ctx, matched)
 		if err != nil {
 			fatal("Failed to persist entity vendor IDs for sportsbook %s: %v", sportsbook, err)
 		}
