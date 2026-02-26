@@ -61,7 +61,7 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 		return fmt.Errorf("failed to resolve division for team %s: %w", team.SportradarID, err)
 	}
 
-	models.Registry.RegisterTeam(&models.Team{
+	if _, err := models.Registry.RegisterTeam(&models.Team{
 		ID:           id,
 		Name:         team.Name,
 		Market:       team.Market,
@@ -72,7 +72,9 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 		VenueCity:    team.VenueCity,
 		VenueState:   team.VenueState,
 		Division:     division,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to register team %s %s: %w", team.Market, team.Name, err)
+	}
 	return nil
 }
 
@@ -115,7 +117,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 	team.Division = division
 
 	// Register and return
-	return models.Registry.RegisterTeam(&team), nil
+	return models.Registry.RegisterTeam(&team)
 }
 
 // GetTeamsByLeague retrieves all teams for a given league name in a single query.
@@ -168,7 +170,11 @@ func (s *Store) GetTeamsByLeague(ctx context.Context, leagueName string) ([]*mod
 		regDiv := models.Registry.RegisterDivision(&div)
 		team.Division = regDiv
 
-		teams = append(teams, models.Registry.RegisterTeam(&team))
+		regTeam, err := models.Registry.RegisterTeam(&team)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register team %s %s: %w", team.Market, team.Name, err)
+		}
+		teams = append(teams, regTeam)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating team rows: %w", err)
@@ -219,5 +225,5 @@ func (s *Store) GetTeamBySportradarID(ctx context.Context, sportradarID string) 
 	team.Division = division
 
 	// Register and return
-	return models.Registry.RegisterTeam(&team), nil
+	return models.Registry.RegisterTeam(&team)
 }

@@ -67,7 +67,7 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 		Position:        individual.Position,
 		JerseyNumber:    individual.JerseyNumber,
 		League:          league,
-	}), nil
+	})
 }
 
 // GetIndividualByID retrieves an individual by database ID.
@@ -108,7 +108,7 @@ func (s *Store) GetIndividualByID(ctx context.Context, id int) (*models.Individu
 	individual.League = league
 
 	// Register and return
-	return models.Registry.RegisterIndividual(&individual), nil
+	return models.Registry.RegisterIndividual(&individual)
 }
 
 // GetIndividualsByLeague retrieves all individuals for a given league name in a single query.
@@ -145,7 +145,11 @@ func (s *Store) GetIndividualsByLeague(ctx context.Context, leagueName string) (
 		}
 
 		ind.League = models.Registry.RegisterLeague(&league)
-		individuals = append(individuals, models.Registry.RegisterIndividual(&ind))
+		regInd, err := models.Registry.RegisterIndividual(&ind)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register individual %s: %w", ind.DisplayName, err)
+		}
+		individuals = append(individuals, regInd)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating individual rows: %w", err)
@@ -192,5 +196,5 @@ func (s *Store) GetIndividualBySportradarID(ctx context.Context, sportradarID st
 	individual.League = league
 
 	// Register and return
-	return models.Registry.RegisterIndividual(&individual), nil
+	return models.Registry.RegisterIndividual(&individual)
 }

@@ -52,7 +52,7 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 		return fmt.Errorf("failed to resolve away team for game %s: %w", game.SportradarID, err)
 	}
 
-	models.Registry.RegisterGame(&models.Game{
+	if _, err := models.Registry.RegisterGame(&models.Game{
 		ID:                 id,
 		ContenderIDA:       int64(game.HomeTeamID),
 		ContenderIDB:       int64(game.AwayTeamID),
@@ -60,7 +60,9 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 		ScheduledStartTime: game.ScheduledStartTime,
 		TeamA:              teamA,
 		TeamB:              teamB,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to register game %s: %w", game.SportradarID, err)
+	}
 	return nil
 }
 
@@ -105,7 +107,7 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 	game.TeamB = teamB
 
 	// Register and return
-	return models.Registry.RegisterGame(&game), nil
+	return models.Registry.RegisterGame(&game)
 }
 
 // GetGameBySportradarID retrieves a game by sportradar_id.
@@ -149,7 +151,7 @@ func (s *Store) GetGameBySportradarID(ctx context.Context, sportradarID string) 
 	game.TeamB = teamB
 
 	// Register and return
-	return models.Registry.RegisterGame(&game), nil
+	return models.Registry.RegisterGame(&game)
 }
 
 // GetGameWithTeamsByID retrieves a game by database ID with TeamA and TeamB populated.
@@ -193,7 +195,11 @@ func (s *Store) GetGamesByLeague(ctx context.Context, leagueName string) ([]*mod
 		game.TeamA = models.Registry.GetTeam(int(game.ContenderIDA))
 		game.TeamB = models.Registry.GetTeam(int(game.ContenderIDB))
 
-		games = append(games, models.Registry.RegisterGame(&game))
+		regGame, err := models.Registry.RegisterGame(&game)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register game %s: %w", game.SportradarID, err)
+		}
+		games = append(games, regGame)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating game rows: %w", err)
