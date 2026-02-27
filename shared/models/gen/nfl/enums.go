@@ -3,6 +3,27 @@
 
 package nfl
 
+// PlayerProp represents the nfl_player_prop_type database enum
+type PlayerProp string
+
+const (
+	PlayerPropExtraPointMakes PlayerProp = "extra_point_makes"
+	PlayerPropFieldGoalMakes PlayerProp = "field_goal_makes"
+	PlayerPropInterceptionsThrown PlayerProp = "interceptions_thrown"
+	PlayerPropKickingPoints PlayerProp = "kicking_points"
+	PlayerPropPassingAttempts PlayerProp = "passing_attempts"
+	PlayerPropPassingCompletions PlayerProp = "passing_completions"
+	PlayerPropPassingPlusRushingYards PlayerProp = "passing_plus_rushing_yards"
+	PlayerPropPassingTouchdowns PlayerProp = "passing_touchdowns"
+	PlayerPropPassingYards PlayerProp = "passing_yards"
+	PlayerPropReceivingReceptions PlayerProp = "receiving_receptions"
+	PlayerPropReceivingYards PlayerProp = "receiving_yards"
+	PlayerPropRushingAttempts PlayerProp = "rushing_attempts"
+	PlayerPropRushingPlusReceivingYards PlayerProp = "rushing_plus_receiving_yards"
+	PlayerPropRushingYards PlayerProp = "rushing_yards"
+	PlayerPropSacksMade PlayerProp = "sacks_made"
+)
+
 // Stat represents the nfl_stat_type database enum
 type Stat string
 

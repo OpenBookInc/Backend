@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	models "github.com/openbook/shared/models"
 	"github.com/openbook/shared/models/gen"
 )
 
@@ -32,4 +33,42 @@ func (s *Store) UpsertEntityVendorID(ctx context.Context, e *EntityVendorIDForUp
 	}
 
 	return nil
+}
+
+// LoadEntityVendorIDs fetches all rows from entity_vendor_ids and registers them in the model registry.
+// Entities (teams, individuals, games) should already be loaded in the registry before calling this,
+// so that the vendor ID mappings can be resolved.
+// Returns the number of vendor IDs loaded.
+func (s *Store) LoadEntityVendorIDs(ctx context.Context) (int, error) {
+	query := `
+		SELECT entity_type, entity_id, vendor, vendor_id
+		FROM entity_vendor_ids
+		ORDER BY entity_type, entity_id
+	`
+
+	rows, err := s.pool.Query(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query entity_vendor_ids: %w", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var entityType gen.Entity
+		var entityID int
+		var vendor gen.Vendor
+		var vendorID string
+
+		if err := rows.Scan(&entityType, &entityID, &vendor, &vendorID); err != nil {
+			return count, fmt.Errorf("failed to scan entity_vendor_ids row: %w", err)
+		}
+
+		models.Registry.RegisterVendorID(entityType, entityID, vendor, vendorID)
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return count, fmt.Errorf("error iterating entity_vendor_ids rows: %w", err)
+	}
+
+	return count, nil
 }

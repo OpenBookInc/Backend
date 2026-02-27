@@ -52,12 +52,20 @@ type TeamInfo struct {
 
 // Odd represents a single odds entry
 type Odd struct {
-	ID     string      `json:"id"`
-	Market string      `json:"market"`
-	Name   string      `json:"name"`
-	Price  string      `json:"price"`
-	Main   bool        `json:"main"`
-	Player *PlayerInfo `json:"player,omitempty"`
+	ID        string      `json:"id"`
+	Market    string      `json:"market"`
+	Name      string      `json:"name"`
+	Price     string      `json:"price"`
+	Main      bool        `json:"main"`
+	Player    *PlayerInfo `json:"player,omitempty"`
+	Selection *Selection  `json:"selection,omitempty"`
+}
+
+// Selection contains the selection details for an odds entry
+type Selection struct {
+	Name string   `json:"name"`
+	Side string   `json:"side"`
+	Line *float64 `json:"line,omitempty"`
 }
 
 // PlayerInfo contains player identification data within an odds entry

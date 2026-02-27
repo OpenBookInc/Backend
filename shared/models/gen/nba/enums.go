@@ -3,6 +3,25 @@
 
 package nba
 
+// PlayerProp represents the nba_player_prop_type database enum
+type PlayerProp string
+
+const (
+	PlayerPropAssists PlayerProp = "assists"
+	PlayerPropBlocks PlayerProp = "blocks"
+	PlayerPropBlocksSteals PlayerProp = "blocks_steals"
+	PlayerPropDoubleDouble PlayerProp = "double_double"
+	PlayerPropPoints PlayerProp = "points"
+	PlayerPropPointsAssists PlayerProp = "points_assists"
+	PlayerPropPointsAssistsRebounds PlayerProp = "points_assists_rebounds"
+	PlayerPropPointsRebounds PlayerProp = "points_rebounds"
+	PlayerPropRebounds PlayerProp = "rebounds"
+	PlayerPropReboundsAssists PlayerProp = "rebounds_assists"
+	PlayerPropSteals PlayerProp = "steals"
+	PlayerPropThreePointMakes PlayerProp = "three_point_makes"
+	PlayerPropTripleDouble PlayerProp = "triple_double"
+)
+
 // Stat represents the nba_stat_type database enum
 type Stat string
 

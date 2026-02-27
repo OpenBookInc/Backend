@@ -6,6 +6,7 @@ import (
 	"time"
 
 	models "github.com/openbook/shared/models"
+	"github.com/openbook/shared/models/gen"
 )
 
 // IndividualForUpsert contains the data needed to upsert an individual
@@ -197,4 +198,32 @@ func (s *Store) GetIndividualBySportradarID(ctx context.Context, sportradarID st
 
 	// Register and return
 	return models.Registry.RegisterIndividual(&individual)
+}
+
+// GetIndividualByVendorID retrieves an individual by vendor ID.
+// First checks the registry, then falls back to querying entity_vendor_ids.
+// Registers the vendor mapping in the registry if found via DB query.
+func (s *Store) GetIndividualByVendorID(ctx context.Context, vendor gen.Vendor, vendorID string) (*models.Individual, error) {
+	// Check registry first
+	if entityID, ok := models.Registry.GetEntityIDByVendorID(gen.EntityIndividual, vendor, vendorID); ok {
+		return s.GetIndividualByID(ctx, entityID)
+	}
+
+	// Query entity_vendor_ids table
+	query := `
+		SELECT entity_id
+		FROM entity_vendor_ids
+		WHERE entity_type = $1 AND vendor = $2 AND vendor_id = $3
+	`
+
+	var entityID int
+	err := s.pool.QueryRow(ctx, query, gen.EntityIndividual, vendor, vendorID).Scan(&entityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find individual with vendor_id %s (vendor=%s): %w", vendorID, vendor, err)
+	}
+
+	// Register the vendor mapping in the registry
+	models.Registry.RegisterVendorID(gen.EntityIndividual, entityID, vendor, vendorID)
+
+	return s.GetIndividualByID(ctx, entityID)
 }

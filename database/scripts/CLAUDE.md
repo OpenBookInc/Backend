@@ -33,6 +33,9 @@ go build ./...
 # Map OddsBlaze entity IDs to existing database entities (writes to entity_vendor_ids)
 ./update_odds_blaze_reference_data.sh
 
+# Fetch player prop markets from OddsBlaze and persist to database
+./update_available_markets.sh
+
 # Download dependencies
 go mod download
 ```
@@ -163,6 +166,11 @@ PostgreSQL → reader/nfl/ or reader/nba/ (read play stats) → persister/nfl/ o
 **OddsBlaze Reference Data Mapping:**
 ```
 OddsBlaze API → client/oddsblaze/ → fetcher/oddsblaze/ (raw API structs) → reducer/oddsblaze/ (unique entities) → matcher/oddsblaze/ (match to DB) → store/oddsblaze/ → entity_vendor_ids table
+```
+
+**Available Markets (Player Props):**
+```
+OddsBlaze API → client/oddsblaze/ → fetcher/oddsblaze/ (raw API structs) → persister/oddsblaze/ (market transformation using entity_vendor_ids) → store/ → player_prop_markets table
 ```
 
 **Box Score Comparison (validates database against Sportradar):**
@@ -518,6 +526,13 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
   - `NBA_GAME_DATE_START_INCLUSIVE`, `NBA_GAME_DATE_END_INCLUSIVE`: NBA date range (YYYY-MM-DD)
 
 **Required (update_odds_blaze_reference_data):**
+- `ODDS_BLAZE_API_KEY`: OddsBlaze API key
+- `ODDS_BLAZE_SPORTSBOOKS`: Comma-separated sportsbooks (allowed: `draftkings`, `fanatics`)
+- `ODDS_BLAZE_LEAGUE`: League to fetch (one of: `nba`, `nfl`, `nhl`, `mlb`)
+- `ODDS_BLAZE_RATE_LIMIT_DELAY_MS`: Milliseconds between OddsBlaze API requests (must be positive)
+- `ODDS_BLAZE_TIMESTAMP`: *(optional)* Timestamp for historical data via rewind endpoint
+
+**Required (update_available_markets):**
 - `ODDS_BLAZE_API_KEY`: OddsBlaze API key
 - `ODDS_BLAZE_SPORTSBOOKS`: Comma-separated sportsbooks (allowed: `draftkings`, `fanatics`)
 - `ODDS_BLAZE_LEAGUE`: League to fetch (one of: `nba`, `nfl`, `nhl`, `mlb`)
