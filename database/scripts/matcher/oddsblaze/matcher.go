@@ -117,26 +117,10 @@ func matchTeams(ctx context.Context, dbStore *store.Store, leagueName string, re
 	return matched, teamsByOddsBlazeID, nil
 }
 
-// teamDisplayNameKey identifies an individual by their team and display name.
-type teamDisplayNameKey struct {
-	TeamID      int
-	DisplayName string
-}
-
-// teamJerseyNumberKey identifies an individual by their team and jersey number.
-type teamJerseyNumberKey struct {
-	TeamID       int
-	JerseyNumber string
-}
-
-// normalizeName normalizes a display name for comparison by uppercasing and removing periods.
-func normalizeName(name string) string {
-	return strings.ToUpper(strings.ReplaceAll(name, ".", ""))
-}
-
 // matchIndividuals matches reduced individuals against database individuals.
-// First tries matching by team + display name, then falls back to team + jersey number.
-// Loads all individuals for the league and uses roster data for team assignments.
+// Uses roster data to build a per-team list of candidates, then applies a tiered matching strategy:
+//  1. namesMatch (suffix-stripped exact match, then last-name + first-initial)
+//  2. jerseyAndLastNameMatch (same jersey number + same last name)
 func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName string, reducedIndividuals []reducer_oddsblaze.ReducedIndividual, teamsByOddsBlazeID map[string]*models.Team) ([]MatchedIndividual, error) {
 	// Load all individuals for the league
 	dbIndividuals, err := dbStore.GetIndividualsByLeague(ctx, leagueName)
@@ -156,20 +140,16 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 		return nil, fmt.Errorf("failed to load rosters for league %s: %w", leagueName, err)
 	}
 
-	// Build lookup maps from roster data:
-	//   (team_id, display_name) → individual
-	//   (team_id, jersey_number) → individual
-	individualByDisplayName := make(map[teamDisplayNameKey]*models.Individual)
-	individualByJerseyNumber := make(map[teamJerseyNumberKey]*models.Individual)
+	// Build per-team roster: team_id → []*Individual
+	teamRoster := make(map[int][]*models.Individual)
 	for _, roster := range rosters {
+		teamID := int(roster.TeamID)
 		for _, individualID := range roster.IndividualIDs {
 			ind, ok := individualByID[int(individualID)]
 			if !ok {
 				continue
 			}
-			teamID := int(roster.TeamID)
-			individualByDisplayName[teamDisplayNameKey{TeamID: teamID, DisplayName: normalizeName(ind.DisplayName)}] = ind
-			individualByJerseyNumber[teamJerseyNumberKey{TeamID: teamID, JerseyNumber: ind.JerseyNumber}] = ind
+			teamRoster[teamID] = append(teamRoster[teamID], ind)
 		}
 	}
 
@@ -181,16 +161,32 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 				ri.Name, ri.OddsBlazeID, ri.TeamOddsBlazeID)
 		}
 
-		// Try matching by team + display name first
-		dbInd, ok := individualByDisplayName[teamDisplayNameKey{TeamID: dbTeam.ID, DisplayName: normalizeName(ri.Name)}]
-		if !ok {
-			// Fall back to team + jersey number
-			dbInd, ok = individualByJerseyNumber[teamJerseyNumberKey{TeamID: dbTeam.ID, JerseyNumber: ri.JerseyNumber}]
-			if !ok {
-				return nil, fmt.Errorf("unmatched OddsBlaze individual: %s #%s on %s (OddsBlaze ID: %s) - no DB individual with display name %q or jersey number %q on team %s %s (ID: %d) in league %s",
-					ri.Name, ri.JerseyNumber, dbTeam.Alias, ri.OddsBlazeID, ri.Name, ri.JerseyNumber, dbTeam.Market, dbTeam.Name, dbTeam.ID, leagueName)
+		roster := teamRoster[dbTeam.ID]
+
+		// Tier 1: Name match (suffix-stripped exact, then last-name + first-initial)
+		var dbInd *models.Individual
+		for _, ind := range roster {
+			if namesMatch(ri.Name, ind.DisplayName) {
+				dbInd = ind
+				break
 			}
 		}
+
+		// Tier 2: Jersey number + last name match
+		if dbInd == nil {
+			for _, ind := range roster {
+				if jerseyAndLastNameMatch(ri.Name, ri.JerseyNumber, ind.DisplayName, ind.JerseyNumber) {
+					dbInd = ind
+					break
+				}
+			}
+		}
+
+		if dbInd == nil {
+			return nil, fmt.Errorf("unmatched OddsBlaze individual: %s #%s on %s (OddsBlaze ID: %s) - no DB individual matched by name or jersey+last-name on team %s %s (ID: %d) in league %s",
+				ri.Name, ri.JerseyNumber, dbTeam.Alias, ri.OddsBlazeID, dbTeam.Market, dbTeam.Name, dbTeam.ID, leagueName)
+		}
+
 		matched = append(matched, MatchedIndividual{
 			OddsBlazeID:  ri.OddsBlazeID,
 			DBIndividual: dbInd,
