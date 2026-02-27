@@ -6,27 +6,33 @@ import "Common.proto";
 
 option go_package = "OpenBook/MatchingService/proto";
 
+// MatchingServerService handles bidirectional streaming of orders and matches
+// between the gateway and the matching engine.
 service MatchingServerService {
+  // CreateTradeStream establishes a bidirectional stream for order submission,
+  // cancellation, and match notifications between the gateway and matching
+  // engine. Sequence numbers are strictly validated - mismatches trigger fatal
+  // errors.
   rpc CreateTradeStream(stream GatewayMessage) returns (stream EngineMessage);
 }
 
 // Messages sent from gateway → engine
 message GatewayMessage {
-  SequencedMessageBase sequencedMessageBase = 1;
+  OpenBook.CommonPackage.SequencedMessageBase sequenced_message_base = 1;
 
   oneof msg {
-    NewOrder newOrder = 2;
-    CancelOrder cancelOrder = 3;
+    NewOrder new_order = 2;
+    CancelOrder cancel_order = 3;
   }
 }
 
 // Messages sent from engine → gateway
 message EngineMessage {
-  SequencedMessageBase sequencedMessageBase = 1;
+  OpenBook.CommonPackage.SequencedMessageBase sequenced_message_base = 1;
 
   oneof event {
-    NewOrderAcknowledgement newOrderAcknowledgement = 2;
-    CancelOrderAcknowledgement cancelOrderAcknowledgement = 3;
+    NewOrderAcknowledgement new_order_acknowledgement = 2;
+    CancelOrderAcknowledgement cancel_order_acknowledgement = 3;
     OrderElimination elimination = 4;
     Match match = 5;
   }
@@ -35,16 +41,18 @@ message EngineMessage {
 message NewOrder {
   message Body {
     message Leg {
-      uint64 legSecurityId = 1;
-      bool isOver = 2;
+      uint64 leg_security_id = 1;
+      bool is_over = 2;
     }
 
-    uint64 clientOrderId = 1; // Unique identifier (assigned by the matching engine gateway) to tie OrderNewAcknowledgement back to this OrderNew
+    uint64 client_order_id =
+        1; // Unique identifier (assigned by the matching engine gateway) to tie
+           // OrderNewAcknowledgement back to this OrderNew
     repeated Leg legs = 2;
-    OrderType orderType = 3;
+    OpenBook.CommonPackage.OrderType order_type = 3;
     uint64 portion = 4;
     uint64 quantity = 5;
-    optional uint64 selfMatchId =
+    optional uint64 self_match_id =
         6; // Protects a user from filling against orders entirely against
            // themselves. If unpopulated, user gets no protections
   }
@@ -54,26 +62,26 @@ message NewOrder {
 
 message NewOrderAcknowledgement {
   message Body {
-    uint64 clientOrderId = 1;
-    uint64 orderId = 2;
+    uint64 client_order_id = 1;
+    uint64 order_id = 2;
   }
 
-  ResponseBase responseBase = 1;
-  FallibleBase fallibleBase = 2;
+  OpenBook.CommonPackage.ResponseBase response_base = 1;
+  OpenBook.CommonPackage.FallibleBase fallible_base = 2;
   Body body = 3;
 }
 
 message CancelOrder {
-  message Body { uint64 orderId = 1; }
+  message Body { uint64 order_id = 1; }
 
   Body body = 1;
 }
 
 message CancelOrderAcknowledgement {
-  message Body { uint64 orderId = 1; }
+  message Body { uint64 order_id = 1; }
 
-  ResponseBase responseBase = 1;
-  FallibleBase fallibleBase = 2;
+  OpenBook.CommonPackage.ResponseBase response_base = 1;
+  OpenBook.CommonPackage.FallibleBase fallible_base = 2;
   Body body = 3;
 }
 
@@ -81,8 +89,8 @@ message CancelOrderAcknowledgement {
 // the user has not requested a cancel (e.g., during Matcher shutdown)
 message OrderElimination {
   message Body {
-    uint64 orderId = 1;
-    string eliminationDescription = 2;
+    uint64 order_id = 1;
+    string elimination_description = 2;
   }
 
   Body body = 1;
@@ -91,18 +99,21 @@ message OrderElimination {
 message Match {
   message Body {
     message FillEvent {
-      uint64 fillEventId = 1;
-      uint64 orderId = 2;
-      bool isAggressor = 3;
-      uint64 matchedPortion = 4;
-      bool isComplete =
+      uint64 fill_event_id = 1;
+      uint64 order_id = 2;
+      bool is_aggressor = 3;
+      uint64 matched_portion = 4;
+      bool is_complete =
           5; // only marked true for the final fill notification of an order
     }
 
-    uint64 transactionId = 1; // If there are multiple matches resulting from one new order, they all share the same transactionId
-    uint64 matchId = 2; // If there are multiple matches resulting from one new order, they all have unique matchIds
-    uint64 matchedQuantity = 3;
-    repeated FillEvent fillEvents = 4;
+    uint64 transaction_id =
+        1; // If there are multiple matches resulting from one new order, they
+           // all share the same transactionId
+    uint64 match_id = 2; // If there are multiple matches resulting from one new
+                         // order, they all have unique matchIds
+    uint64 matched_quantity = 3;
+    repeated FillEvent fill_events = 4;
   }
 
   Body body = 1;

@@ -1,15 +1,12 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // First compile Common.proto (no package, goes to _.rs)
+    // First compile Common.proto (package OpenBook.CommonPackage)
     tonic_build::configure()
-        .compile_protos(&["proto/Common.proto"], &["proto"])?;
+        .compile_protos(&["../proto/Common.proto"], &["../proto"])?;
 
-    // Then compile MatchingService.proto with extern_path references to common types
+    // Then compile MatchingService.proto with extern_path mapping the entire common package
     tonic_build::configure()
-        .extern_path(".SequencedMessageBase", "crate::common::SequencedMessageBase")
-        .extern_path(".ResponseBase", "crate::common::ResponseBase")
-        .extern_path(".FallibleBase", "crate::common::FallibleBase")
-        .extern_path(".OrderType", "crate::common::OrderType")
-        .compile_protos(&["proto/MatchingService.proto"], &["proto"])?;
+        .extern_path(".OpenBook.CommonPackage", "crate::common")
+        .compile_protos(&["../proto/MatchingService.proto"], &["../proto"])?;
 
     Ok(())
 }

@@ -3,9 +3,9 @@ pub mod math_utils;
 pub mod pool_manager;
 pub mod pool_utils;
 
-// Common types (from Common.proto with no package)
+// Common types (from Common.proto with package OpenBook.CommonPackage)
 pub mod common {
-    tonic::include_proto!("_");
+    tonic::include_proto!("open_book.common_package");
 }
 
 // Re-export common types at the matching_service_package level for convenience

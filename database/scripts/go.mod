@@ -6,6 +6,7 @@ require (
 	github.com/go-resty/resty/v2 v2.11.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/openbook/shared v0.0.0
+	github.com/shopspring/decimal v1.4.0
 )
 
 require (

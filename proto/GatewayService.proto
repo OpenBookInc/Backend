@@ -6,6 +6,10 @@ import "Common.proto";
 
 option go_package = "OpenBook/GatewayService/proto";
 
+// GatewayServerService handles bidirectional streaming between clients and the
+// matching engine. Clients send NewOrder and CancelOrder messages; the gateway
+// responds with ordered GatewayEvents (acknowledgements, matches, and
+// snapshots) maintaining strict sequence validation.
 service GatewayServerService {
   // Bidirectional streaming RPC:
   // Client sends NewOrder / CancelOrder messages.
@@ -16,34 +20,34 @@ service GatewayServerService {
 // Messages sent from client → server
 message BackendMessage {
   oneof msg {
-    NewOrder newOrder = 1;
-    CancelOrder cancelOrder = 2;
+    NewOrder new_order = 1;
+    CancelOrder cancel_order = 4;
   }
 }
 
 // Messages sent from server → client
 message GatewayMessage {
-  SequencedMessageBase sequencedMessageBase = 1;
+  OpenBook.CommonPackage.SequencedMessageBase sequenced_message_base = 1;
 
   oneof event {
-    NewOrderAcknowledgement newOrderAcknowledgement = 2;
-    CancelOrderAcknowledgement cancelOrderAcknowledgement = 3;
+    NewOrderAcknowledgement new_order_acknowledgement = 2;
+    CancelOrderAcknowledgement cancel_order_acknowledgement = 3;
     Match match = 4;
-    OrderBookSnapshot orderBookSnapshot = 5;
+    OrderBookSnapshot order_book_snapshot = 5;
   }
 }
 
 message NewOrder {
   message Body {
     message Leg {
-      uint64 legSecurityId = 1;
-      bool isOver = 2;
+      uint64 leg_security_id = 1;
+      bool is_over = 2;
     }
 
-    uint64 userId = 1;
-    uint64 clientOrderId = 2;
+    uint64 user_id = 1;
+    uint64 client_order_id = 2;
     repeated Leg legs = 3;
-    OrderType orderType = 4;
+    OpenBook.CommonPackage.OrderType order_type = 4;
     uint64 portion = 5;
     uint64 quantity = 6;
   }
@@ -52,45 +56,48 @@ message NewOrder {
 }
 
 message CancelOrder {
-  message Body { uint64 orderId = 1; }
+  message Body { uint64 order_id = 1; }
 
   Body body = 1;
 }
 
 message CancelOrderAcknowledgement {
-  message Body { uint64 orderId = 1; }
+  message Body { uint64 order_id = 1; }
 
-  ResponseBase responseBase = 1;
-  FallibleBase fallibleBase = 2;
+  OpenBook.CommonPackage.ResponseBase response_base = 1;
+  OpenBook.CommonPackage.FallibleBase fallible_base = 2;
   Body body = 3;
 }
 
 message NewOrderAcknowledgement {
   message Body {
-    uint64 clientOrderId = 1;
-    uint64 orderId = 2;
+    uint64 client_order_id = 1;
+    uint64 order_id = 2;
   }
 
-  ResponseBase responseBase = 1;
-  FallibleBase fallibleBase = 2;
+  OpenBook.CommonPackage.ResponseBase response_base = 1;
+  OpenBook.CommonPackage.FallibleBase fallible_base = 2;
   Body body = 3;
 }
 
 message Match {
   message Body {
     message FillEvent {
-      uint64 fillEventId = 1;
-      uint64 orderId = 2;
-      bool isAggressor = 3;
-      uint64 matchedPortion = 4;
-      bool isComplete =
+      uint64 fill_event_id = 1;
+      uint64 order_id = 2;
+      bool is_aggressor = 3;
+      uint64 matched_portion = 4;
+      bool is_complete =
           5; // only marked true for the final fill notification of an order
     }
 
-    uint64 transactionId = 1; // If there are multiple matches resulting from one new order, they all share the same transactionId
-    uint64 matchId = 2; // If there are multiple matches resulting from one new order, they all have unique matchIds
-    uint64 matchedQuantity = 3;
-    repeated FillEvent fillEvents = 4;
+    uint64 transaction_id =
+        1; // If there are multiple matches resulting from one new order, they
+           // all share the same transactionId
+    uint64 match_id = 2; // If there are multiple matches resulting from one new
+                         // order, they all have unique matchIds
+    uint64 matched_quantity = 3;
+    repeated FillEvent fill_events = 4;
   }
 
   Body body = 1;
@@ -99,15 +106,15 @@ message Match {
 message OrderBookSnapshot {
   message LineupBook {
     message Level {
-      message Order { uint64 quantityRemaining = 1; }
+      message Order { uint64 quantity_remaining = 1; }
 
       uint64 portion = 1;
       repeated Order orders = 2;
     }
 
-    repeated bool isOver = 1;
+    repeated bool is_over = 1;
     repeated Level levels = 2;
   }
 
-  repeated uint64 legSecurityIds = 1;
+  repeated uint64 leg_security_ids = 1;
 }
