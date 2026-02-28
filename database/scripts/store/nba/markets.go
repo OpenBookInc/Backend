@@ -19,7 +19,8 @@ type NBAMarketForUpsert struct {
 
 // UpsertNBAMarket inserts or updates an NBA market in the database.
 // Uses (game_id, individual_id, market_type, market_line) as the unique constraint for ON CONFLICT.
-func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert) error {
+// Returns the market row ID.
+func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert) (int, error) {
 	query := `
 		INSERT INTO nba_markets (
 			game_id, individual_id, market_type, market_line,
@@ -28,18 +29,20 @@ func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert)
 		VALUES ($1, $2, $3::nba_player_prop_type, $4, NOW(), NOW())
 		ON CONFLICT (game_id, individual_id, market_type, market_line)
 		DO UPDATE SET updated_at = NOW()
+		RETURNING id
 	`
 
-	_, err := s.Pool().Exec(ctx, query,
+	var id int
+	err := s.Pool().QueryRow(ctx, query,
 		m.GameID,
 		m.IndividualID,
 		m.MarketType,
 		m.MarketLine,
-	)
+	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to upsert NBA market (game_id=%d, individual_id=%d, type=%s, line=%s): %w",
+		return 0, fmt.Errorf("failed to upsert NBA market (game_id=%d, individual_id=%d, type=%s, line=%s): %w",
 			m.GameID, m.IndividualID, m.MarketType, m.MarketLine, err)
 	}
 
-	return nil
+	return id, nil
 }

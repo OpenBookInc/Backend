@@ -19,7 +19,7 @@ import (
 
 // PersistMarkets processes an OddsBlaze odds response and persists player prop markets.
 // Returns the number of markets persisted.
-func PersistMarkets(ctx context.Context, dbStore *store.Store, league string, oddsResp *fetcher_oddsblaze.OddsResponse) (int, error) {
+func PersistMarkets(ctx context.Context, dbStore *store.Store, marketEntity gen.MarketEntity, sportsbook gen.Sportsbook, oddsResp *fetcher_oddsblaze.OddsResponse) (int, error) {
 	count := 0
 
 	for _, event := range oddsResp.Events {
@@ -35,7 +35,7 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, league string, od
 				continue
 			}
 
-			propType, err := mapMarketToPlayerPropType(league, odd.Market)
+			propType, err := mapMarketToPlayerPropType(marketEntity, odd.Market)
 			if errors.Is(err, persister_oddsblaze_nba.ErrNotPlayerProp) || errors.Is(err, persister_oddsblaze_nfl.ErrNotPlayerProp) {
 				continue
 			}
@@ -51,29 +51,49 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, league string, od
 
 			line := getMarketLine(odd, propType)
 
-			switch league {
-			case "NBA":
+			var marketID int
+
+			switch marketEntity {
+			case gen.MarketEntityNbaMarket:
 				nbaProp := models_nba.PlayerProp(propType)
-				if err := store_nba.UpsertNBAMarket(dbStore, ctx, &store_nba.NBAMarketForUpsert{
+				marketID, err = store_nba.UpsertNBAMarket(dbStore, ctx, &store_nba.NBAMarketForUpsert{
 					GameID:       game.ID,
 					IndividualID: individual.ID,
 					MarketType:   nbaProp,
 					MarketLine:   line,
-				}); err != nil {
+				})
+				if err != nil {
 					return count, fmt.Errorf("failed to upsert NBA market: %w", err)
 				}
-			case "NFL":
+			case gen.MarketEntityNflMarket:
 				nflProp := models_nfl.PlayerProp(propType)
-				if err := store_nfl.UpsertNFLMarket(dbStore, ctx, &store_nfl.NFLMarketForUpsert{
+				marketID, err = store_nfl.UpsertNFLMarket(dbStore, ctx, &store_nfl.NFLMarketForUpsert{
 					GameID:       game.ID,
 					IndividualID: individual.ID,
 					MarketType:   nflProp,
 					MarketLine:   line,
-				}); err != nil {
+				})
+				if err != nil {
 					return count, fmt.Errorf("failed to upsert NFL market: %w", err)
 				}
 			default:
-				return count, fmt.Errorf("unsupported league: %s", league)
+				return count, fmt.Errorf("unsupported market entity type: %s", marketEntity)
+			}
+
+			// Persist the OddsBlaze market ID mapping
+			side, err := mapSelectionSideToMarketSide(odd)
+			if err != nil {
+				return count, fmt.Errorf("failed to map selection side for odd %s in event %s: %w", odd.ID, event.ID, err)
+			}
+
+			if err := dbStore.UpsertOddsBlazeMarketID(ctx, &store.OddsBlazeMarketIDForUpsert{
+				EntityType:  marketEntity,
+				EntityID:    marketID,
+				Sportsbook:  sportsbook,
+				Side:        side,
+				OddsBlazeID: odd.ID,
+			}); err != nil {
+				return count, fmt.Errorf("failed to upsert OddsBlaze market ID for odd %s: %w", odd.ID, err)
 			}
 
 			count++
@@ -85,16 +105,33 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, league string, od
 
 // mapMarketToPlayerPropType dispatches to the league-specific market mapping function.
 // Returns the prop type as a string that can be cast to the league-specific type.
-func mapMarketToPlayerPropType(league string, market string) (string, error) {
-	switch league {
-	case "NBA":
+func mapMarketToPlayerPropType(marketEntity gen.MarketEntity, market string) (string, error) {
+	switch marketEntity {
+	case gen.MarketEntityNbaMarket:
 		prop, err := persister_oddsblaze_nba.MapMarketToPlayerPropType(market)
 		return string(prop), err
-	case "NFL":
+	case gen.MarketEntityNflMarket:
 		prop, err := persister_oddsblaze_nfl.MapMarketToPlayerPropType(market)
 		return string(prop), err
 	default:
-		return "", fmt.Errorf("unsupported league: %s", league)
+		return "", fmt.Errorf("unsupported market entity type: %s", marketEntity)
+	}
+}
+
+// mapSelectionSideToMarketSide maps OddsBlaze selection side strings to our MarketSide enum.
+// "Over" and "Yes" map to over; "Under" maps to under.
+func mapSelectionSideToMarketSide(odd *fetcher_oddsblaze.Odd) (gen.MarketSide, error) {
+	if odd.Selection == nil || odd.Selection.Side == "" {
+		return "", fmt.Errorf("odd %s has no selection side", odd.ID)
+	}
+
+	switch odd.Selection.Side {
+	case "Over", "Yes":
+		return gen.MarketSideOver, nil
+	case "Under":
+		return gen.MarketSideUnder, nil
+	default:
+		return "", fmt.Errorf("unknown selection side %q for odd %s", odd.Selection.Side, odd.ID)
 	}
 }
 

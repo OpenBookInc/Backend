@@ -19,7 +19,8 @@ type NFLMarketForUpsert struct {
 
 // UpsertNFLMarket inserts or updates an NFL market in the database.
 // Uses (game_id, individual_id, market_type, market_line) as the unique constraint for ON CONFLICT.
-func UpsertNFLMarket(s *store.Store, ctx context.Context, m *NFLMarketForUpsert) error {
+// Returns the market row ID.
+func UpsertNFLMarket(s *store.Store, ctx context.Context, m *NFLMarketForUpsert) (int, error) {
 	query := `
 		INSERT INTO nfl_markets (
 			game_id, individual_id, market_type, market_line,
@@ -28,18 +29,20 @@ func UpsertNFLMarket(s *store.Store, ctx context.Context, m *NFLMarketForUpsert)
 		VALUES ($1, $2, $3::nfl_player_prop_type, $4, NOW(), NOW())
 		ON CONFLICT (game_id, individual_id, market_type, market_line)
 		DO UPDATE SET updated_at = NOW()
+		RETURNING id
 	`
 
-	_, err := s.Pool().Exec(ctx, query,
+	var id int
+	err := s.Pool().QueryRow(ctx, query,
 		m.GameID,
 		m.IndividualID,
 		m.MarketType,
 		m.MarketLine,
-	)
+	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to upsert NFL market (game_id=%d, individual_id=%d, type=%s, line=%s): %w",
+		return 0, fmt.Errorf("failed to upsert NFL market (game_id=%d, individual_id=%d, type=%s, line=%s): %w",
 			m.GameID, m.IndividualID, m.MarketType, m.MarketLine, err)
 	}
 
-	return nil
+	return id, nil
 }

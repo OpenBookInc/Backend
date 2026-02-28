@@ -13,6 +13,7 @@ import (
 	"github.com/openbook/population-scripts/config"
 	fetcher_oddsblaze "github.com/openbook/population-scripts/fetcher/oddsblaze"
 	persister_oddsblaze "github.com/openbook/population-scripts/persister/oddsblaze"
+	"github.com/openbook/shared/models/gen"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -57,8 +58,12 @@ func main() {
 		RateLimitDelay: time.Duration(cfg.OddsBlazeRateLimitDelayMilliseconds) * time.Millisecond,
 	})
 
-	// Convert league to uppercase for DB lookup (e.g., "nba" -> "NBA")
+	// Convert league config to MarketEntity enum
 	leagueName := strings.ToUpper(cfg.OddsBlazeLeague)
+	marketEntity, err := marketEntityForLeague(leagueName)
+	if err != nil {
+		fatal("%v", err)
+	}
 
 	// Optional timestamp pointer
 	var timestamp *string
@@ -87,7 +92,7 @@ func main() {
 
 		// Persist markets
 		fmt.Printf("  Persisting player prop markets...\n")
-		markets, err := persister_oddsblaze.PersistMarkets(ctx, dbStore, leagueName, oddsResp)
+		markets, err := persister_oddsblaze.PersistMarkets(ctx, dbStore, marketEntity, gen.Sportsbook(sportsbook), oddsResp)
 		if err != nil {
 			fatal("Failed to persist markets for sportsbook %s: %v", sportsbook, err)
 		}
@@ -104,4 +109,16 @@ func main() {
 	fmt.Println("\n" + strings.Repeat("=", 72))
 	fmt.Println("Update available markets complete!")
 	fmt.Println(strings.Repeat("=", 72))
+}
+
+// marketEntityForLeague converts a league name string to its MarketEntity enum value.
+func marketEntityForLeague(league string) (gen.MarketEntity, error) {
+	switch league {
+	case "NBA":
+		return gen.MarketEntityNbaMarket, nil
+	case "NFL":
+		return gen.MarketEntityNflMarket, nil
+	default:
+		return "", fmt.Errorf("unsupported league: %s", league)
+	}
 }

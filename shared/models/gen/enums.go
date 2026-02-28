@@ -86,6 +86,22 @@ const (
 	IndividualStatusUnknown IndividualStatus = "unknown"
 )
 
+// MarketEntity represents the market_entity_type database enum
+type MarketEntity string
+
+const (
+	MarketEntityNbaMarket MarketEntity = "nba_market"
+	MarketEntityNflMarket MarketEntity = "nfl_market"
+)
+
+// MarketSide represents the market_side database enum
+type MarketSide string
+
+const (
+	MarketSideOver MarketSide = "over"
+	MarketSideUnder MarketSide = "under"
+)
+
 // OrderStatusEnum represents the order_status_enum database enum
 type OrderStatusEnum string
 
@@ -112,6 +128,14 @@ type Side string
 const (
 	SideBid Side = "bid"
 	SideAsk Side = "ask"
+)
+
+// Sportsbook represents the sportsbook_type database enum
+type Sportsbook string
+
+const (
+	SportsbookDraftkings Sportsbook = "draftkings"
+	SportsbookFanatics Sportsbook = "fanatics"
 )
 
 // Vendor represents the vendor_type database enum
