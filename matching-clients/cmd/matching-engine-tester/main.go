@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -54,103 +55,27 @@ type WebClient struct {
 	gatewayPort string
 }
 
-func NewWebClient(cfg *Config) (*WebClient, error) {
-	// Default to gateway
-	targetMode := "gateway"
-	targetPort := cfg.GatewayPort
-
-	serverAddr := fmt.Sprintf("%s:%s", cfg.ServerHost, targetPort)
-
-	conn, err := grpc.NewClient(serverAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
-	}
-
+func NewWebClient(cfg *Config) *WebClient {
 	wc := &WebClient{
-		conn:                conn,
-		client:              pb.NewMatchingServerServiceClient(conn),
 		requests:            make([]string, 0),
 		responses:           make([]string, 0),
-		tradeSendChan:       make(chan *pb.GatewayMessage, 10),
 		tradeStreamActive:   false,
 		globalClientOrderId: 1000, // Start at 1001 (will increment on first use)
 		poolTracker:         NewPoolTracker(),
 		pendingOrders:       make(map[uint64]*pb.NewOrder),
-		targetMode:          targetMode,
+		targetMode:          "gateway",
 		serverHost:          cfg.ServerHost,
 		serverPort:          cfg.ServerPort,
 		gatewayPort:         cfg.GatewayPort,
 	}
 
-	// Initialize unified trade stream
-	if err := wc.initTradeStream(); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to initialize trade stream: %v", err)
+	// Try to connect to default target (gateway), but don't fail if unreachable
+	if err := wc.SwitchTarget("gateway"); err != nil {
+		log.Printf("Warning: Could not connect to gateway: %v", err)
+		log.Printf("Web server will start in disconnected state")
 	}
 
-	return wc, nil
-}
-
-func (wc *WebClient) initTradeStream() error {
-	stream, err := wc.client.CreateTradeStream(context.Background())
-	if err != nil {
-		return err
-	}
-
-	wc.tradeStream = stream
-	wc.tradeStreamActive = true
-
-	// Goroutine to send messages from the channel
-	go func() {
-		for msg := range wc.tradeSendChan {
-			if err := stream.Send(msg); err != nil {
-				log.Printf("Failed to send message: %v", err)
-				wc.mu.Lock()
-				wc.tradeStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-		}
-	}()
-
-	// Goroutine to receive responses
-	go func() {
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				log.Println("Trade stream closed by server")
-				wc.mu.Lock()
-				wc.tradeStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-			if err != nil {
-				log.Printf("Error receiving response: %v", err)
-				wc.mu.Lock()
-				wc.tradeStreamActive = false
-				wc.mu.Unlock()
-				return
-			}
-
-			respJSON, _ := marshaler.Marshal(resp)
-			wc.mu.Lock()
-			wc.responses = append(wc.responses, string(respJSON))
-
-			// Process the response for pool tracking
-			wc.processEngineMessage(resp)
-
-			wc.mu.Unlock()
-		}
-	}()
-
-	return nil
+	return wc
 }
 
 // processEngineMessage processes engine responses and updates pool state
@@ -226,7 +151,9 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 
 func (wc *WebClient) Close() {
 	// Close the send channel to stop the sender goroutine
-	close(wc.tradeSendChan)
+	if wc.tradeSendChan != nil {
+		close(wc.tradeSendChan)
+	}
 
 	// Close the stream
 	if wc.tradeStream != nil {
@@ -238,17 +165,45 @@ func (wc *WebClient) Close() {
 	}
 }
 
-// SwitchTarget switches the connection to a different target (matching_server or gateway)
+// checkServiceReachable tests TCP reachability of a host:port with a short timeout.
+func checkServiceReachable(host, port string) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+// handleHealthCheck returns TCP reachability of both services
+func (wc *WebClient) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	wc.mu.RLock()
+	host := wc.serverHost
+	serverPort := wc.serverPort
+	gatewayPort := wc.gatewayPort
+	wc.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"matching_server": map[string]interface{}{
+			"reachable": checkServiceReachable(host, serverPort),
+			"port":      serverPort,
+		},
+		"gateway": map[string]interface{}{
+			"reachable": checkServiceReachable(host, gatewayPort),
+			"port":      gatewayPort,
+		},
+	})
+}
+
+// SwitchTarget switches the connection to a different target (matching_server or gateway).
+// Always updates targetMode. If the connection fails, the client enters a disconnected state.
 func (wc *WebClient) SwitchTarget(newMode string) error {
 	if newMode != "matching_server" && newMode != "gateway" {
 		return fmt.Errorf("invalid target mode: %s", newMode)
 	}
 
 	wc.mu.Lock()
-	if wc.targetMode == newMode {
-		wc.mu.Unlock()
-		return nil // Already connected to this target
-	}
 
 	// Increment generation to invalidate old goroutines
 	wc.streamGeneration++
@@ -262,10 +217,20 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 	oldStream := wc.tradeStream
 	oldConn := wc.conn
 
-	// Clear references before releasing lock
+	// Clear references and update target mode immediately
 	wc.tradeSendChan = nil
 	wc.tradeStream = nil
 	wc.conn = nil
+	wc.client = nil
+	wc.targetMode = newMode
+
+	// Clear state
+	wc.requests = make([]string, 0)
+	wc.responses = make([]string, 0)
+	wc.poolTracker = NewPoolTracker()
+	wc.pendingOrders = make(map[uint64]*pb.NewOrder)
+	wc.globalSequenceNumber = 0
+	wc.globalClientOrderId = 1000
 
 	// Determine new port
 	var targetPort string
@@ -296,10 +261,17 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 	// Create new connection (outside lock)
 	serverAddr := fmt.Sprintf("%s:%s", serverHost, targetPort)
 
+	// Check TCP reachability before attempting gRPC connection
+	if !checkServiceReachable(serverHost, targetPort) {
+		log.Printf("Service at %s is not reachable", serverAddr)
+		return fmt.Errorf("service at %s is not reachable", serverAddr)
+	}
+
 	conn, err := grpc.NewClient(serverAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
+		log.Printf("Failed to connect to %s: %v", serverAddr, err)
 		return fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
 	}
 
@@ -309,25 +281,17 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 	stream, err := client.CreateTradeStream(context.Background())
 	if err != nil {
 		conn.Close()
+		log.Printf("Failed to create trade stream on %s: %v", serverAddr, err)
 		return fmt.Errorf("failed to create trade stream: %v", err)
 	}
 
-	// Now acquire lock to update state
+	// Now acquire lock to update connection state
 	wc.mu.Lock()
 	wc.conn = conn
 	wc.client = client
-	wc.targetMode = newMode
 	wc.tradeSendChan = make(chan *pb.GatewayMessage, 10)
 	wc.tradeStream = stream
 	wc.tradeStreamActive = true
-
-	// Clear state
-	wc.requests = make([]string, 0)
-	wc.responses = make([]string, 0)
-	wc.poolTracker = NewPoolTracker()
-	wc.pendingOrders = make(map[uint64]*pb.NewOrder)
-	wc.globalSequenceNumber = 0
-	wc.globalClientOrderId = 1000
 
 	sendChan := wc.tradeSendChan // Capture for goroutine
 	wc.mu.Unlock()
@@ -400,25 +364,38 @@ func (wc *WebClient) handleTargetMode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		newMode := r.FormValue("targetMode")
-		if err := wc.SwitchTarget(newMode); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
+		switchErr := wc.SwitchTarget(newMode)
+
+		wc.mu.RLock()
+		active := wc.tradeStreamActive
+		currentMode := wc.targetMode
+		wc.mu.RUnlock()
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"targetMode": newMode, "status": "switched"})
+		resp := map[string]interface{}{
+			"targetMode":   currentMode,
+			"streamActive": active,
+		}
+		if switchErr != nil {
+			resp["error"] = switchErr.Error()
+		} else {
+			resp["status"] = "switched"
+		}
+		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
-	// GET: return current target mode
+	// GET: return current target mode and connection status
 	wc.mu.RLock()
 	currentMode := wc.targetMode
+	active := wc.tradeStreamActive
 	wc.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"targetMode": currentMode})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"targetMode":   currentMode,
+		"streamActive": active,
+	})
 }
 
 // Send order handler
@@ -753,11 +730,11 @@ func renderMainPage(w http.ResponseWriter) {
         .header h1 { margin: 0; font-size: 24px; }
         .header-right { display: flex; align-items: center; gap: 10px; }
         .target-selector { display: flex; align-items: center; gap: 8px; }
-        .target-selector label { font-size: 14px; }
-        .target-selector select { padding: 5px 10px; border-radius: 3px; border: none; }
-        .target-indicator { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }
-        .target-matching { background: #e74c3c; }
-        .target-gateway { background: #3498db; }
+        .target-selector-label { font-size: 13px; color: #aaa; }
+        .target-btn { width: 140px; padding: 6px 0; border-radius: 16px; border: 2px solid transparent; background: #555; color: #ccc; font-size: 13px; cursor: pointer; text-align: center; }
+        .target-btn:hover { background: #666; }
+        .target-btn.active { background: #28a745; color: white; border-color: #1e7e34; }
+        .target-btn .offline-icon { font-size: 10px; vertical-align: middle; }
         
         /* Main layout - two columns */
         .main-container { display: flex; flex: 1; overflow: hidden; }
@@ -827,13 +804,10 @@ func renderMainPage(w http.ResponseWriter) {
         <h1>Matching Engine Tester</h1>
         <div class="header-right">
             <div class="target-selector">
-                <label>Target:</label>
-                <select id="targetModeSelect">
-                    <option value="matching_server">Matching Server (:50051)</option>
-                    <option value="gateway">Gateway (:50052)</option>
-                </select>
+                <span class="target-selector-label">Target:</span>
+                <button id="btnMatchingServer" class="target-btn active" data-target="matching_server">Matching Server</button>
+                <button id="btnGateway" class="target-btn" data-target="gateway">Gateway</button>
             </div>
-            <span id="targetIndicator" class="target-indicator target-matching">MATCHING</span>
         </div>
     </div>
     
@@ -1319,57 +1293,52 @@ func renderMainPage(w http.ResponseWriter) {
         }
 
         // ============ Target Mode ============
-        const targetModeSelect = document.getElementById('targetModeSelect');
-        const targetIndicator = document.getElementById('targetIndicator');
+        const btnMatchingServer = document.getElementById('btnMatchingServer');
+        const btnGateway = document.getElementById('btnGateway');
+        const targetButtons = { matching_server: btnMatchingServer, gateway: btnGateway };
+        const targetLabels = { matching_server: 'Matching Server', gateway: 'Gateway' };
 
-        function updateTargetIndicator(mode) {
-            if (mode === 'gateway') {
-                targetIndicator.textContent = 'GATEWAY';
-                targetIndicator.className = 'target-indicator target-gateway';
-            } else {
-                targetIndicator.textContent = 'RUST';
-                targetIndicator.className = 'target-indicator target-matching';
-            }
+        function setActiveTarget(mode) {
+            Object.values(targetButtons).forEach(b => b.classList.remove('active'));
+            if (targetButtons[mode]) targetButtons[mode].classList.add('active');
         }
 
         async function loadTargetMode() {
             try {
                 const response = await fetch('/target-mode');
                 const data = await response.json();
-                targetModeSelect.value = data.targetMode;
-                updateTargetIndicator(data.targetMode);
+                setActiveTarget(data.targetMode);
             } catch (err) {
                 console.error('Error fetching target mode:', err);
             }
         }
 
-        targetModeSelect.addEventListener('change', async function() {
-            const newMode = this.value;
+        async function switchTarget(mode) {
             try {
                 const response = await fetch('/target-mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'targetMode=' + newMode
+                    body: 'targetMode=' + mode
                 });
                 const data = await response.json();
+                setActiveTarget(data.targetMode);
+                // Clear UI state on any switch
+                requestList.innerHTML = '<p class="empty-pools">No requests yet.</p>';
+                responseList.innerHTML = '<p class="empty-pools">No responses yet.</p>';
+                orderColors.clear();
+                colorIndex = 0;
+                loadInitialSequenceNumber();
+                loadInitialClientOrderId();
                 if (data.error) {
-                    alert('Failed to switch target: ' + data.error);
-                    loadTargetMode();
-                } else {
-                    updateTargetIndicator(newMode);
-                    requestList.innerHTML = '<p class="empty-pools">No requests yet.</p>';
-                    responseList.innerHTML = '<p class="empty-pools">No responses yet.</p>';
-                    orderColors.clear();
-                    colorIndex = 0;
-                    loadInitialSequenceNumber();
-                    loadInitialClientOrderId();
+                    console.warn('Connection error:', data.error);
                 }
             } catch (err) {
                 console.error('Error switching target:', err);
-                alert('Network error switching target');
-                loadTargetMode();
             }
-        });
+        }
+
+        btnMatchingServer.addEventListener('click', () => switchTarget('matching_server'));
+        btnGateway.addEventListener('click', () => switchTarget('gateway'));
 
         loadTargetMode();
 
@@ -1404,6 +1373,23 @@ func renderMainPage(w http.ResponseWriter) {
 
         fetchPools();
         setInterval(fetchPools, 500);
+
+        // ============ Health Check & Connection Status ============
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health-check');
+                const health = await response.json();
+                for (const [key, btn] of Object.entries(targetButtons)) {
+                    const info = key === 'matching_server' ? health.matching_server : health.gateway;
+                    btn.innerHTML = info.reachable ? targetLabels[key] : targetLabels[key] + ' <span class="offline-icon">\u274C</span>';
+                }
+            } catch (err) {
+                console.error('Error checking health:', err);
+            }
+        }
+
+        checkHealth();
+        setInterval(checkHealth, 5000);
     </script>
 </body>
 </html>
@@ -1471,10 +1457,7 @@ func main() {
 
 	log.Printf("Initial target mode: gateway")
 
-	client, err := NewWebClient(cfg)
-	if err != nil {
-		fatal("Failed to create client: %v", err)
-	}
+	client := NewWebClient(cfg)
 	defer client.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -1489,6 +1472,7 @@ func main() {
 	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
 	http.HandleFunc("/client-order-id", client.handleClientOrderId)
 	http.HandleFunc("/target-mode", client.handleTargetMode)
+	http.HandleFunc("/health-check", client.handleHealthCheck)
 
 	webAddr := fmt.Sprintf(":%s", cfg.WebPort)
 	log.Printf("Starting web server on %s", webAddr)

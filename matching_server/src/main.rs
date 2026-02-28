@@ -16,13 +16,6 @@ use matching_server::matching_service_package::{
 
 use matching_server::pool_manager::PoolManager;
 
-/// Logs an error message and terminates the process.
-/// Used for unrecoverable errors that indicate a serious bug or protocol violation.
-fn fatal_error(msg: &str) -> ! {
-    eprintln!("FATAL: {}", msg);
-    std::process::exit(1);
-}
-
 /// Inner state of the MatcherService, wrapped in Arc to allow cloning into spawned tasks.
 #[derive(Clone)]
 struct ServiceState {
@@ -55,9 +48,12 @@ impl MatcherService {
         }
     }
 
-    /// Closes the trade stream.
+    /// Closes the trade stream and resets all state for a fresh reconnection.
     fn close_stream(&self) {
         let _ = self.state.trade_tx.lock().unwrap().take();
+        *self.state.expected_next_sequence_number.lock().unwrap() = 0;
+        *self.state.next_response_sequence_number.lock().unwrap() = 0;
+        *self.state.pool_manager.lock().unwrap() = PoolManager::new();
     }
 
     /// Helper to get the next response sequence number
@@ -69,16 +65,17 @@ impl MatcherService {
     }
 
     /// Validates the incoming sequence number and updates expected.
-    /// Calls fatal_error if sequence number doesn't match expected.
-    fn validate_and_advance_sequence(&self, received_sequence: u64) {
+    /// Returns an error if sequence number doesn't match expected.
+    fn validate_and_advance_sequence(&self, received_sequence: u64) -> Result<(), Status> {
         let mut expected = self.state.expected_next_sequence_number.lock().unwrap();
         if received_sequence != *expected {
-            fatal_error(&format!(
+            return Err(Status::invalid_argument(format!(
                 "Sequence number mismatch: expected {}, received {}",
                 *expected, received_sequence
-            ));
+            )));
         }
         *expected += 1;
+        Ok(())
     }
 
     /// Processes a GatewayMessage and sends responses through the trade channel.
@@ -94,7 +91,7 @@ impl MatcherService {
             .ok_or_else(|| Status::invalid_argument("Missing sequenced_message_base"))?;
 
         let request_sequence_number = sequenced_base.sequence_number;
-        self.validate_and_advance_sequence(request_sequence_number);
+        self.validate_and_advance_sequence(request_sequence_number)?;
 
         // Process based on message type
         match message.msg {
@@ -307,16 +304,9 @@ impl MatchingServerService for MatcherService {
                 match result {
                     Ok(message) => {
                         if let Err(e) = service.process_gateway_message(message, &tx).await {
-                            match e.code() {
-                                tonic::Code::InvalidArgument | tonic::Code::Internal => {
-                                    fatal_error(&format!("Trade stream error: {:?}", e));
-                                }
-                                _ => {
-                                    // Transport/disconnect error - close stream gracefully
-                                    service.close_stream();
-                                    break;
-                                }
-                            }
+                            eprintln!("ERROR: Trade stream error: {:?}. Closing stream.", e);
+                            service.close_stream();
+                            break;
                         }
                     }
                     Err(_) => {

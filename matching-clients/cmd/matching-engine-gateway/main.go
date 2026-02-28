@@ -94,6 +94,10 @@ type Gateway struct {
 	// gRPC server for incoming connections
 	grpcServer *grpc.Server
 
+	// Upstream matching server connection state
+	upstreamConnected bool
+	upstreamMu        sync.RWMutex
+
 	// Context for shutdown
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -191,17 +195,16 @@ func NewGateway(ctx context.Context, config *Config) (*Gateway, error) {
 		cancel:          cancel,
 	}
 
-	// Connect to database
+	// Connect to database (mandatory - fail fast)
 	if err := gw.connectDB(ctx); err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Connect to matching server
+	// Connect to matching server (optional - gateway can start without it)
 	if err := gw.connectMatchingServer(); err != nil {
-		gw.db.Close()
-		cancel()
-		return nil, fmt.Errorf("failed to connect to matching server: %w", err)
+		log.Printf("WARNING: Could not connect to matching server: %v\n", err)
+		log.Println("Gateway will start without matching server connection and attempt to reconnect")
 	}
 
 	return gw, nil
@@ -274,15 +277,25 @@ func (gw *Gateway) connectMatchingServer() error {
 
 // Start begins the gateway operations
 func (gw *Gateway) Start() error {
-	// Initialize the unified trade stream to upstream matching server
-	if err := gw.initializeTradeStream(); err != nil {
-		return fmt.Errorf("failed to initialize trade stream: %w", err)
+	// Try to initialize trade stream if we have a connection
+	if gw.conn != nil {
+		if err := gw.initializeTradeStream(); err != nil {
+			log.Printf("WARNING: Could not initialize trade stream: %v\n", err)
+		} else {
+			gw.upstreamMu.Lock()
+			gw.upstreamConnected = true
+			gw.upstreamMu.Unlock()
+			log.Println("Connected to matching server")
+		}
 	}
 
 	// Start the gRPC server for incoming connections
 	if err := gw.startGRPCServer(); err != nil {
 		return fmt.Errorf("failed to start gRPC server: %w", err)
 	}
+
+	// Start reconnection loop in background
+	go gw.reconnectionLoop()
 
 	log.Println("Gateway started successfully")
 	return nil
@@ -325,9 +338,13 @@ func (gw *Gateway) initializeTradeStream() error {
 			select {
 			case <-gw.ctx.Done():
 				return
-			case msg := <-gw.sendChan:
+			case msg, ok := <-gw.sendChan:
+				if !ok {
+					return // channel closed
+				}
 				if err := stream.Send(msg); err != nil {
-					log.Printf("Failed to send message: %v\n", err)
+					log.Printf("Failed to send message to matching server: %v\n", err)
+					gw.markDisconnected()
 					return
 				}
 			}
@@ -454,6 +471,10 @@ func (gw *Gateway) GetSelfMatchID(ctx context.Context, userID string) (uint64, e
 
 // SubmitOrder validates and submits an order to the matching server
 func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
+	if !gw.isUpstreamConnected() {
+		return errors.New("matching server is not available")
+	}
+
 	// Step 1: Check balance
 	hasBalance, err := gw.CheckBalance(ctx, req.UserID, req.WagerAmount)
 	if err != nil {
@@ -548,10 +569,12 @@ func (gw *Gateway) handleTradeStreamResponses() {
 			resp, err := gw.tradeStream.Recv()
 			if err == io.EOF {
 				log.Println("Trade stream closed by server")
+				gw.markDisconnected()
 				return
 			}
 			if err != nil {
 				log.Printf("Error receiving trade stream response: %v\n", err)
+				gw.markDisconnected()
 				return
 			}
 
@@ -811,6 +834,10 @@ func (gw *Gateway) handleMatch(ctx context.Context, match *pb.Match) {
 
 // CancelOrder sends a cancel request for an order
 func (gw *Gateway) CancelOrder(orderID uint64) error {
+	if !gw.isUpstreamConnected() {
+		return errors.New("matching server is not available")
+	}
+
 	cancelOrder := &pb.CancelOrder{
 		Body: &pb.CancelOrder_Body{
 			OrderId: orderID,
@@ -835,6 +862,139 @@ func (gw *Gateway) CancelOrder(orderID uint64) error {
 	}
 
 	return nil
+}
+
+// markDisconnected sets the upstream connection state to disconnected
+func (gw *Gateway) markDisconnected() {
+	gw.upstreamMu.Lock()
+	wasConnected := gw.upstreamConnected
+	gw.upstreamConnected = false
+	gw.upstreamMu.Unlock()
+	if wasConnected {
+		log.Println("Disconnected from matching server")
+	}
+}
+
+// isUpstreamConnected returns whether the upstream matching server is connected
+func (gw *Gateway) isUpstreamConnected() bool {
+	gw.upstreamMu.RLock()
+	defer gw.upstreamMu.RUnlock()
+	return gw.upstreamConnected
+}
+
+// reconnectionLoop runs in the background and attempts to reconnect when disconnected
+func (gw *Gateway) reconnectionLoop() {
+	backoff := 1 * time.Second
+	maxBackoff := 30 * time.Second
+
+	for {
+		select {
+		case <-gw.ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+
+		if gw.isUpstreamConnected() {
+			backoff = 1 * time.Second
+			continue
+		}
+
+		log.Println("Attempting to reconnect to matching server...")
+
+		if err := gw.attemptReconnect(); err != nil {
+			log.Printf("Reconnection failed: %v\n", err)
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+
+		log.Println("Successfully reconnected to matching server")
+		backoff = 1 * time.Second
+	}
+}
+
+// attemptReconnect tries to establish a new connection to the matching server
+func (gw *Gateway) attemptReconnect() error {
+	// Close existing connection if any
+	if gw.conn != nil {
+		gw.conn.Close()
+		gw.conn = nil
+		gw.client = nil
+	}
+
+	// Create new gRPC connection
+	if err := gw.connectMatchingServer(); err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+
+	// Reset sequence number for new stream
+	gw.sequenceMu.Lock()
+	gw.sequenceNumber = 0
+	gw.sequenceMu.Unlock()
+
+	// Drain any stale messages from send channel
+	for {
+		select {
+		case <-gw.sendChan:
+		default:
+			goto drained
+		}
+	}
+drained:
+
+	// Initialize trade stream
+	if err := gw.initializeTradeStream(); err != nil {
+		gw.conn.Close()
+		gw.conn = nil
+		gw.client = nil
+		return fmt.Errorf("stream creation failed: %w", err)
+	}
+
+	// Reconcile stale DB state
+	gw.reconcileAfterReconnect()
+
+	gw.upstreamMu.Lock()
+	gw.upstreamConnected = true
+	gw.upstreamMu.Unlock()
+
+	return nil
+}
+
+// reconcileAfterReconnect marks all in-flight orders as cancelled and clears tracking maps
+func (gw *Gateway) reconcileAfterReconnect() {
+	ctx := context.Background()
+
+	// Mark all "resting_on_matching_engine" orders as cancelled_by_exchange
+	result, err := gw.db.Exec(ctx,
+		"UPDATE confirmed_bets SET order_status = $1, updated_at = NOW() WHERE order_status = $2",
+		OrderStatusCancelledEx, OrderStatusResting,
+	)
+	if err != nil {
+		log.Printf("ERROR: Failed to reconcile resting orders: %v\n", err)
+	} else {
+		log.Printf("Reconciled %d resting orders to cancelled_by_exchange\n", result.RowsAffected())
+	}
+
+	// Mark all "submitted_to_matching_engine" orders as cancelled_by_exchange
+	result, err = gw.db.Exec(ctx,
+		"UPDATE confirmed_bets SET order_status = $1, updated_at = NOW() WHERE order_status = $2",
+		OrderStatusCancelledEx, OrderStatusSubmitted,
+	)
+	if err != nil {
+		log.Printf("ERROR: Failed to reconcile submitted orders: %v\n", err)
+	} else {
+		log.Printf("Reconciled %d submitted orders to cancelled_by_exchange\n", result.RowsAffected())
+	}
+
+	// Clear in-memory tracking maps
+	gw.pendingOrdersMu.Lock()
+	gw.pendingOrders = make(map[uint64]*PendingOrder)
+	gw.pendingOrdersMu.Unlock()
+
+	gw.confirmedOrdersMu.Lock()
+	gw.confirmedOrders = make(map[uint64]int64)
+	gw.confirmedOrdersMu.Unlock()
+
+	log.Println("State reconciliation complete")
 }
 
 // Shutdown gracefully shuts down the gateway
@@ -922,6 +1082,11 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 	}
 
 	clientOrderID := order.Body.ClientOrderId
+
+	if !gw.isUpstreamConnected() {
+		return gw.sendOrderRejection(clientStream, clientOrderID, "matching server is not available")
+	}
+
 	log.Printf("Processing new order from client: clientOrderId=%d\n", clientOrderID)
 
 	// For now, use dummy values for user/wager - in production these would come from auth/session
@@ -1024,6 +1189,11 @@ func (gw *Gateway) handleClientCancelOrder(ctx context.Context, clientStream pb.
 	}
 
 	orderID := cancel.Body.OrderId
+
+	if !gw.isUpstreamConnected() {
+		return errors.New("matching server is not available")
+	}
+
 	log.Printf("Processing cancel order from client: orderId=%d\n", orderID)
 
 	// Forward cancel to upstream matching server
