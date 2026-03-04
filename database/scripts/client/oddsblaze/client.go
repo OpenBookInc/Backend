@@ -10,6 +10,7 @@ import (
 const (
 	BaseURL       = "https://odds.oddsblaze.com"
 	RewindBaseURL = "https://rewind.odds.oddsblaze.com"
+	GraderBaseURL = "https://grader.oddsblaze.com"
 )
 
 // ClientConfig holds configuration for the OddsBlaze API client
@@ -75,6 +76,26 @@ func (c *Client) GetOdds(sportsbook, league string, timestamp *string) ([]byte, 
 
 	if resp.StatusCode() != 200 {
 		return nil, formatAPIError(resp.StatusCode(), baseURL, resp.String())
+	}
+
+	return resp.Body(), nil
+}
+
+// GetGraderResult fetches the grading result for a single OddsBlaze market ID.
+// Returns raw JSON bytes.
+func (c *Client) GetGraderResult(oddsBlazeID string) ([]byte, error) {
+	c.rateLimitWait()
+
+	resp, err := c.httpClient.R().
+		SetQueryParam("key", c.apiKey).
+		SetQueryParam("id", oddsBlazeID).
+		Get(GraderBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OddsBlaze grader result for id %s: %w", oddsBlazeID, err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, formatAPIError(resp.StatusCode(), GraderBaseURL, resp.String())
 	}
 
 	return resp.Body(), nil

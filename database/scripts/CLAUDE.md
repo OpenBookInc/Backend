@@ -36,6 +36,9 @@ go build ./...
 # Fetch player prop markets from OddsBlaze and persist to database
 ./update_available_markets.sh
 
+# Grade closed OddsBlaze markets and persist outcomes (Win/Loss)
+./grade_market_outcomes.sh
+
 # Download dependencies
 go mod download
 ```
@@ -171,6 +174,11 @@ OddsBlaze API → client/oddsblaze/ → fetcher/oddsblaze/ (raw API structs) →
 **Available Markets (Player Props):**
 ```
 OddsBlaze API → client/oddsblaze/ → fetcher/oddsblaze/ (raw API structs) → persister/oddsblaze/ (market transformation using entity_vendor_ids) → store/ → player_prop_markets table
+```
+
+**Market Outcome Grading:**
+```
+PostgreSQL (ungraded closed markets) → store/ → odds_blaze_ids[] → OddsBlaze Grader API → client/oddsblaze/ → fetcher/oddsblaze/ (grader response) → persister/oddsblaze/ (result mapping) → store/ → odds_blaze_market_outcomes table
 ```
 
 **Box Score Comparison (validates database against Sportradar):**
@@ -539,6 +547,12 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `ODDS_BLAZE_RATE_LIMIT_DELAY_MS`: Milliseconds between OddsBlaze API requests (must be positive)
 - `ODDS_BLAZE_TIMESTAMP`: *(optional)* Timestamp for historical data via rewind endpoint
 
+**Required (grade_market_outcomes):**
+- `ODDS_BLAZE_API_KEY`: OddsBlaze API key
+- `ODDS_BLAZE_LEAGUE`: League to grade (one of: `nba`, `nfl`)
+- `ODDS_BLAZE_RATE_LIMIT_DELAY_MS`: Milliseconds between OddsBlaze API requests (must be positive)
+- `ODDS_BLAZE_SPORTSBOOKS`: Required by config loader but not used by this script
+
 **Required (compare_*_box_score_data):**
 - `SPORTRADAR_API_KEYS`: Sportradar API keys (same as other Sportradar scripts)
 - `SPORTRADAR_ACCESS_LEVEL`: API access level (trial, production)
@@ -571,6 +585,7 @@ Uses Sportradar **trial** endpoints (v7 for NFL, v8 for NBA):
 **OddsBlaze:**
 - Odds (live): `https://odds.oddsblaze.com?key={key}&sportsbook={sportsbook}&league={league}&price=decimal`
 - Odds (historical): `https://rewind.odds.oddsblaze.com?key={key}&sportsbook={sportsbook}&league={league}&price=decimal&timestamp={timestamp}`
+- Grader: `https://grader.oddsblaze.com?key={key}&id={oddsBlazeID}` (grades a single market outcome)
 
 **Error handling**: 404 errors include full URL in error message for debugging. All API errors include response body and status code.
 

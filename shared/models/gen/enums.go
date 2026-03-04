@@ -94,6 +94,15 @@ const (
 	MarketEntityNflMarket MarketEntity = "nfl_market"
 )
 
+// MarketOutcomeResult represents the market_outcome_result database enum
+type MarketOutcomeResult string
+
+const (
+	MarketOutcomeResultWin MarketOutcomeResult = "Win"
+	MarketOutcomeResultLoss MarketOutcomeResult = "Loss"
+	MarketOutcomeResultVoid MarketOutcomeResult = "Void"
+)
+
 // MarketSide represents the market_side database enum
 type MarketSide string
 
