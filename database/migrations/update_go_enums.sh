@@ -34,10 +34,22 @@ else
     exit 1
 fi
 
-# Check if psql is installed
-if ! command -v psql &> /dev/null; then
+# Find psql: check PATH first, then common Homebrew keg-only locations
+PSQL_CMD=""
+if command -v psql &> /dev/null; then
+    PSQL_CMD="psql"
+else
+    for dir in /opt/homebrew/opt/postgresql@*/bin /usr/local/opt/postgresql@*/bin; do
+        if [ -x "$dir/psql" ]; then
+            PSQL_CMD="$dir/psql"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PSQL_CMD" ]; then
     echo -e "${RED}Error: psql is not installed${NC}"
-    echo "Install PostgreSQL client tools"
+    echo "Install PostgreSQL client tools: brew install postgresql@17"
     exit 1
 fi
 
@@ -115,7 +127,7 @@ ORDER BY t.typname;
 "
 
 # Execute query and store results
-ENUM_DATA=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DATABASE" -t -A -F'|' -c "$ENUM_QUERY" 2>&1)
+ENUM_DATA=$(PGPASSWORD="$PG_PASSWORD" "$PSQL_CMD" -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DATABASE" -t -A -F'|' -c "$ENUM_QUERY" 2>&1)
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error querying database:${NC}"

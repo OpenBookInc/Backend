@@ -25,6 +25,7 @@ GO_VERSION="1.25.4"
 RUST_VERSION="1.91.1"
 PROTOC_VERSION="33.2"
 GOOSE_VERSION="v3.26.0"
+POSTGRESQL_VERSION="17"
 
 # =============================================================================
 # Helper Functions
@@ -271,6 +272,48 @@ setup_goose() {
 }
 
 # =============================================================================
+# PostgreSQL Client Tools (psql)
+# =============================================================================
+setup_postgresql() {
+    print_header "Setting up PostgreSQL $POSTGRESQL_VERSION client tools"
+
+    # Check PATH first, then keg-only locations
+    if check_command psql; then
+        CURRENT_PSQL_VERSION=$(psql --version | grep -oE '[0-9]+' | head -1)
+        print_success "psql is already installed (version $CURRENT_PSQL_VERSION) and in PATH"
+        return 0
+    fi
+
+    # Check keg-only Homebrew location
+    BREW_PSQL="/opt/homebrew/opt/postgresql@${POSTGRESQL_VERSION}/bin/psql"
+    if [ -x "$BREW_PSQL" ]; then
+        print_success "psql found at $BREW_PSQL (keg-only, not in PATH)"
+        print_warning "To add to PATH, add this to your shell profile:"
+        print_info "export PATH=\"/opt/homebrew/opt/postgresql@${POSTGRESQL_VERSION}/bin:\$PATH\""
+        return 0
+    fi
+
+    if [ "$OS" == "macos" ]; then
+        if check_command brew; then
+            print_info "Installing postgresql@${POSTGRESQL_VERSION} via Homebrew..."
+            brew install "postgresql@${POSTGRESQL_VERSION}"
+            print_success "PostgreSQL $POSTGRESQL_VERSION installed via Homebrew"
+            print_warning "This is a keg-only formula. To add to PATH:"
+            print_info "export PATH=\"/opt/homebrew/opt/postgresql@${POSTGRESQL_VERSION}/bin:\$PATH\""
+            return 0
+        else
+            print_error "Homebrew not found. Please install Homebrew first: https://brew.sh"
+            return 1
+        fi
+    elif [ "$OS" == "linux" ]; then
+        print_info "On Linux, install via: sudo apt-get install postgresql-client-${POSTGRESQL_VERSION}"
+        return 1
+    fi
+
+    return 1
+}
+
+# =============================================================================
 # Verify Installation
 # =============================================================================
 verify_installation() {
@@ -321,7 +364,15 @@ verify_installation() {
     else
         print_warning "goose: not in PATH"
     fi
-    
+
+    if check_command psql; then
+        echo "psql:    $(psql --version | grep -oE '[0-9]+\.[0-9]+')"
+    elif [ -x "/opt/homebrew/opt/postgresql@${POSTGRESQL_VERSION}/bin/psql" ]; then
+        echo "psql:    $(/opt/homebrew/opt/postgresql@${POSTGRESQL_VERSION}/bin/psql --version | grep -oE '[0-9]+\.[0-9]+') (keg-only, not in PATH)"
+    else
+        print_warning "psql: NOT INSTALLED"
+    fi
+
     echo "----------------------------------------"
     echo ""
 }
@@ -339,6 +390,7 @@ print_version_reference() {
     echo "Rust:                  $RUST_VERSION"
     echo "protoc:                $PROTOC_VERSION"
     echo "goose:                 $GOOSE_VERSION"
+    echo "postgresql:            $POSTGRESQL_VERSION"
     echo "protoc-gen-go:         (installed via go install)"
     echo "protoc-gen-go-grpc:    (installed via go install)"
     echo "----------------------------------------"
@@ -396,7 +448,8 @@ main() {
     setup_protoc
     setup_protoc_go_plugins
     setup_goose
-    
+    setup_postgresql
+
     verify_installation
     print_version_reference
     
