@@ -63,7 +63,7 @@ func main() {
 
 	// Get all games with box scores from database within date range
 	fmt.Println("\nQuerying games with box scores from database...")
-	gameIDs, err := store_nfl.GetAllNFLGamesWithBoxScores(dbStore, ctx, cfg.NFLGameDateStartInclusive, cfg.NFLGameDateEndInclusive)
+	gameIDs, err := store_nfl.GetAllNFLGamesWithBoxScores(dbStore, ctx, cfg.NFLGameDateStartInclusive, cfg.NFLGameDateEndInclusive, cfg.TimeZoneForDate)
 	if err != nil {
 		fatal("Failed to get games with box scores: %v", err)
 	}

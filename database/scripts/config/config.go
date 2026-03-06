@@ -88,6 +88,9 @@ type CompareBoxScoreConfig struct {
 	// NBA Date Range (inclusive)
 	NBAGameDateStartInclusive time.Time
 	NBAGameDateEndInclusive   time.Time
+
+	// TimeZoneForDate is the IANA timezone name used to determine which calendar date a game falls on
+	TimeZoneForDate string
 }
 
 // BatchUpdateConfig holds configuration for the batch update script
@@ -468,6 +471,7 @@ func LoadCompareBoxScoreConfig() *CompareBoxScoreConfig {
 		NFLGameDateEndInclusive:              parseDate(os.Getenv("NFL_GAME_DATE_END_INCLUSIVE")),
 		NBAGameDateStartInclusive:            parseDate(os.Getenv("NBA_GAME_DATE_START_INCLUSIVE")),
 		NBAGameDateEndInclusive:              parseDate(os.Getenv("NBA_GAME_DATE_END_INCLUSIVE")),
+		TimeZoneForDate:                      os.Getenv("TIME_ZONE_FOR_DATE"),
 	}
 }
 
@@ -532,6 +536,13 @@ func (c *CompareBoxScoreConfig) Validate() error {
 	}
 	if c.NBAGameDateStartInclusive.After(c.NBAGameDateEndInclusive) {
 		return fmt.Errorf("NBA_GAME_DATE_START_INCLUSIVE must be before or equal to NBA_GAME_DATE_END_INCLUSIVE")
+	}
+
+	if c.TimeZoneForDate == "" {
+		return fmt.Errorf("missing required environment variable: TIME_ZONE_FOR_DATE (IANA timezone, e.g. America/Los_Angeles)")
+	}
+	if _, err := time.LoadLocation(c.TimeZoneForDate); err != nil {
+		return fmt.Errorf("invalid TIME_ZONE_FOR_DATE '%s': %w", c.TimeZoneForDate, err)
 	}
 
 	return nil

@@ -203,19 +203,21 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID string)
 
 // GetAllNBAGamesWithBoxScores returns all game IDs that have NBA box score entries
 // within the specified date range (inclusive).
+// Uses the provided IANA timezone to determine which calendar date a game falls on.
 // Filters by scheduled_start_time and only considers non-deleted box scores.
 // Returns game IDs ordered by scheduled_start_time ascending (earliest games first).
-func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]string, error) {
+func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time, timeZone string) ([]string, error) {
 	query := `
 		SELECT DISTINCT bs.game_id, g.scheduled_start_time
 		FROM nba_box_scores bs
 		JOIN games g ON bs.game_id = g.id
-		WHERE g.scheduled_start_time >= $1 AND DATE(g.scheduled_start_time) <= DATE($2)
+		WHERE (g.scheduled_start_time AT TIME ZONE $3)::date >= $1
+		  AND (g.scheduled_start_time AT TIME ZONE $3)::date <= $2
 		  AND bs.vendor_deleted = FALSE
 		ORDER BY g.scheduled_start_time
 	`
 
-	rows, err := s.Pool().Query(ctx, query, startDate, endDate)
+	rows, err := s.Pool().Query(ctx, query, startDate, endDate, timeZone)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query games with NBA box scores: %w", err)
 	}
