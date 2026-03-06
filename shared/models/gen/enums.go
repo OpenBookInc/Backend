@@ -3,43 +3,6 @@
 
 package gen
 
-// BetEvent represents the bet_event_type database enum
-type BetEvent string
-
-const (
-	BetEventGame BetEvent = "game"
-	BetEventOutright BetEvent = "outright"
-)
-
-// BetStatusEnum represents the bet_status_enum database enum
-type BetStatusEnum string
-
-const (
-	BetStatusEnumLost BetStatusEnum = "lost"
-	BetStatusEnumPaid BetStatusEnum = "paid"
-	BetStatusEnumCancelled BetStatusEnum = "cancelled"
-	BetStatusEnumPending BetStatusEnum = "pending"
-)
-
-// Bet represents the bet_type database enum
-type Bet string
-
-const (
-	BetSpread Bet = "spread"
-	BetMoney Bet = "money"
-	BetTotal Bet = "total"
-	BetOutright Bet = "outright"
-	BetProp Bet = "prop"
-)
-
-// Contender represents the contender_type database enum
-type Contender string
-
-const (
-	ContenderIndividual Contender = "individual"
-	ContenderTeam Contender = "team"
-)
-
 // Entity represents the entity_type database enum
 type Entity string
 
@@ -49,14 +12,24 @@ const (
 	EntityGame Entity = "game"
 )
 
-// Event represents the event_type database enum
-type Event string
+// ExchangeOrderStatus represents the exchange_order_status database enum
+type ExchangeOrderStatus string
 
 const (
-	EventDivisionWinner Event = "division_winner"
-	EventConferenceWinner Event = "conference_winner"
-	EventPostseasonChampion Event = "postseason_champion"
-	EventLeagueMvp Event = "league_mvp"
+	ExchangeOrderStatusReceivedByBackend ExchangeOrderStatus = "received_by_backend"
+	ExchangeOrderStatusSubmittedToExchange ExchangeOrderStatus = "submitted_to_exchange"
+	ExchangeOrderStatusRestingOnExchange ExchangeOrderStatus = "resting_on_exchange"
+	ExchangeOrderStatusCancelledByExchange ExchangeOrderStatus = "cancelled_by_exchange"
+	ExchangeOrderStatusCancelledByUser ExchangeOrderStatus = "cancelled_by_user"
+	ExchangeOrderStatusFullyFilled ExchangeOrderStatus = "fully_filled"
+)
+
+// ExchangeOrder represents the exchange_order_type database enum
+type ExchangeOrder string
+
+const (
+	ExchangeOrderLimit ExchangeOrder = "limit"
+	ExchangeOrderMarket ExchangeOrder = "market"
 )
 
 // GameStatus represents the game_status_type database enum
@@ -109,18 +82,6 @@ type MarketSide string
 const (
 	MarketSideOver MarketSide = "over"
 	MarketSideUnder MarketSide = "under"
-)
-
-// OrderStatusEnum represents the order_status_enum database enum
-type OrderStatusEnum string
-
-const (
-	OrderStatusEnumReceivedByBackend OrderStatusEnum = "received_by_backend"
-	OrderStatusEnumSubmittedToMatchingEngine OrderStatusEnum = "submitted_to_matching_engine"
-	OrderStatusEnumRestingOnMatchingEngine OrderStatusEnum = "resting_on_matching_engine"
-	OrderStatusEnumCancelledByExchange OrderStatusEnum = "cancelled_by_exchange"
-	OrderStatusEnumCancelledByUser OrderStatusEnum = "cancelled_by_user"
-	OrderStatusEnumFullyFilled OrderStatusEnum = "fully_filled"
 )
 
 // Period represents the period_type database enum
