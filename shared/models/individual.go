@@ -8,7 +8,7 @@ import (
 
 // Individual represents a player/individual athlete
 type Individual struct {
-	ID               int       `json:"id"`                // Database ID (auto-increment)
+	ID               string    `json:"id"`                // Database UUID
 	DisplayName      string    `json:"display_name"`      // Full display name
 	AbbreviatedName  string    `json:"abbreviated_name"`  // Short name
 	DateOfBirth      *time.Time `json:"date_of_birth"`    // Can be null in DB
@@ -23,7 +23,7 @@ type Individual struct {
 func (i *Individual) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s (#%s) - %s\n", i.DisplayName, i.JerseyNumber, i.Position))
-	sb.WriteString(fmt.Sprintf("  DB ID: %d | Sportradar ID: %s\n", i.ID, i.SportradarID))
+	sb.WriteString(fmt.Sprintf("  DB ID: %s | Sportradar ID: %s\n", i.ID, i.SportradarID))
 	if i.DateOfBirth != nil {
 		sb.WriteString(fmt.Sprintf("  Birth Date: %s\n", i.DateOfBirth.Format("2006-01-02")))
 	}

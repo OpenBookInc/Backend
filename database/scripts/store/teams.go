@@ -40,7 +40,7 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 		RETURNING id
 	`
 
-	var id int
+	var id string
 	err := s.pool.QueryRow(ctx, query,
 		team.Name,
 		team.Market,
@@ -80,7 +80,7 @@ func (s *Store) UpsertTeam(ctx context.Context, team *TeamForUpsert) error {
 
 // GetTeamByID retrieves a team by database ID.
 // Uses the registry for caching and resolves the nested Division pointer.
-func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
+func (s *Store) GetTeamByID(ctx context.Context, id string) (*models.Team, error) {
 	// Check registry first
 	if team := models.Registry.GetTeam(id); team != nil {
 		return team, nil
@@ -106,13 +106,13 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 		&team.VenueState,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get team with id %d: %w", id, err)
+		return nil, fmt.Errorf("failed to get team with id %s: %w", id, err)
 	}
 
 	// Resolve nested Division pointer
 	division, err := s.GetDivisionByID(ctx, int(team.DivisionID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve division for team %d: %w", id, err)
+		return nil, fmt.Errorf("failed to resolve division for team %s: %w", id, err)
 	}
 	team.Division = division
 
@@ -121,7 +121,7 @@ func (s *Store) GetTeamByID(ctx context.Context, id int) (*models.Team, error) {
 }
 
 // GetTeamsByLeague retrieves all teams for a given league name in a single query.
-// JOINs through divisions → conferences → leagues and fetches all columns inline,
+// JOINs through divisions -> conferences -> leagues and fetches all columns inline,
 // registering the full hierarchy (league, conference, division, team) in the registry.
 func (s *Store) GetTeamsByLeague(ctx context.Context, leagueName string) ([]*models.Team, error) {
 	query := `

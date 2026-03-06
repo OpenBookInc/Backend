@@ -23,8 +23,8 @@ import (
 
 // NBABoxScoreForUpsert contains the data needed to upsert a box score
 type NBABoxScoreForUpsert struct {
-	GameID                 int
-	IndividualID           int
+	GameID                 string
+	IndividualID           string
 	TwoPointAttempts       decimal.Decimal
 	TwoPointMakes          decimal.Decimal
 	ThreePointAttempts     decimal.Decimal
@@ -96,7 +96,7 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 		boxScore.PersonalFoulsCommitted,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to upsert box score for game_id %d, individual_id %d: %w",
+		return fmt.Errorf("failed to upsert box score for game_id %s, individual_id %s: %w",
 			boxScore.GameID, boxScore.IndividualID, err)
 	}
 
@@ -104,16 +104,17 @@ func UpsertNBABoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 }
 
 // MarkNBABoxScoreDeleted marks an NBA box score as vendor_deleted = TRUE.
+// Uses (game_id, individual_id) composite key since box scores no longer have an id column.
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
-func MarkNBABoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, boxScoreID int) error {
+func MarkNBABoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, gameID string, individualID string) error {
 	query := `
 		UPDATE nba_box_scores
 		SET vendor_deleted = TRUE, updated_at = NOW()
-		WHERE id = $1
+		WHERE game_id = $1 AND individual_id = $2
 	`
-	_, err := tx.Exec(ctx, query, boxScoreID)
+	_, err := tx.Exec(ctx, query, gameID, individualID)
 	if err != nil {
-		return fmt.Errorf("failed to mark box score as deleted (box_score_id: %d): %w", boxScoreID, err)
+		return fmt.Errorf("failed to mark box score as deleted (game_id: %s, individual_id: %s): %w", gameID, individualID, err)
 	}
 
 	return nil
@@ -123,16 +124,16 @@ func MarkNBABoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, boxS
 // Uses the registry for caching Game and Individual instances.
 // Only returns box scores where vendor_deleted = FALSE.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
-func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nba.IndividualBoxScore, error) {
+func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID string) ([]*models_nba.IndividualBoxScore, error) {
 	// Get the game from registry (resolves teams automatically)
 	game, err := s.GetGameByID(ctx, gameID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get game %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to get game %s: %w", gameID, err)
 	}
 
 	query := `
 		SELECT
-			bs.id, bs.individual_id,
+			bs.individual_id,
 			bs.two_point_attempts, bs.two_point_makes,
 			bs.three_point_attempts, bs.three_point_makes,
 			bs.free_throw_attempts, bs.free_throw_makes,
@@ -145,17 +146,16 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 
 	rows, err := s.Pool().Query(ctx, query, gameID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query box scores for game_id %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to query box scores for game_id %s: %w", gameID, err)
 	}
 	defer rows.Close()
 
 	var results []*models_nba.IndividualBoxScore
 	for rows.Next() {
 		stats := &models_nba.NBAStats{}
-		var individualID int
+		var individualID string
 
 		err := rows.Scan(
-			&stats.ID,
 			&individualID,
 			&stats.TwoPointAttempts,
 			&stats.TwoPointMakes,
@@ -178,7 +178,7 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 		// Get individual from registry
 		individual, err := s.GetIndividualByID(ctx, individualID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get individual %d: %w", individualID, err)
+			return nil, fmt.Errorf("failed to get individual %s: %w", individualID, err)
 		}
 
 		// Set pointer fields
@@ -205,7 +205,7 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID int) ([
 // within the specified date range (inclusive).
 // Filters by scheduled_start_time and only considers non-deleted box scores.
 // Returns game IDs ordered by scheduled_start_time ascending (earliest games first).
-func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]int, error) {
+func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate, endDate time.Time) ([]string, error) {
 	query := `
 		SELECT DISTINCT bs.game_id, g.scheduled_start_time
 		FROM nba_box_scores bs
@@ -221,9 +221,9 @@ func GetAllNBAGamesWithBoxScores(s *store.Store, ctx context.Context, startDate,
 	}
 	defer rows.Close()
 
-	var gameIDs []int
+	var gameIDs []string
 	for rows.Next() {
-		var gameID int
+		var gameID string
 		var scheduledStartTime time.Time
 		if err := rows.Scan(&gameID, &scheduledStartTime); err != nil {
 			return nil, fmt.Errorf("failed to scan game_id: %w", err)

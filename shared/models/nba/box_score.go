@@ -17,7 +17,6 @@ import (
 
 // NBAStats holds aggregated statistics for a player in a single game
 type NBAStats struct {
-	ID                     int                   // Database ID (auto-increment)
 	Game                   *models.Game          `json:"-"` // Game information (pointer to registry instance)
 	Individual             *models.Individual    `json:"-"` // Player information (pointer to registry instance)
 	TwoPointAttempts       decimal.Decimal       // Two-point field goal attempts
@@ -69,7 +68,7 @@ func (bs *NBABoxScore) String() string {
 			awayTeamName = fmt.Sprintf("%s %s", bs.Game.TeamB.Market, bs.Game.TeamB.Name)
 		}
 		sb.WriteString(fmt.Sprintf("NBA Box Score: %s vs %s\n", awayTeamName, homeTeamName))
-		sb.WriteString(fmt.Sprintf("Game ID: %d | %s\n", bs.Game.ID, bs.Game.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
+		sb.WriteString(fmt.Sprintf("Game ID: %s | %s\n", bs.Game.ID, bs.Game.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
 	} else {
 		sb.WriteString("NBA Box Score: Unknown Game\n")
 	}
@@ -109,7 +108,7 @@ func (bs *NBABoxScore) StringWithRosters(awayRoster, homeRoster *models.Roster) 
 			awayTeamName = fmt.Sprintf("%s %s", bs.Game.TeamB.Market, bs.Game.TeamB.Name)
 		}
 		sb.WriteString(fmt.Sprintf("NBA Box Score: %s vs %s\n", awayTeamName, homeTeamName))
-		sb.WriteString(fmt.Sprintf("Game ID: %d | %s\n", bs.Game.ID, bs.Game.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
+		sb.WriteString(fmt.Sprintf("Game ID: %s | %s\n", bs.Game.ID, bs.Game.ScheduledStartTime.Format("2006-01-02 15:04:05 MST")))
 	} else {
 		sb.WriteString("NBA Box Score: Unknown Game\n")
 	}
@@ -126,13 +125,11 @@ func (bs *NBABoxScore) StringWithRosters(awayRoster, homeRoster *models.Roster) 
 			continue
 		}
 
-		individualID := int64(player.Individual.ID)
-
 		// Check if player is in away roster
 		inAwayRoster := false
 		if awayRoster != nil {
 			for _, rosterID := range awayRoster.IndividualIDs {
-				if rosterID == individualID {
+				if rosterID == player.Individual.ID {
 					inAwayRoster = true
 					break
 				}
@@ -143,7 +140,7 @@ func (bs *NBABoxScore) StringWithRosters(awayRoster, homeRoster *models.Roster) 
 		inHomeRoster := false
 		if homeRoster != nil {
 			for _, rosterID := range homeRoster.IndividualIDs {
-				if rosterID == individualID {
+				if rosterID == player.Individual.ID {
 					inHomeRoster = true
 					break
 				}

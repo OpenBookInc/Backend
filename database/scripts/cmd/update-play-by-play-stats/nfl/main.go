@@ -37,7 +37,7 @@ func main() {
 	fmt.Println(strings.Repeat("=", 72))
 	fmt.Println("NFL Play-by-Play Data Updater")
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Printf("Game ID (database): %d\n", cfg.NFLGameID)
+	fmt.Printf("Game ID (database): %s\n", cfg.NFLGameID)
 	fmt.Println(strings.Repeat("=", 72))
 
 	ctx := context.Background()
@@ -60,7 +60,7 @@ func main() {
 	fmt.Println("\nLooking up game in database...")
 	game, err := dbStore.GetGameByID(ctx, cfg.NFLGameID)
 	if err != nil {
-		fatal("Failed to lookup game with id %d: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NFLGameID, err)
+		fatal("Failed to lookup game with id %s: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NFLGameID, err)
 	}
 	fmt.Printf("Found game with sportradar_id: %s\n", game.SportradarID)
 

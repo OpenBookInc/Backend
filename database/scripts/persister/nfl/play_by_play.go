@@ -50,7 +50,7 @@ func PersistMissingNFLIndividuals(ctx context.Context, dbStore *store.Store, api
 // 2. Beginning the transaction and passing it to this function
 // 3. Calling CheckAndUpdateNFLPlayByPlayDeletions() after this function
 // 4. Committing the transaction
-func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
+func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, pbp *fetcher_nfl.PlayByPlayResponse) error {
 	// Step 1: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
@@ -80,7 +80,7 @@ func PersistNFLPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, 
 // persistDrive upserts a drive and all its plays within the transaction.
 // Only processes drives with type "drive" or "play" (skips "event" entries like timeouts).
 // Foreign keys are resolved via subqueries in the store layer.
-func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, period *fetcher_nfl.Period, drive *fetcher_nfl.Drive) error {
+func persistDrive(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, period *fetcher_nfl.Period, drive *fetcher_nfl.Drive) error {
 	// Skip non-drive entries (e.g., type "event" for timeouts, end-of-period markers)
 	if !shouldPersistDrive(drive) {
 		return nil
@@ -333,7 +333,7 @@ func parseTimestamp(ts string) (time.Time, error) {
 // - For plays with Deleted=true, marks the play as deleted
 //
 // The caller is responsible for committing the transaction after this function returns.
-func CheckAndUpdateNFLPlayByPlayDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nfl.PlayByPlayResponse) error {
+func CheckAndUpdateNFLPlayByPlayDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, pbp *fetcher_nfl.PlayByPlayResponse) error {
 	for _, period := range pbp.Periods {
 		for _, drive := range period.PBP {
 			// Check if the drive is marked as deleted

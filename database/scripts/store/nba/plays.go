@@ -12,7 +12,7 @@ import (
 
 // NBAPlayForUpsert contains the data needed to upsert an NBA play
 type NBAPlayForUpsert struct {
-	GameID          int
+	GameID          string
 	SportradarID    string
 	VendorSequence  decimal.Decimal
 	PeriodType      string // DB enum value as string (e.g., "quarter", "overtime")
@@ -74,7 +74,7 @@ type NBAPlayBasic struct {
 
 // GetNBAPlayBySportradarID retrieves an NBA play by game_id and sportradar_id.
 // Only returns plays where vendor_deleted = FALSE.
-func GetNBAPlayBySportradarID(s *store.Store, ctx context.Context, gameID int, sportradarID string) (*NBAPlayBasic, error) {
+func GetNBAPlayBySportradarID(s *store.Store, ctx context.Context, gameID string, sportradarID string) (*NBAPlayBasic, error) {
 	query := `
 		SELECT id
 		FROM nba_plays

@@ -83,16 +83,16 @@ func main() {
 	fmt.Println(strings.Repeat("-", 72))
 
 	for i, gameID := range gameIDs {
-		fmt.Printf("\n[%d/%d] Comparing game ID %d...\n", i+1, len(gameIDs), gameID)
+		fmt.Printf("\n[%d/%d] Comparing game ID %s...\n", i+1, len(gameIDs), gameID)
 
 		// Read database box score
 		dbBoxScore, err := reader_nfl.ReadNFLBoxScore(ctx, dbStore, gameID)
 		if err != nil {
-			fatal("Failed to read database box score for game %d: %v", gameID, err)
+			fatal("Failed to read database box score for game %s: %v", gameID, err)
 		}
 
 		if dbBoxScore.Game == nil || dbBoxScore.Game.TeamA == nil || dbBoxScore.Game.TeamB == nil {
-			fatal("Game %d is missing team information", gameID)
+			fatal("Game %s is missing team information", gameID)
 		}
 
 		game := dbBoxScore.Game

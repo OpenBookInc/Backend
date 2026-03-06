@@ -17,7 +17,7 @@ import (
 
 // NBADiscrepancy represents a single stat discrepancy
 type NBADiscrepancy struct {
-	GameID          int
+	GameID          string
 	GameSportradarID    string
 	PlayerName      string
 	PlayerSportradarID  string
@@ -27,13 +27,13 @@ type NBADiscrepancy struct {
 }
 
 func (d *NBADiscrepancy) Error() string {
-	return fmt.Sprintf("Discrepancy found for game %d (vendor: %s)\n  Player: %s (vendor: %s)\n  Field: %s\n    Database: %s\n    Sportradar: %s",
+	return fmt.Sprintf("Discrepancy found for game %s (vendor: %s)\n  Player: %s (vendor: %s)\n  Field: %s\n    Database: %s\n    Sportradar: %s",
 		d.GameID, d.GameSportradarID, d.PlayerName, d.PlayerSportradarID, d.Field, d.DBValue.String(), d.SportradarValue.String())
 }
 
 // NBAMissingPlayerError represents a player missing from one source
 type NBAMissingPlayerError struct {
-	GameID         int
+	GameID         string
 	GameSportradarID   string
 	PlayerName     string
 	PlayerSportradarID string
@@ -41,13 +41,13 @@ type NBAMissingPlayerError struct {
 }
 
 func (e *NBAMissingPlayerError) Error() string {
-	return fmt.Sprintf("Player mismatch for game %d (vendor: %s)\n  Player: %s (vendor: %s)\n  Missing in: %s",
+	return fmt.Sprintf("Player mismatch for game %s (vendor: %s)\n  Player: %s (vendor: %s)\n  Missing in: %s",
 		e.GameID, e.GameSportradarID, e.PlayerName, e.PlayerSportradarID, e.MissingIn)
 }
 
 // CompareNBABoxScores compares database box score with Sportradar box score
 // Returns nil if all stats match, otherwise returns the first discrepancy found
-func CompareNBABoxScores(gameID int, gameSportradarID string, dbBoxScore *models_nba.NBABoxScore, sportradarBoxScore *models_nba.NBABoxScore) error {
+func CompareNBABoxScores(gameID string, gameSportradarID string, dbBoxScore *models_nba.NBABoxScore, sportradarBoxScore *models_nba.NBABoxScore) error {
 	// Build map of Sportradar players by vendor ID
 	sportradarPlayers := make(map[string]*models_nba.IndividualBoxScore)
 	for _, player := range sportradarBoxScore.Players {
@@ -117,7 +117,7 @@ func CompareNBABoxScores(gameID int, gameSportradarID string, dbBoxScore *models
 // compareNBAPlayerStats compares individual player stats using reflection to iterate
 // over all Decimal fields. This makes the comparison future-proof when new statistical
 // fields are added to NBAStats.
-func compareNBAPlayerStats(gameID int, gameSportradarID string, playerName string, playerSportradarID string, dbStats *models_nba.NBAStats, srStats *models_nba.NBAStats) error {
+func compareNBAPlayerStats(gameID string, gameSportradarID string, playerName string, playerSportradarID string, dbStats *models_nba.NBAStats, srStats *models_nba.NBAStats) error {
 	dbVal := reflect.ValueOf(*dbStats)
 	srVal := reflect.ValueOf(*srStats)
 	dbType := dbVal.Type()

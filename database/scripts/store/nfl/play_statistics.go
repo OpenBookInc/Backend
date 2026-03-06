@@ -211,7 +211,7 @@ func GetNFLPlayStatisticsByPlayID(s *store.Store, ctx context.Context, playID in
 // Joins through nfl_plays -> nfl_drives to filter by game_id.
 // Only returns statistics where the associated play and drive are not deleted.
 // Returns all PlayStatistic records associated with plays in the specified game.
-func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID int) ([]*models_nfl.PlayStatistic, error) {
+func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID string) ([]*models_nfl.PlayStatistic, error) {
 	query := `
 		SELECT ps.id, ps.play_id, ps.individual_id, ps.stat_type,
 		       ps.passing_attempts, ps.rushing_attempts, ps.receiving_targets,
@@ -233,7 +233,7 @@ func GetNFLPlayStatisticsByGameID(s *store.Store, ctx context.Context, gameID in
 
 	rows, err := s.Pool().Query(ctx, query, gameID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query statistics for game_id %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to query statistics for game_id %s: %w", gameID, err)
 	}
 	defer rows.Close()
 

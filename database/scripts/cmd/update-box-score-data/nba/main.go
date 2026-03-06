@@ -28,13 +28,13 @@ func main() {
 	// Load configuration from environment file and variables
 	cfg, err := config.LoadBoxScoreConfigFromFile(*envFile)
 	if err != nil {
-		fatal("Failed to load configuration: %v\nPlease ensure NBA_GAME_ID is set as a database integer ID in .env file or as an environment variable", err)
+		fatal("Failed to load configuration: %v\nPlease ensure NBA_GAME_ID is set as a database UUID in .env file or as an environment variable", err)
 	}
 
 	fmt.Println(strings.Repeat("=", 72))
 	fmt.Println("NBA Box Score Data Generator")
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Printf("Game ID (database): %d\n", cfg.NBAGameID)
+	fmt.Printf("Game ID (database): %s\n", cfg.NBAGameID)
 	fmt.Println(strings.Repeat("=", 72))
 
 	ctx := context.Background()

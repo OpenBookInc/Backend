@@ -39,13 +39,13 @@ type MatchedEntities struct {
 
 // gameKey is used to look up games by the team pair and scheduled start time
 type gameKey struct {
-	TeamIDA            int
-	TeamIDB            int
+	TeamIDA            string
+	TeamIDB            string
 	ScheduledStartTime time.Time
 }
 
 // makeGameKey creates a normalized game key with sorted team IDs so order doesn't matter
-func makeGameKey(teamIDA, teamIDB int, scheduledStartTime time.Time) gameKey {
+func makeGameKey(teamIDA, teamIDB string, scheduledStartTime time.Time) gameKey {
 	if teamIDA > teamIDB {
 		teamIDA, teamIDB = teamIDB, teamIDA
 	}
@@ -129,7 +129,7 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 	}
 
 	// Build individual ID → individual map
-	individualByID := make(map[int]*models.Individual, len(dbIndividuals))
+	individualByID := make(map[string]*models.Individual, len(dbIndividuals))
 	for _, ind := range dbIndividuals {
 		individualByID[ind.ID] = ind
 	}
@@ -141,15 +141,14 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 	}
 
 	// Build per-team roster: team_id → []*Individual
-	teamRoster := make(map[int][]*models.Individual)
+	teamRoster := make(map[string][]*models.Individual)
 	for _, roster := range rosters {
-		teamID := int(roster.TeamID)
 		for _, individualID := range roster.IndividualIDs {
-			ind, ok := individualByID[int(individualID)]
+			ind, ok := individualByID[individualID]
 			if !ok {
 				continue
 			}
-			teamRoster[teamID] = append(teamRoster[teamID], ind)
+			teamRoster[roster.TeamID] = append(teamRoster[roster.TeamID], ind)
 		}
 	}
 
@@ -183,7 +182,7 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 		}
 
 		if dbInd == nil {
-			return nil, fmt.Errorf("unmatched OddsBlaze individual: %s #%s on %s (OddsBlaze ID: %s) - no DB individual matched by name or jersey+last-name on team %s %s (ID: %d) in league %s",
+			return nil, fmt.Errorf("unmatched OddsBlaze individual: %s #%s on %s (OddsBlaze ID: %s) - no DB individual matched by name or jersey+last-name on team %s %s (ID: %s) in league %s",
 				ri.Name, ri.JerseyNumber, dbTeam.Alias, ri.OddsBlazeID, dbTeam.Market, dbTeam.Name, dbTeam.ID, leagueName)
 		}
 
@@ -206,7 +205,7 @@ func matchGames(ctx context.Context, dbStore *store.Store, leagueName string, re
 	// Build map from (sorted team IDs, scheduled start time) to DB game
 	gameByKey := make(map[gameKey]*models.Game, len(dbGames))
 	for _, g := range dbGames {
-		key := makeGameKey(int(g.ContenderIDA), int(g.ContenderIDB), g.ScheduledStartTime)
+		key := makeGameKey(g.ContenderIDA, g.ContenderIDB, g.ScheduledStartTime)
 		gameByKey[key] = g
 	}
 
@@ -236,7 +235,7 @@ func matchGames(ctx context.Context, dbStore *store.Store, leagueName string, re
 				}
 			}
 			sort.Strings(availableTimes)
-			return nil, fmt.Errorf("unmatched OddsBlaze game: %s (%s vs %s at %s) - no DB game found for team pair (%d, %d) at that time. Available times: %v",
+			return nil, fmt.Errorf("unmatched OddsBlaze game: %s (%s vs %s at %s) - no DB game found for team pair (%s, %s) at that time. Available times: %v",
 				rg.OddsBlazeID, homeTeam.Alias, awayTeam.Alias, rg.ScheduledStartTime.Format(time.RFC3339),
 				homeTeam.ID, awayTeam.ID, availableTimes)
 		}

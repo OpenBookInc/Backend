@@ -12,8 +12,8 @@ import (
 // GameForUpsert contains the data needed to upsert a game
 type GameForUpsert struct {
 	SportradarID       string
-	HomeTeamID         int
-	AwayTeamID         int
+	HomeTeamID         string
+	AwayTeamID         string
 	ScheduledStartTime time.Time
 }
 
@@ -32,7 +32,7 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 		RETURNING id
 	`
 
-	var id int
+	var id string
 	err := s.pool.QueryRow(ctx, query,
 		game.HomeTeamID,
 		game.AwayTeamID,
@@ -55,8 +55,8 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 
 	if _, err := models.Registry.RegisterGame(&models.Game{
 		ID:                 id,
-		ContenderIDA:       int64(game.HomeTeamID),
-		ContenderIDB:       int64(game.AwayTeamID),
+		ContenderIDA:       game.HomeTeamID,
+		ContenderIDB:       game.AwayTeamID,
 		SportradarID:       game.SportradarID,
 		ScheduledStartTime: game.ScheduledStartTime,
 		TeamA:              teamA,
@@ -69,7 +69,7 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 
 // GetGameByID retrieves a game by database ID.
 // Uses the registry for caching and resolves the nested Team pointers.
-func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, error) {
+func (s *Store) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
 	// Check registry first
 	if game := models.Registry.GetGame(gameID); game != nil {
 		return game, nil
@@ -91,19 +91,19 @@ func (s *Store) GetGameByID(ctx context.Context, gameID int) (*models.Game, erro
 		&game.ScheduledStartTime,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get game with id %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to get game with id %s: %w", gameID, err)
 	}
 
 	// Resolve nested Team pointers
-	teamA, err := s.GetTeamByID(ctx, int(game.ContenderIDA))
+	teamA, err := s.GetTeamByID(ctx, game.ContenderIDA)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve team A for game %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to resolve team A for game %s: %w", gameID, err)
 	}
 	game.TeamA = teamA
 
-	teamB, err := s.GetTeamByID(ctx, int(game.ContenderIDB))
+	teamB, err := s.GetTeamByID(ctx, game.ContenderIDB)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve team B for game %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to resolve team B for game %s: %w", gameID, err)
 	}
 	game.TeamB = teamB
 
@@ -139,13 +139,13 @@ func (s *Store) GetGameBySportradarID(ctx context.Context, sportradarID string) 
 	}
 
 	// Resolve nested Team pointers
-	teamA, err := s.GetTeamByID(ctx, int(game.ContenderIDA))
+	teamA, err := s.GetTeamByID(ctx, game.ContenderIDA)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve team A for game %s: %w", sportradarID, err)
 	}
 	game.TeamA = teamA
 
-	teamB, err := s.GetTeamByID(ctx, int(game.ContenderIDB))
+	teamB, err := s.GetTeamByID(ctx, game.ContenderIDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve team B for game %s: %w", sportradarID, err)
 	}
@@ -157,12 +157,12 @@ func (s *Store) GetGameBySportradarID(ctx context.Context, sportradarID string) 
 
 // GetGameWithTeamsByID retrieves a game by database ID with TeamA and TeamB populated.
 // Delegates to GetGameByID which now automatically resolves team pointers via the registry.
-func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID int) (*models.Game, error) {
+func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID string) (*models.Game, error) {
 	return s.GetGameByID(ctx, gameID)
 }
 
 // GetGamesByLeague retrieves all games for a given league name in a single query.
-// JOINs through teams → divisions → conferences → leagues and fetches all game columns inline.
+// JOINs through teams -> divisions -> conferences -> leagues and fetches all game columns inline.
 // Expects teams to already be registered in the registry (call GetTeamsByLeague first).
 func (s *Store) GetGamesByLeague(ctx context.Context, leagueName string) ([]*models.Game, error) {
 	query := `
@@ -193,8 +193,8 @@ func (s *Store) GetGamesByLeague(ctx context.Context, leagueName string) ([]*mod
 		}
 
 		// Resolve team pointers from registry (teams should already be loaded)
-		game.TeamA = models.Registry.GetTeam(int(game.ContenderIDA))
-		game.TeamB = models.Registry.GetTeam(int(game.ContenderIDB))
+		game.TeamA = models.Registry.GetTeam(game.ContenderIDA)
+		game.TeamB = models.Registry.GetTeam(game.ContenderIDB)
 
 		regGame, err := models.Registry.RegisterGame(&game)
 		if err != nil {
@@ -235,9 +235,9 @@ func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName str
 	}
 	defer rows.Close()
 
-	var gameIDs []int
+	var gameIDs []string
 	for rows.Next() {
-		var gameID int
+		var gameID string
 		if err := rows.Scan(&gameID); err != nil {
 			return nil, fmt.Errorf("failed to scan game id: %w", err)
 		}
@@ -253,7 +253,7 @@ func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName str
 	for _, gameID := range gameIDs {
 		game, err := s.GetGameByID(ctx, gameID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get game %d: %w", gameID, err)
+			return nil, fmt.Errorf("failed to get game %s: %w", gameID, err)
 		}
 		games = append(games, game)
 	}
@@ -277,7 +277,7 @@ func (s *Store) GetGameByVendorID(ctx context.Context, vendor gen.Vendor, vendor
 		WHERE entity_type = $1 AND vendor = $2 AND vendor_id = $3
 	`
 
-	var entityID int
+	var entityID string
 	err := s.pool.QueryRow(ctx, query, gen.EntityGame, vendor, vendorID).Scan(&entityID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find game with vendor_id %s (vendor=%s): %w", vendorID, vendor, err)

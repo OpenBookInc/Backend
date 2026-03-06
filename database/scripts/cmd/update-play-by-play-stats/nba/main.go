@@ -35,14 +35,14 @@ func main() {
 	}
 
 	// Validate that NBA_GAME_ID is set
-	if cfg.NBAGameID == 0 {
+	if cfg.NBAGameID == "" {
 		fatal("NBA_GAME_ID is required but not set\nPlease set NBA_GAME_ID in .env file or as an environment variable")
 	}
 
 	fmt.Println(strings.Repeat("=", 72))
 	fmt.Println("NBA Play-by-Play Data Fetcher")
 	fmt.Println(strings.Repeat("=", 72))
-	fmt.Printf("Game ID (database): %d\n", cfg.NBAGameID)
+	fmt.Printf("Game ID (database): %s\n", cfg.NBAGameID)
 	fmt.Println(strings.Repeat("=", 72))
 
 	ctx := context.Background()
@@ -65,7 +65,7 @@ func main() {
 	fmt.Println("\nLooking up game in database...")
 	game, err := dbStore.GetGameByID(ctx, cfg.NBAGameID)
 	if err != nil {
-		fatal("Failed to lookup game with id %d: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NBAGameID, err)
+		fatal("Failed to lookup game with id %s: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NBAGameID, err)
 	}
 	fmt.Printf("Found game with sportradar_id: %s\n", game.SportradarID)
 

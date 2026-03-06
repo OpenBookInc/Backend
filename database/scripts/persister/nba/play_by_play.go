@@ -51,7 +51,7 @@ func PersistMissingNBAIndividuals(ctx context.Context, dbStore *store.Store, api
 // 2. Beginning the transaction and passing it to this function
 // 3. Calling CheckAndUpdateNBAPlayByPlayDeletions() after this function
 // 4. Committing the transaction
-func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nba.PlayByPlayResponse) error {
+func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, pbp *fetcher_nba.PlayByPlayResponse) error {
 	// Step 1: Upsert game status
 	// Map the API status to database enum value
 	mappedGameStatus, err := MapGameStatusToDB(pbp.Status)
@@ -81,7 +81,7 @@ func PersistNBAPlayByPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, 
 
 // persistPlay upserts a play and all its statistics within the transaction.
 // Foreign keys are resolved via subqueries in the store layer.
-func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, period *fetcher_nba.Period, event *fetcher_nba.Event) error {
+func persistPlay(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, period *fetcher_nba.Period, event *fetcher_nba.Event) error {
 	if !shouldPersistPlay(event) {
 		return nil
 	}
@@ -247,7 +247,7 @@ func parseTimestamp(ts string) (time.Time, error) {
 // any with Deleted=true as deleted in the database.
 //
 // The caller is responsible for committing the transaction after this function returns.
-func CheckAndUpdateNBAPlayByPlayDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID int, pbp *fetcher_nba.PlayByPlayResponse) error {
+func CheckAndUpdateNBAPlayByPlayDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, gameID string, pbp *fetcher_nba.PlayByPlayResponse) error {
 	for _, period := range pbp.Periods {
 		for _, event := range period.Events {
 			if event.Deleted {

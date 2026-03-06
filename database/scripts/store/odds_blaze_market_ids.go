@@ -10,7 +10,7 @@ import (
 // OddsBlazeMarketIDForUpsert contains the data needed to upsert an OddsBlaze market ID mapping
 type OddsBlazeMarketIDForUpsert struct {
 	EntityType  gen.MarketEntity
-	EntityID    int
+	EntityID    string
 	Sportsbook  gen.Sportsbook
 	Side        gen.MarketSide
 	OddsBlazeID string
@@ -75,7 +75,7 @@ func (s *Store) GetUngradedOddsBlazeMarketIDs(ctx context.Context, marketEntity 
 // GetGameIDsMissingGameStatus returns distinct game IDs that have ungraded odds_blaze_market_ids
 // entries but no corresponding row in game_statuses. These games need play-by-play updates
 // before grading can proceed.
-func (s *Store) GetGameIDsMissingGameStatus(ctx context.Context, marketEntity gen.MarketEntity) ([]int, error) {
+func (s *Store) GetGameIDsMissingGameStatus(ctx context.Context, marketEntity gen.MarketEntity) ([]string, error) {
 	var marketTable string
 	switch marketEntity {
 	case gen.MarketEntityNbaMarket:
@@ -106,9 +106,9 @@ func (s *Store) GetGameIDsMissingGameStatus(ctx context.Context, marketEntity ge
 	}
 	defer rows.Close()
 
-	var gameIDs []int
+	var gameIDs []string
 	for rows.Next() {
-		var gameID int
+		var gameID string
 		if err := rows.Scan(&gameID); err != nil {
 			return nil, fmt.Errorf("failed to scan game ID: %w", err)
 		}
@@ -133,7 +133,7 @@ func (s *Store) UpsertOddsBlazeMarketID(ctx context.Context, m *OddsBlazeMarketI
 
 	_, err := s.pool.Exec(ctx, query, m.EntityType, m.EntityID, m.Sportsbook, m.Side, m.OddsBlazeID)
 	if err != nil {
-		return fmt.Errorf("failed to upsert OddsBlaze market ID (entity_type=%s, entity_id=%d, sportsbook=%s, side=%s): %w",
+		return fmt.Errorf("failed to upsert OddsBlaze market ID (entity_type=%s, entity_id=%s, sportsbook=%s, side=%s): %w",
 			m.EntityType, m.EntityID, m.Sportsbook, m.Side, err)
 	}
 

@@ -22,11 +22,11 @@ import (
 
 // ReadRosterByTeamID reads a roster from the database by team ID.
 // Returns the roster with individual IDs populated.
-// The teamID is the database integer ID (ContenderIDA or ContenderIDB from Game).
-func ReadRosterByTeamID(ctx context.Context, dbStore *store.Store, teamID int64) (*models.Roster, error) {
+// The teamID is the database UUID (ContenderIDA or ContenderIDB from Game).
+func ReadRosterByTeamID(ctx context.Context, dbStore *store.Store, teamID string) (*models.Roster, error) {
 	roster, err := dbStore.GetRosterByTeamID(ctx, teamID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read roster for team_id %d: %w", teamID, err)
+		return nil, fmt.Errorf("failed to read roster for team_id %s: %w", teamID, err)
 	}
 
 	return roster, nil

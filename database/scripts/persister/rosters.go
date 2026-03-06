@@ -28,7 +28,7 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		fmt.Printf("  Processing players for %s %s (%d players)...\n",
 			team.Market, team.Name, len(roster.Players))
 
-		var individualIDs []int64
+		var individualIDs []string
 		teamNewCount := 0
 		for i, player := range roster.Players {
 			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{
@@ -39,7 +39,7 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.ID, err)
 			}
 
-			individualIDs = append(individualIDs, int64(individual.ID))
+			individualIDs = append(individualIDs, individual.ID)
 			if fetched {
 				newIndividualCount++
 				teamNewCount++
@@ -83,7 +83,7 @@ func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		fmt.Printf("  Processing players for %s %s (%d players)...\n",
 			team.Market, team.Name, len(roster.Players))
 
-		var individualIDs []int64
+		var individualIDs []string
 		teamNewCount := 0
 		for i, player := range roster.Players {
 			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{
@@ -94,7 +94,7 @@ func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 				return 0, 0, fmt.Errorf("failed to upsert individual %s: %w", player.ID, err)
 			}
 
-			individualIDs = append(individualIDs, int64(individual.ID))
+			individualIDs = append(individualIDs, individual.ID)
 			if fetched {
 				newIndividualCount++
 				teamNewCount++

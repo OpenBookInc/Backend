@@ -11,8 +11,8 @@ import (
 
 // NBAMarketForUpsert contains the data needed to upsert an NBA market
 type NBAMarketForUpsert struct {
-	GameID       int
-	IndividualID int
+	GameID       string
+	IndividualID string
 	MarketType   models_nba.PlayerProp
 	MarketLine   decimal.Decimal
 }
@@ -20,7 +20,7 @@ type NBAMarketForUpsert struct {
 // UpsertNBAMarket inserts or updates an NBA market in the database.
 // Uses (game_id, individual_id, market_type, market_line) as the unique constraint for ON CONFLICT.
 // Returns the market row ID.
-func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert) (int, error) {
+func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert) (string, error) {
 	query := `
 		INSERT INTO nba_markets (
 			game_id, individual_id, market_type, market_line,
@@ -32,7 +32,7 @@ func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert)
 		RETURNING id
 	`
 
-	var id int
+	var id string
 	err := s.Pool().QueryRow(ctx, query,
 		m.GameID,
 		m.IndividualID,
@@ -40,7 +40,7 @@ func UpsertNBAMarket(s *store.Store, ctx context.Context, m *NBAMarketForUpsert)
 		m.MarketLine,
 	).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert NBA market (game_id=%d, individual_id=%d, type=%s, line=%s): %w",
+		return "", fmt.Errorf("failed to upsert NBA market (game_id=%s, individual_id=%s, type=%s, line=%s): %w",
 			m.GameID, m.IndividualID, m.MarketType, m.MarketLine, err)
 	}
 

@@ -29,7 +29,7 @@ import (
 
 // playerStatsAccumulator holds running totals for a player's statistics
 type playerStatsAccumulator struct {
-	IndividualID           int
+	IndividualID           string
 	TwoPointAttempts       decimal.Decimal
 	TwoPointMakes          decimal.Decimal
 	ThreePointAttempts     decimal.Decimal
@@ -46,7 +46,7 @@ type playerStatsAccumulator struct {
 }
 
 // newPlayerStatsAccumulator creates a new accumulator initialized to zero values
-func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
+func newPlayerStatsAccumulator(individualID string) *playerStatsAccumulator {
 	zero := decimal.NewFromInt(0)
 	return &playerStatsAccumulator{
 		IndividualID:           individualID,
@@ -81,7 +81,7 @@ func newPlayerStatsAccumulator(individualID int) *playerStatsAccumulator {
 // 3. Committing the transaction
 func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, data *reader_nba.NBAPlayByPlayData) ([]*store_nba.NBABoxScoreForUpsert, error) {
 	// Step 1: Aggregate statistics by player
-	accumulators := make(map[int]*playerStatsAccumulator)
+	accumulators := make(map[string]*playerStatsAccumulator)
 
 	for _, stat := range data.Statistics {
 		// Get or create accumulator for this player
@@ -134,7 +134,7 @@ func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, d
 		}
 
 		if err := store_nba.UpsertNBABoxScore(dbStore, ctx, tx, boxScore); err != nil {
-			return nil, fmt.Errorf("failed to upsert box score for individual_id %d: %w", acc.IndividualID, err)
+			return nil, fmt.Errorf("failed to upsert box score for individual_id %s: %w", acc.IndividualID, err)
 		}
 		upsertedBoxScores = append(upsertedBoxScores, boxScore)
 	}
@@ -145,7 +145,7 @@ func PersistNBABoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, d
 // GetBoxScoreCount returns the number of box scores that would be generated
 // This is useful for printing summaries
 func GetBoxScoreCount(data *reader_nba.NBAPlayByPlayData) int {
-	players := make(map[int]bool)
+	players := make(map[string]bool)
 	for _, stat := range data.Statistics {
 		players[stat.IndividualID] = true
 	}
@@ -165,7 +165,7 @@ func GetBoxScoreCount(data *reader_nba.NBAPlayByPlayData) int {
 // The caller is responsible for committing the transaction after this function returns.
 func CheckAndUpdateNBABoxScoreDeletions(ctx context.Context, dbStore *store.Store, tx pgx.Tx, existingBoxScores []*models_nba.IndividualBoxScore, upsertedBoxScores []*store_nba.NBABoxScoreForUpsert) error {
 	// Build a set of individual IDs that were upserted
-	upsertedIndividuals := make(map[int]bool)
+	upsertedIndividuals := make(map[string]bool)
 	for _, boxScore := range upsertedBoxScores {
 		upsertedIndividuals[boxScore.IndividualID] = true
 	}
@@ -174,8 +174,8 @@ func CheckAndUpdateNBABoxScoreDeletions(ctx context.Context, dbStore *store.Stor
 	for _, existing := range existingBoxScores {
 		if !upsertedIndividuals[existing.Individual.ID] {
 			// This box score exists in the database but was not upserted - mark it as deleted
-			if err := store_nba.MarkNBABoxScoreDeleted(dbStore, ctx, tx, existing.Stats.ID); err != nil {
-				return fmt.Errorf("failed to mark box score as deleted (id: %d, individual_id: %d): %w", existing.Stats.ID, existing.Individual.ID, err)
+			if err := store_nba.MarkNBABoxScoreDeleted(dbStore, ctx, tx, existing.Stats.Game.ID, existing.Individual.ID); err != nil {
+				return fmt.Errorf("failed to mark box score as deleted (game_id: %s, individual_id: %s): %w", existing.Stats.Game.ID, existing.Individual.ID, err)
 			}
 		}
 	}

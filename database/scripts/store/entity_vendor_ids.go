@@ -11,7 +11,7 @@ import (
 // EntityVendorIDForUpsert contains the data needed to upsert an entity vendor ID mapping
 type EntityVendorIDForUpsert struct {
 	EntityType gen.Entity
-	EntityID   int
+	EntityID   string
 	Vendor     gen.Vendor
 	VendorID   string
 }
@@ -28,7 +28,7 @@ func (s *Store) UpsertEntityVendorID(ctx context.Context, e *EntityVendorIDForUp
 
 	_, err := s.pool.Exec(ctx, query, e.EntityType, e.EntityID, e.Vendor, e.VendorID)
 	if err != nil {
-		return fmt.Errorf("failed to upsert entity vendor ID (type=%s, id=%d, vendor=%s, vendor_id=%s): %w",
+		return fmt.Errorf("failed to upsert entity vendor ID (type=%s, id=%s, vendor=%s, vendor_id=%s): %w",
 			e.EntityType, e.EntityID, e.Vendor, e.VendorID, err)
 	}
 
@@ -55,7 +55,7 @@ func (s *Store) LoadEntityVendorIDs(ctx context.Context) (int, error) {
 	count := 0
 	for rows.Next() {
 		var entityType gen.Entity
-		var entityID int
+		var entityID string
 		var vendor gen.Vendor
 		var vendorID string
 

@@ -23,17 +23,17 @@ import (
 
 // NBAPlayByPlayData holds all play statistics for a game
 type NBAPlayByPlayData struct {
-	GameID     int
+	GameID     string
 	Statistics []*models_nba.PlayStatistic
 }
 
 // ReadNBAPlayByPlay reads all play statistics for a game from the database.
 // Returns all PlayStatistic records associated with the given game_id.
-// The game_id is the database integer ID, not the vendor UUID.
-func ReadNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID int) (*NBAPlayByPlayData, error) {
+// The game_id is the database UUID, not the vendor UUID.
+func ReadNBAPlayByPlay(ctx context.Context, dbStore *store.Store, gameID string) (*NBAPlayByPlayData, error) {
 	stats, err := store_nba.GetNBAPlayStatisticsByGameID(dbStore, ctx, gameID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read play-by-play statistics for game_id %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to read play-by-play statistics for game_id %s: %w", gameID, err)
 	}
 
 	return &NBAPlayByPlayData{

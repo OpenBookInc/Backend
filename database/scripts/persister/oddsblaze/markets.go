@@ -51,7 +51,7 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, marketEntity gen.
 
 			line := getMarketLine(odd, propType)
 
-			var marketID int
+			var marketID string
 
 			switch marketEntity {
 			case gen.MarketEntityNbaMarket:

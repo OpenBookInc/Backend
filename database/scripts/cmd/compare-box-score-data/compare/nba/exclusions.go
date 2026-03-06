@@ -22,7 +22,7 @@ import (
 
 // statDiscrepancyKey uniquely identifies a known stat discrepancy
 type statDiscrepancyKey struct {
-	GameID         int
+	GameID         string
 	PlayerSportradarID string
 	FieldName      string // PascalCase field name (e.g., "Steals")
 }
@@ -33,34 +33,34 @@ type statDiscrepancyKey struct {
 var knownStatDiscrepancies = map[statDiscrepancyKey]string{
 	// OKC @ SAS on 2025-12-23: Sportradar play-by-play shows Cason Wallace with a steal
 	// on event f24cf5aa-31da-46ec-b472-dced2d72ab77, but their box score summary shows 0 steals.
-	{GameID: 1606, PlayerSportradarID: "b3db0b36-344f-4035-b315-9fb18933e535", FieldName: "Steals"}: "Sportradar API inconsistency: play-by-play shows steal, box score shows 0",
+	{GameID: "9ca7e004-b8aa-4c40-a20c-84bb7e40c556", PlayerSportradarID: "b3db0b36-344f-4035-b315-9fb18933e535", FieldName: "Steals"}: "Sportradar API inconsistency: play-by-play shows steal, box score shows 0",
 
 	// OKC @ SAS on 2025-12-23: Sportradar box score shows Aaron Wiggins with 1 steal,
 	// but their play-by-play API contains no steal events for him.
-	{GameID: 1606, PlayerSportradarID: "d3b28775-473d-471a-8452-e913f4347f0f", FieldName: "Steals"}: "Sportradar API inconsistency: box score shows 1 steal, play-by-play shows 0",
+	{GameID: "9ca7e004-b8aa-4c40-a20c-84bb7e40c556", PlayerSportradarID: "d3b28775-473d-471a-8452-e913f4347f0f", FieldName: "Steals"}: "Sportradar API inconsistency: box score shows 1 steal, play-by-play shows 0",
 
 	// GSW @ PHI on 2025-12-04: Sportradar box score shows Joel Embiid with 8 two-point attempts,
 	// but their play-by-play API only contains 7 two-point shot events for him.
-	{GameID: 1715, PlayerSportradarID: "bf9ad0fd-0cb8-4360-8970-5f1b5cf3fa8d", FieldName: "TwoPointAttempts"}:   "Sportradar API inconsistency: box score shows 8, play-by-play shows 7",
-	{GameID: 1715, PlayerSportradarID: "bf9ad0fd-0cb8-4360-8970-5f1b5cf3fa8d", FieldName: "ThreePointAttempts"}: "Sportradar API inconsistency: box score shows 5, play-by-play shows 6",
+	{GameID: "91bf6d98-8a8a-46b7-9384-88cc4ab1a804", PlayerSportradarID: "bf9ad0fd-0cb8-4360-8970-5f1b5cf3fa8d", FieldName: "TwoPointAttempts"}:   "Sportradar API inconsistency: box score shows 8, play-by-play shows 7",
+	{GameID: "91bf6d98-8a8a-46b7-9384-88cc4ab1a804", PlayerSportradarID: "bf9ad0fd-0cb8-4360-8970-5f1b5cf3fa8d", FieldName: "ThreePointAttempts"}: "Sportradar API inconsistency: box score shows 5, play-by-play shows 6",
 
 	// MEM @ LAC on 2025-12-15: Sportradar play-by-play shows Jock Landale with 2 steals
 	// (events 144b02a1-e15c-48a5-be5e-1096c2e73c7a and dbd20fc7-ff36-4acd-afd4-b0a9b56d946b),
 	// but their box score summary shows only 1 steal.
-	{GameID: 18073, PlayerSportradarID: "02dc6e18-95a4-4919-b4fc-f8a981ccd359", FieldName: "Steals"}: "Sportradar API inconsistency: play-by-play shows 2 steals, box score shows 1",
+	{GameID: "634d1b8f-68dc-4c78-aac4-ec06e9eaf168", PlayerSportradarID: "02dc6e18-95a4-4919-b4fc-f8a981ccd359", FieldName: "Steals"}: "Sportradar API inconsistency: play-by-play shows 2 steals, box score shows 1",
 
 	// MEM @ LAC on 2025-12-15: Sportradar box score shows Jaren Jackson Jr. with 2 steals,
 	// but their play-by-play API only contains 1 steal event (2f31c03d-6ca4-4e2a-a8d6-9342c123428f).
-	{GameID: 18073, PlayerSportradarID: "3e492a6a-ed3c-499d-b3f5-ff68ca16f6fd", FieldName: "Steals"}: "Sportradar API inconsistency: box score shows 2 steals, play-by-play shows 1",
+	{GameID: "634d1b8f-68dc-4c78-aac4-ec06e9eaf168", PlayerSportradarID: "3e492a6a-ed3c-499d-b3f5-ff68ca16f6fd", FieldName: "Steals"}: "Sportradar API inconsistency: box score shows 2 steals, play-by-play shows 1",
 
 	// BOS @ POR on 2025-12-28: Sportradar play-by-play shows Derrick White with 4 defensive rebounds,
 	// but their box score summary shows only 3.
-	{GameID: 2020, PlayerSportradarID: "9bcd5cff-4a1c-4454-89b6-a5899b0c6bcc", FieldName: "DefensiveRebounds"}: "Sportradar API inconsistency: play-by-play shows 4 defensive rebounds, box score shows 3",
+	{GameID: "c858cd49-a724-4d6f-ac99-0d8a1cb0e2f9", PlayerSportradarID: "9bcd5cff-4a1c-4454-89b6-a5899b0c6bcc", FieldName: "DefensiveRebounds"}: "Sportradar API inconsistency: play-by-play shows 4 defensive rebounds, box score shows 3",
 }
 
 // shouldExcludeStatDiscrepancy returns true if the given stat discrepancy is a known
 // Sportradar data inconsistency that should be ignored.
-func shouldExcludeStatDiscrepancy(gameID int, playerSportradarID string, fieldName string) bool {
+func shouldExcludeStatDiscrepancy(gameID string, playerSportradarID string, fieldName string) bool {
 	key := statDiscrepancyKey{
 		GameID:             gameID,
 		PlayerSportradarID: playerSportradarID,

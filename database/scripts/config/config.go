@@ -53,8 +53,8 @@ type PlayByPlayConfig struct {
 	BaseConfig
 
 	// Game Configuration
-	NFLGameID int // Database game ID (not vendor UUID)
-	NBAGameID int // Database game ID (not vendor UUID)
+	NFLGameID string // Database game ID (UUID)
+	NBAGameID string // Database game ID (UUID)
 }
 
 // BoxScoreConfig holds configuration for the box score generation script
@@ -62,8 +62,8 @@ type BoxScoreConfig struct {
 	BaseConfig
 
 	// Game Configuration
-	NFLGameID int // Database game ID (not vendor UUID)
-	NBAGameID int // Database game ID (not vendor UUID)
+	NFLGameID string // Database game ID (UUID)
+	NBAGameID string // Database game ID (UUID)
 }
 
 // CompareBoxScoreConfig holds configuration for the box score comparison tool
@@ -327,8 +327,8 @@ func LoadPlayByPlayConfigFromFile(envFile string) (*PlayByPlayConfig, error) {
 func LoadPlayByPlayConfig() *PlayByPlayConfig {
 	return &PlayByPlayConfig{
 		BaseConfig: loadBaseConfig(),
-		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
-		NBAGameID:  envloader.GetEnvAsIntWithDefault("NBA_GAME_ID", 0),
+		NFLGameID:  envloader.GetEnvAsStringWithDefault("NFL_GAME_ID", ""),
+		NBAGameID:  envloader.GetEnvAsStringWithDefault("NBA_GAME_ID", ""),
 	}
 }
 
@@ -340,8 +340,8 @@ func (c *PlayByPlayConfig) Validate() error {
 	}
 
 	// Play-by-play specific validation - at least one game ID must be set
-	if c.NFLGameID == 0 && c.NBAGameID == 0 {
-		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a positive integer database ID)")
+	if c.NFLGameID == "" && c.NBAGameID == "" {
+		return fmt.Errorf("missing required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a UUID database ID)")
 	}
 
 	return nil
@@ -385,8 +385,8 @@ func LoadBoxScoreConfigFromFile(envFile string) (*BoxScoreConfig, error) {
 func LoadBoxScoreConfig() *BoxScoreConfig {
 	return &BoxScoreConfig{
 		BaseConfig: loadBaseConfig(),
-		NFLGameID:  envloader.GetEnvAsIntWithDefault("NFL_GAME_ID", 0),
-		NBAGameID:  envloader.GetEnvAsIntWithDefault("NBA_GAME_ID", 0),
+		NFLGameID:  envloader.GetEnvAsStringWithDefault("NFL_GAME_ID", ""),
+		NBAGameID:  envloader.GetEnvAsStringWithDefault("NBA_GAME_ID", ""),
 	}
 }
 
@@ -413,8 +413,8 @@ func (c *BoxScoreConfig) Validate() error {
 	}
 
 	// Box score specific validation - at least one game ID must be set
-	if c.NFLGameID == 0 && c.NBAGameID == 0 {
-		return fmt.Errorf("missing or invalid required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a positive integer database ID)")
+	if c.NFLGameID == "" && c.NBAGameID == "" {
+		return fmt.Errorf("missing required environment variable: NFL_GAME_ID or NBA_GAME_ID (must be a UUID database ID)")
 	}
 
 	return nil

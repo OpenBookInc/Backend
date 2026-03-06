@@ -4,9 +4,8 @@ import "fmt"
 
 // Roster represents a team's roster
 type Roster struct {
-	ID            int           `json:"id"`              // Database ID (auto-increment)
-	TeamID        int64         `json:"team_id"`         // Foreign key to teams table
-	IndividualIDs []int64       `json:"individual_ids"`  // Array of individual IDs (for DB persistence)
+	TeamID        string        `json:"team_id"`         // Foreign key to teams table (also PK)
+	IndividualIDs []string      `json:"individual_ids"`  // Array of individual UUIDs (for DB persistence)
 	Team          *Team         `json:"-"`               // Pointer to parent Team (not stored in DB)
 	Players       []*Individual `json:"players"`         // Full player objects (in-memory only)
 }
@@ -18,8 +17,8 @@ func (r *Roster) String() string {
 	if r.Team != nil {
 		teamName = fmt.Sprintf("%s %s", r.Team.Market, r.Team.Name)
 	}
-	sb += fmt.Sprintf("\n%s Roster (DB ID: %d)\n", teamName, r.ID)
-	sb += fmt.Sprintf("  Team ID: %d\n", r.TeamID)
+	sb += fmt.Sprintf("\n%s Roster (Team ID: %s)\n", teamName, r.TeamID)
+	sb += fmt.Sprintf("  Team ID: %s\n", r.TeamID)
 	sb += fmt.Sprintf("  Player Count: %d\n", len(r.Players))
 	sb += "  Players:\n"
 	for _, player := range r.Players {

@@ -15,7 +15,7 @@ import (
 // This function accepts a transaction (pgx.Tx) to support atomic operations.
 // The sportradarTeamID is looked up via subquery to get the possession_team_id.
 // Sets vendor_deleted = FALSE on both insert and update.
-func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, sportradarDriveID string, sequence interface{}, sportradarTeamID string) (int, error) {
+func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID string, sportradarDriveID string, sequence interface{}, sportradarTeamID string) (int, error) {
 	query := `
 		INSERT INTO nfl_drives (
 			game_id, sportradar_id, vendor_sequence, possession_team_id,
@@ -55,7 +55,7 @@ func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID int, 
 
 // GetNFLDriveBySportradarID retrieves an NFL drive by game_id and sportradar_id.
 // Only returns drives where vendor_deleted = FALSE.
-func GetNFLDriveBySportradarID(s *store.Store, ctx context.Context, gameID int, sportradarID string) (*models_nfl.Drive, error) {
+func GetNFLDriveBySportradarID(s *store.Store, ctx context.Context, gameID string, sportradarID string) (*models_nfl.Drive, error) {
 	query := `
 		SELECT id, game_id, sportradar_id, vendor_sequence, possession_team_id,
 		       created_at, updated_at

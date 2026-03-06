@@ -15,7 +15,7 @@ import (
 
 // PersistNFLPlayerProfile persists an NFL player profile as an individual in the database.
 // Returns the database ID of the individual.
-func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nfl.PlayerProfile, leagueID int) (int, error) {
+func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nfl.PlayerProfile, leagueID int) (string, error) {
 	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
 		SportradarID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
@@ -26,7 +26,7 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		JerseyNumber:    profile.Jersey,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to persist NFL player profile %s (sportradar_id: %s): %w",
+		return "", fmt.Errorf("failed to persist NFL player profile %s (sportradar_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 
@@ -35,7 +35,7 @@ func PersistNFLPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 
 // PersistNBAPlayerProfile persists an NBA player profile as an individual in the database.
 // Returns the database ID of the individual.
-func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nba.PlayerProfile, leagueID int) (int, error) {
+func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile *fetcher_nba.PlayerProfile, leagueID int) (string, error) {
 	result, err := dbStore.UpsertIndividual(ctx, &store.IndividualForUpsert{
 		SportradarID:        profile.ID,
 		DisplayName:     profile.GetDisplayName(),
@@ -46,7 +46,7 @@ func PersistNBAPlayerProfile(ctx context.Context, dbStore *store.Store, profile 
 		JerseyNumber:    profile.JerseyNumber,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to persist NBA player profile %s (sportradar_id: %s): %w",
+		return "", fmt.Errorf("failed to persist NBA player profile %s (sportradar_id: %s): %w",
 			profile.GetDisplayName(), profile.ID, err)
 	}
 

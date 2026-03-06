@@ -22,7 +22,7 @@ import (
 
 // statDiscrepancyKey uniquely identifies a known stat discrepancy
 type statDiscrepancyKey struct {
-	GameID         int
+	GameID         string
 	PlayerSportradarID string
 	FieldName      string // PascalCase field name (e.g., "PassingYards")
 }
@@ -37,7 +37,7 @@ var knownStatDiscrepancies = map[statDiscrepancyKey]string{
 
 // shouldExcludeStatDiscrepancy returns true if the given stat discrepancy is a known
 // Sportradar data inconsistency that should be ignored.
-func shouldExcludeStatDiscrepancy(gameID int, playerSportradarID string, fieldName string) bool {
+func shouldExcludeStatDiscrepancy(gameID string, playerSportradarID string, fieldName string) bool {
 	key := statDiscrepancyKey{
 		GameID:             gameID,
 		PlayerSportradarID: playerSportradarID,

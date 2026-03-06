@@ -116,11 +116,11 @@ func processNFLGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 	fmt.Printf("Found %d NFL games in date range\n", len(games))
 
 	for i, game := range games {
-		fmt.Printf("\n[%d/%d] Processing NFL game %d (vendor: %s, scheduled: %s)\n",
+		fmt.Printf("\n[%d/%d] Processing NFL game %s (vendor: %s, scheduled: %s)\n",
 			i+1, len(games), game.ID, game.SportradarID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
 
 		if err := processNFLGame(ctx, dbStore, apiClient, game); err != nil {
-			return fmt.Errorf("failed to process NFL game %d: %w", game.ID, err)
+			return fmt.Errorf("failed to process NFL game %s: %w", game.ID, err)
 		}
 	}
 
@@ -203,7 +203,7 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 		return err
 	}
 
-	fmt.Printf("  Successfully processed game %d\n", game.ID)
+	fmt.Printf("  Successfully processed game %s\n", game.ID)
 	return nil
 }
 
@@ -221,11 +221,11 @@ func processNBAGames(ctx context.Context, dbStore *store.Store, apiClient *sport
 	fmt.Printf("Found %d NBA games in date range\n", len(games))
 
 	for i, game := range games {
-		fmt.Printf("\n[%d/%d] Processing NBA game %d (vendor: %s, scheduled: %s)\n",
+		fmt.Printf("\n[%d/%d] Processing NBA game %s (vendor: %s, scheduled: %s)\n",
 			i+1, len(games), game.ID, game.SportradarID, game.ScheduledStartTime.Format("2006-01-02 15:04"))
 
 		if err := processNBAGame(ctx, dbStore, apiClient, game); err != nil {
-			return fmt.Errorf("failed to process NBA game %d: %w", game.ID, err)
+			return fmt.Errorf("failed to process NBA game %s: %w", game.ID, err)
 		}
 	}
 
@@ -308,6 +308,6 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 		return err
 	}
 
-	fmt.Printf("  Successfully processed game %d\n", game.ID)
+	fmt.Printf("  Successfully processed game %s\n", game.ID)
 	return nil
 }

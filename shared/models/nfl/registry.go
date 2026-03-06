@@ -2,6 +2,12 @@ package nfl
 
 import "sync"
 
+// boxScoreKey is a composite key for NFL box scores (game_id, individual_id).
+type boxScoreKey struct {
+	GameID       string
+	IndividualID string
+}
+
 // NFLRegistry provides thread-safe storage and retrieval of NFL-specific model instances.
 // See models.ModelRegistry for the general pattern documentation.
 type NFLRegistry struct {
@@ -10,8 +16,8 @@ type NFLRegistry struct {
 	// Slices own the data
 	nflStats []NFLStats
 
-	// Maps for O(1) lookups by database ID
-	nflStatsByID map[int]*NFLStats
+	// Maps for O(1) lookups by composite key (game_id, individual_id)
+	nflStatsByKey map[boxScoreKey]*NFLStats
 }
 
 // Registry is the global singleton for NFL model instances.
@@ -20,7 +26,7 @@ var Registry = NewNFLRegistry()
 // NewNFLRegistry creates a new initialized NFLRegistry.
 func NewNFLRegistry() *NFLRegistry {
 	return &NFLRegistry{
-		nflStatsByID: make(map[int]*NFLStats),
+		nflStatsByKey: make(map[boxScoreKey]*NFLStats),
 	}
 }
 
@@ -30,28 +36,29 @@ func (r *NFLRegistry) Clear() {
 	defer r.mu.Unlock()
 
 	r.nflStats = nil
-	r.nflStatsByID = make(map[int]*NFLStats)
+	r.nflStatsByKey = make(map[boxScoreKey]*NFLStats)
 }
 
-// GetNFLStats returns a registered NFLStats by database ID, or nil if not found.
-func (r *NFLRegistry) GetNFLStats(id int) *NFLStats {
+// GetNFLStats returns a registered NFLStats by game and individual ID, or nil if not found.
+func (r *NFLRegistry) GetNFLStats(gameID, individualID string) *NFLStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.nflStatsByID[id]
+	return r.nflStatsByKey[boxScoreKey{GameID: gameID, IndividualID: individualID}]
 }
 
 // RegisterNFLStats adds NFLStats to the registry and returns a pointer to the registered instance.
-// If NFLStats with the same ID already exists, returns the existing pointer.
+// If NFLStats with the same composite key already exists, returns the existing pointer.
 func (r *NFLRegistry) RegisterNFLStats(stats *NFLStats) *NFLStats {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if existing, ok := r.nflStatsByID[stats.ID]; ok {
+	key := boxScoreKey{GameID: stats.Game.ID, IndividualID: stats.Individual.ID}
+	if existing, ok := r.nflStatsByKey[key]; ok {
 		return existing
 	}
 
 	r.nflStats = append(r.nflStats, *stats)
 	ptr := &r.nflStats[len(r.nflStats)-1]
-	r.nflStatsByID[stats.ID] = ptr
+	r.nflStatsByKey[key] = ptr
 	return ptr
 }

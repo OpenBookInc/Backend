@@ -10,7 +10,7 @@ import (
 
 // GameStatusForUpsert contains the data needed to upsert a game status
 type GameStatusForUpsert struct {
-	GameID int
+	GameID string
 	Status string // DB enum value as string (e.g., "scheduled", "in_progress")
 }
 
@@ -32,14 +32,14 @@ func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *GameSta
 		status.Status,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to upsert game status (game_id: %d): %w", status.GameID, err)
+		return fmt.Errorf("failed to upsert game status (game_id: %s): %w", status.GameID, err)
 	}
 
 	return nil
 }
 
 // GetGameStatusByGameID retrieves a game's status by game_id
-func (s *Store) GetGameStatusByGameID(ctx context.Context, gameID int) (*models_nfl.GameStatus, error) {
+func (s *Store) GetGameStatusByGameID(ctx context.Context, gameID string) (*models_nfl.GameStatus, error) {
 	query := `
 		SELECT game_id, status, updated_at
 		FROM game_statuses
@@ -53,7 +53,7 @@ func (s *Store) GetGameStatusByGameID(ctx context.Context, gameID int) (*models_
 		&status.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get game status with game_id %d: %w", gameID, err)
+		return nil, fmt.Errorf("failed to get game status with game_id %s: %w", gameID, err)
 	}
 
 	return &status, nil

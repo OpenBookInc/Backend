@@ -267,7 +267,7 @@ roster.TeamID = team.ID
 
 Every entity has two identifiers:
 - **VendorID** (string): Sportradar UUID, set immediately during API fetch
-- **ID** (int): PostgreSQL auto-increment primary key, set ONLY after database upsert
+- **ID** (string): PostgreSQL UUID primary key, set by the database during upsert
 
 **Why**: VendorID enables idempotent upserts (`ON CONFLICT (vendor_id) DO UPDATE`). ID is for foreign key relationships in database.
 
@@ -277,7 +277,7 @@ The `entity_vendor_ids` table maps IDs from alternate vendors (e.g., OddsBlaze) 
 
 **Schema:**
 - `entity_type` (entity_type enum): The type of entity (e.g., team, individual, game)
-- `entity_id` (int): The database primary key ID of the entity
+- `entity_id` (uuid): The database primary key ID of the entity
 - `vendor` (vendor_type enum): The vendor providing the alternate ID (e.g., OddsBlaze)
 - `vendor_id` (varchar): The vendor's identifier for the entity
 
@@ -525,8 +525,8 @@ Environment variables loaded from `.env` (auto-loaded) or via `--env` flag:
 - `NBA_SEASON_TYPE`: Season type - REG, PST
 
 **Required (single game scripts: update_*_play_by_play_stats, update_*_box_score_data):**
-- `NFL_GAME_ID`: Database integer ID for NFL game (not vendor UUID)
-- `NBA_GAME_ID`: Database integer ID for NBA game (not vendor UUID)
+- `NFL_GAME_ID`: Database UUID for NFL game
+- `NBA_GAME_ID`: Database UUID for NBA game
 
 **Required (update_batch_play_by_play_and_box_scores):**
 - At least one complete date range must be set:

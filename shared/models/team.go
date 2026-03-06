@@ -7,7 +7,7 @@ import (
 
 // Team represents a sports team
 type Team struct {
-	ID         int       `json:"id"`          // Database ID (auto-increment)
+	ID         string    `json:"id"`          // Database UUID
 	Name       string    `json:"name"`        // Team name (e.g., "Cowboys")
 	Market     string    `json:"market"`      // City/region (e.g., "Dallas")
 	Alias      string    `json:"alias"`       // Short name (e.g., "DAL")
@@ -23,7 +23,7 @@ type Team struct {
 func (t *Team) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("\n%s %s (%s)\n", t.Market, t.Name, t.Alias))
-	sb.WriteString(fmt.Sprintf("  DB ID: %d | Sportradar ID: %s\n", t.ID, t.SportradarID))
+	sb.WriteString(fmt.Sprintf("  DB ID: %s | Sportradar ID: %s\n", t.ID, t.SportradarID))
 	if t.Division != nil {
 		sb.WriteString(fmt.Sprintf("  Division: %s", t.Division.Name))
 		if t.Division.Conference != nil {

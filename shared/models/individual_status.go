@@ -8,8 +8,7 @@ import (
 
 // IndividualStatus represents the current status of a player
 type IndividualStatus struct {
-	ID           int                `json:"id"`             // Database ID (auto-increment)
-	IndividualID int64              `json:"individual_id"`  // Foreign key to individuals table
+	IndividualID string             `json:"individual_id"`  // Foreign key to individuals table (also PK)
 	Status       gen.IndividualStatus `json:"status"`         // Individual status enum (Active, Day To Day, Doubtful, Out, Out For Season, Questionable)
 	Individual   *Individual        `json:"-"`              // Pointer to individual (not stored in DB)
 }
@@ -20,6 +19,6 @@ func (is *IndividualStatus) String() string {
 	if is.Individual != nil {
 		individualName = is.Individual.DisplayName
 	}
-	return fmt.Sprintf("\n%s - Status: %s (DB ID: %d, Individual ID: %d)\n",
-		individualName, string(is.Status), is.ID, is.IndividualID)
+	return fmt.Sprintf("\n%s - Status: %s (Individual ID: %s)\n",
+		individualName, string(is.Status), is.IndividualID)
 }
