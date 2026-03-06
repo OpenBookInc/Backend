@@ -41,7 +41,7 @@ pub struct EntryParameters {
     /// Optional self-match prevention ID. If Some(id), entries in other lineups with the same
     /// self_match_id will be cancelled when this entry is submitted. Entries in the same lineup
     /// with the same self_match_id are allowed to coexist.
-    pub self_match_id: Option<u64>,
+    pub self_match_id: Option<u128>,
 }
 
 /// Represents a single entry in a lineup's book
@@ -60,7 +60,7 @@ pub struct Entry {
     /// Timestamp/sequence for FIFO ordering among same-portion entries
     pub sequence: u64,
     /// Optional self-match prevention ID
-    pub self_match_id: Option<u64>,
+    pub self_match_id: Option<u128>,
 }
 
 impl Entry {

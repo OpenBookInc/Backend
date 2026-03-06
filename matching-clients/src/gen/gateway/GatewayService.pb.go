@@ -94,11 +94,11 @@ type isBackendMessage_Msg interface {
 }
 
 type BackendMessage_NewOrder struct {
-	NewOrder *NewOrder `protobuf:"bytes,1,opt,name=newOrder,proto3,oneof"`
+	NewOrder *NewOrder `protobuf:"bytes,1,opt,name=new_order,json=newOrder,proto3,oneof"`
 }
 
 type BackendMessage_CancelOrder struct {
-	CancelOrder *CancelOrder `protobuf:"bytes,2,opt,name=cancelOrder,proto3,oneof"`
+	CancelOrder *CancelOrder `protobuf:"bytes,4,opt,name=cancel_order,json=cancelOrder,proto3,oneof"`
 }
 
 func (*BackendMessage_NewOrder) isBackendMessage_Msg() {}
@@ -108,7 +108,7 @@ func (*BackendMessage_CancelOrder) isBackendMessage_Msg() {}
 // Messages sent from server → client
 type GatewayMessage struct {
 	state                protoimpl.MessageState    `protogen:"open.v1"`
-	SequencedMessageBase *gen.SequencedMessageBase `protobuf:"bytes,1,opt,name=sequencedMessageBase,proto3" json:"sequencedMessageBase,omitempty"`
+	SequencedMessageBase *gen.SequencedMessageBase `protobuf:"bytes,1,opt,name=sequenced_message_base,json=sequencedMessageBase,proto3" json:"sequenced_message_base,omitempty"`
 	// Types that are valid to be assigned to Event:
 	//
 	//	*GatewayMessage_NewOrderAcknowledgement
@@ -205,11 +205,11 @@ type isGatewayMessage_Event interface {
 }
 
 type GatewayMessage_NewOrderAcknowledgement struct {
-	NewOrderAcknowledgement *NewOrderAcknowledgement `protobuf:"bytes,2,opt,name=newOrderAcknowledgement,proto3,oneof"`
+	NewOrderAcknowledgement *NewOrderAcknowledgement `protobuf:"bytes,2,opt,name=new_order_acknowledgement,json=newOrderAcknowledgement,proto3,oneof"`
 }
 
 type GatewayMessage_CancelOrderAcknowledgement struct {
-	CancelOrderAcknowledgement *CancelOrderAcknowledgement `protobuf:"bytes,3,opt,name=cancelOrderAcknowledgement,proto3,oneof"`
+	CancelOrderAcknowledgement *CancelOrderAcknowledgement `protobuf:"bytes,3,opt,name=cancel_order_acknowledgement,json=cancelOrderAcknowledgement,proto3,oneof"`
 }
 
 type GatewayMessage_Match struct {
@@ -217,7 +217,7 @@ type GatewayMessage_Match struct {
 }
 
 type GatewayMessage_OrderBookSnapshot struct {
-	OrderBookSnapshot *OrderBookSnapshot `protobuf:"bytes,5,opt,name=orderBookSnapshot,proto3,oneof"`
+	OrderBookSnapshot *OrderBookSnapshot `protobuf:"bytes,5,opt,name=order_book_snapshot,json=orderBookSnapshot,proto3,oneof"`
 }
 
 func (*GatewayMessage_NewOrderAcknowledgement) isGatewayMessage_Event() {}
@@ -318,8 +318,8 @@ func (x *CancelOrder) GetBody() *CancelOrder_Body {
 
 type CancelOrderAcknowledgement struct {
 	state         protoimpl.MessageState           `protogen:"open.v1"`
-	ResponseBase  *gen.ResponseBase                `protobuf:"bytes,1,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase  *gen.FallibleBase                `protobuf:"bytes,2,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
+	ResponseBase  *gen.ResponseBase                `protobuf:"bytes,1,opt,name=response_base,json=responseBase,proto3" json:"response_base,omitempty"`
+	FallibleBase  *gen.FallibleBase                `protobuf:"bytes,2,opt,name=fallible_base,json=fallibleBase,proto3" json:"fallible_base,omitempty"`
 	Body          *CancelOrderAcknowledgement_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -378,8 +378,8 @@ func (x *CancelOrderAcknowledgement) GetBody() *CancelOrderAcknowledgement_Body 
 
 type NewOrderAcknowledgement struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
-	ResponseBase  *gen.ResponseBase             `protobuf:"bytes,1,opt,name=responseBase,proto3" json:"responseBase,omitempty"`
-	FallibleBase  *gen.FallibleBase             `protobuf:"bytes,2,opt,name=fallibleBase,proto3" json:"fallibleBase,omitempty"`
+	ResponseBase  *gen.ResponseBase             `protobuf:"bytes,1,opt,name=response_base,json=responseBase,proto3" json:"response_base,omitempty"`
+	FallibleBase  *gen.FallibleBase             `protobuf:"bytes,2,opt,name=fallible_base,json=fallibleBase,proto3" json:"fallible_base,omitempty"`
 	Body          *NewOrderAcknowledgement_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -482,7 +482,7 @@ func (x *Match) GetBody() *Match_Body {
 
 type OrderBookSnapshot struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	LegSecurityIds []uint64               `protobuf:"varint,1,rep,packed,name=legSecurityIds,proto3" json:"legSecurityIds,omitempty"`
+	LegSecurityIds []uint64               `protobuf:"varint,1,rep,packed,name=leg_security_ids,json=legSecurityIds,proto3" json:"leg_security_ids,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -526,10 +526,10 @@ func (x *OrderBookSnapshot) GetLegSecurityIds() []uint64 {
 
 type NewOrder_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        uint64                 `protobuf:"varint,1,opt,name=userId,proto3" json:"userId,omitempty"`
-	ClientOrderId uint64                 `protobuf:"varint,2,opt,name=clientOrderId,proto3" json:"clientOrderId,omitempty"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ClientOrderId uint64                 `protobuf:"varint,2,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
 	Legs          []*NewOrder_Body_Leg   `protobuf:"bytes,3,rep,name=legs,proto3" json:"legs,omitempty"`
-	OrderType     gen.OrderType          `protobuf:"varint,4,opt,name=orderType,proto3,enum=OrderType" json:"orderType,omitempty"`
+	OrderType     gen.OrderType          `protobuf:"varint,4,opt,name=order_type,json=orderType,proto3,enum=OpenBook.CommonPackage.OrderType" json:"order_type,omitempty"`
 	Portion       uint64                 `protobuf:"varint,5,opt,name=portion,proto3" json:"portion,omitempty"`
 	Quantity      uint64                 `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -610,8 +610,8 @@ func (x *NewOrder_Body) GetQuantity() uint64 {
 
 type NewOrder_Body_Leg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	LegSecurityId uint64                 `protobuf:"varint,1,opt,name=legSecurityId,proto3" json:"legSecurityId,omitempty"`
-	IsOver        bool                   `protobuf:"varint,2,opt,name=isOver,proto3" json:"isOver,omitempty"`
+	LegSecurityId uint64                 `protobuf:"varint,1,opt,name=leg_security_id,json=legSecurityId,proto3" json:"leg_security_id,omitempty"`
+	IsOver        bool                   `protobuf:"varint,2,opt,name=is_over,json=isOver,proto3" json:"is_over,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -662,7 +662,7 @@ func (x *NewOrder_Body_Leg) GetIsOver() bool {
 
 type CancelOrder_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -706,7 +706,7 @@ func (x *CancelOrder_Body) GetOrderId() uint64 {
 
 type CancelOrderAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderId       uint64                 `protobuf:"varint,1,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -750,8 +750,8 @@ func (x *CancelOrderAcknowledgement_Body) GetOrderId() uint64 {
 
 type NewOrderAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=clientOrderId,proto3" json:"clientOrderId,omitempty"`
-	OrderId       uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
+	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
+	OrderId       uint64                 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -801,11 +801,13 @@ func (x *NewOrderAcknowledgement_Body) GetOrderId() uint64 {
 }
 
 type Match_Body struct {
-	state           protoimpl.MessageState  `protogen:"open.v1"`
-	TransactionId   uint64                  `protobuf:"varint,1,opt,name=transactionId,proto3" json:"transactionId,omitempty"` // If there are multiple matches resulting from one new order, they all share the same transactionId
-	MatchId         uint64                  `protobuf:"varint,2,opt,name=matchId,proto3" json:"matchId,omitempty"`             // If there are multiple matches resulting from one new order, they all have unique matchIds
-	MatchedQuantity uint64                  `protobuf:"varint,3,opt,name=matchedQuantity,proto3" json:"matchedQuantity,omitempty"`
-	FillEvents      []*Match_Body_FillEvent `protobuf:"bytes,4,rep,name=fillEvents,proto3" json:"fillEvents,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransactionId uint64                 `protobuf:"varint,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"` // If there are multiple matches resulting from one new order, they
+	// all share the same transactionId
+	MatchId uint64 `protobuf:"varint,2,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"` // If there are multiple matches resulting from one new
+	// order, they all have unique matchIds
+	MatchedQuantity uint64                  `protobuf:"varint,3,opt,name=matched_quantity,json=matchedQuantity,proto3" json:"matched_quantity,omitempty"`
+	FillEvents      []*Match_Body_FillEvent `protobuf:"bytes,4,rep,name=fill_events,json=fillEvents,proto3" json:"fill_events,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -870,11 +872,11 @@ func (x *Match_Body) GetFillEvents() []*Match_Body_FillEvent {
 
 type Match_Body_FillEvent struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	FillEventId    uint64                 `protobuf:"varint,1,opt,name=fillEventId,proto3" json:"fillEventId,omitempty"`
-	OrderId        uint64                 `protobuf:"varint,2,opt,name=orderId,proto3" json:"orderId,omitempty"`
-	IsAggressor    bool                   `protobuf:"varint,3,opt,name=isAggressor,proto3" json:"isAggressor,omitempty"`
-	MatchedPortion uint64                 `protobuf:"varint,4,opt,name=matchedPortion,proto3" json:"matchedPortion,omitempty"`
-	IsComplete     bool                   `protobuf:"varint,5,opt,name=isComplete,proto3" json:"isComplete,omitempty"` // only marked true for the final fill notification of an order
+	FillEventId    uint64                 `protobuf:"varint,1,opt,name=fill_event_id,json=fillEventId,proto3" json:"fill_event_id,omitempty"`
+	OrderId        uint64                 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	IsAggressor    bool                   `protobuf:"varint,3,opt,name=is_aggressor,json=isAggressor,proto3" json:"is_aggressor,omitempty"`
+	MatchedPortion uint64                 `protobuf:"varint,4,opt,name=matched_portion,json=matchedPortion,proto3" json:"matched_portion,omitempty"`
+	IsComplete     bool                   `protobuf:"varint,5,opt,name=is_complete,json=isComplete,proto3" json:"is_complete,omitempty"` // only marked true for the final fill notification of an order
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -946,7 +948,7 @@ func (x *Match_Body_FillEvent) GetIsComplete() bool {
 
 type OrderBookSnapshot_LineupBook struct {
 	state         protoimpl.MessageState                `protogen:"open.v1"`
-	IsOver        []bool                                `protobuf:"varint,1,rep,packed,name=isOver,proto3" json:"isOver,omitempty"`
+	IsOver        []bool                                `protobuf:"varint,1,rep,packed,name=is_over,json=isOver,proto3" json:"is_over,omitempty"`
 	Levels        []*OrderBookSnapshot_LineupBook_Level `protobuf:"bytes,2,rep,name=levels,proto3" json:"levels,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1050,7 +1052,7 @@ func (x *OrderBookSnapshot_LineupBook_Level) GetOrders() []*OrderBookSnapshot_Li
 
 type OrderBookSnapshot_LineupBook_Level_Order struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	QuantityRemaining uint64                 `protobuf:"varint,1,opt,name=quantityRemaining,proto3" json:"quantityRemaining,omitempty"`
+	QuantityRemaining uint64                 `protobuf:"varint,1,opt,name=quantity_remaining,json=quantityRemaining,proto3" json:"quantity_remaining,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1096,76 +1098,74 @@ var File_GatewayService_proto protoreflect.FileDescriptor
 
 const file_GatewayService_proto_rawDesc = "" +
 	"\n" +
-	"\x14GatewayService.proto\x12\x1eOpenBook.GatewayServicePackage\x1a\fCommon.proto\"\xb0\x01\n" +
-	"\x0eBackendMessage\x12F\n" +
-	"\bnewOrder\x18\x01 \x01(\v2(.OpenBook.GatewayServicePackage.NewOrderH\x00R\bnewOrder\x12O\n" +
-	"\vcancelOrder\x18\x02 \x01(\v2+.OpenBook.GatewayServicePackage.CancelOrderH\x00R\vcancelOrderB\x05\n" +
-	"\x03msg\"\xf9\x03\n" +
-	"\x0eGatewayMessage\x12I\n" +
-	"\x14sequencedMessageBase\x18\x01 \x01(\v2\x15.SequencedMessageBaseR\x14sequencedMessageBase\x12s\n" +
-	"\x17newOrderAcknowledgement\x18\x02 \x01(\v27.OpenBook.GatewayServicePackage.NewOrderAcknowledgementH\x00R\x17newOrderAcknowledgement\x12|\n" +
-	"\x1acancelOrderAcknowledgement\x18\x03 \x01(\v2:.OpenBook.GatewayServicePackage.CancelOrderAcknowledgementH\x00R\x1acancelOrderAcknowledgement\x12=\n" +
-	"\x05match\x18\x04 \x01(\v2%.OpenBook.GatewayServicePackage.MatchH\x00R\x05match\x12a\n" +
-	"\x11orderBookSnapshot\x18\x05 \x01(\v21.OpenBook.GatewayServicePackage.OrderBookSnapshotH\x00R\x11orderBookSnapshotB\a\n" +
-	"\x05event\"\x80\x03\n" +
+	"\x14GatewayService.proto\x12\x1eOpenBook.GatewayServicePackage\x1a\fCommon.proto\"\xb2\x01\n" +
+	"\x0eBackendMessage\x12G\n" +
+	"\tnew_order\x18\x01 \x01(\v2(.OpenBook.GatewayServicePackage.NewOrderH\x00R\bnewOrder\x12P\n" +
+	"\fcancel_order\x18\x04 \x01(\v2+.OpenBook.GatewayServicePackage.CancelOrderH\x00R\vcancelOrderB\x05\n" +
+	"\x03msg\"\x98\x04\n" +
+	"\x0eGatewayMessage\x12b\n" +
+	"\x16sequenced_message_base\x18\x01 \x01(\v2,.OpenBook.CommonPackage.SequencedMessageBaseR\x14sequencedMessageBase\x12u\n" +
+	"\x19new_order_acknowledgement\x18\x02 \x01(\v27.OpenBook.GatewayServicePackage.NewOrderAcknowledgementH\x00R\x17newOrderAcknowledgement\x12~\n" +
+	"\x1ccancel_order_acknowledgement\x18\x03 \x01(\v2:.OpenBook.GatewayServicePackage.CancelOrderAcknowledgementH\x00R\x1acancelOrderAcknowledgement\x12=\n" +
+	"\x05match\x18\x04 \x01(\v2%.OpenBook.GatewayServicePackage.MatchH\x00R\x05match\x12c\n" +
+	"\x13order_book_snapshot\x18\x05 \x01(\v21.OpenBook.GatewayServicePackage.OrderBookSnapshotH\x00R\x11orderBookSnapshotB\a\n" +
+	"\x05event\"\x9e\x03\n" +
 	"\bNewOrder\x12A\n" +
-	"\x04body\x18\x01 \x01(\v2-.OpenBook.GatewayServicePackage.NewOrder.BodyR\x04body\x1a\xb0\x02\n" +
-	"\x04Body\x12\x16\n" +
-	"\x06userId\x18\x01 \x01(\x04R\x06userId\x12$\n" +
-	"\rclientOrderId\x18\x02 \x01(\x04R\rclientOrderId\x12E\n" +
-	"\x04legs\x18\x03 \x03(\v21.OpenBook.GatewayServicePackage.NewOrder.Body.LegR\x04legs\x12(\n" +
-	"\torderType\x18\x04 \x01(\x0e2\n" +
-	".OrderTypeR\torderType\x12\x18\n" +
+	"\x04body\x18\x01 \x01(\v2-.OpenBook.GatewayServicePackage.NewOrder.BodyR\x04body\x1a\xce\x02\n" +
+	"\x04Body\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12&\n" +
+	"\x0fclient_order_id\x18\x02 \x01(\x04R\rclientOrderId\x12E\n" +
+	"\x04legs\x18\x03 \x03(\v21.OpenBook.GatewayServicePackage.NewOrder.Body.LegR\x04legs\x12@\n" +
+	"\n" +
+	"order_type\x18\x04 \x01(\x0e2!.OpenBook.CommonPackage.OrderTypeR\torderType\x12\x18\n" +
 	"\aportion\x18\x05 \x01(\x04R\aportion\x12\x1a\n" +
-	"\bquantity\x18\x06 \x01(\x04R\bquantity\x1aC\n" +
-	"\x03Leg\x12$\n" +
-	"\rlegSecurityId\x18\x01 \x01(\x04R\rlegSecurityId\x12\x16\n" +
-	"\x06isOver\x18\x02 \x01(\bR\x06isOver\"u\n" +
+	"\bquantity\x18\x06 \x01(\x04R\bquantity\x1aF\n" +
+	"\x03Leg\x12&\n" +
+	"\x0fleg_security_id\x18\x01 \x01(\x04R\rlegSecurityId\x12\x17\n" +
+	"\ais_over\x18\x02 \x01(\bR\x06isOver\"v\n" +
 	"\vCancelOrder\x12D\n" +
-	"\x04body\x18\x01 \x01(\v20.OpenBook.GatewayServicePackage.CancelOrder.BodyR\x04body\x1a \n" +
-	"\x04Body\x12\x18\n" +
-	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\xf9\x01\n" +
-	"\x1aCancelOrderAcknowledgement\x121\n" +
-	"\fresponseBase\x18\x01 \x01(\v2\r.ResponseBaseR\fresponseBase\x121\n" +
-	"\ffallibleBase\x18\x02 \x01(\v2\r.FallibleBaseR\ffallibleBase\x12S\n" +
-	"\x04body\x18\x03 \x01(\v2?.OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.BodyR\x04body\x1a \n" +
-	"\x04Body\x12\x18\n" +
-	"\aorderId\x18\x01 \x01(\x04R\aorderId\"\x99\x02\n" +
-	"\x17NewOrderAcknowledgement\x121\n" +
-	"\fresponseBase\x18\x01 \x01(\v2\r.ResponseBaseR\fresponseBase\x121\n" +
-	"\ffallibleBase\x18\x02 \x01(\v2\r.FallibleBaseR\ffallibleBase\x12P\n" +
-	"\x04body\x18\x03 \x01(\v2<.OpenBook.GatewayServicePackage.NewOrderAcknowledgement.BodyR\x04body\x1aF\n" +
-	"\x04Body\x12$\n" +
-	"\rclientOrderId\x18\x01 \x01(\x04R\rclientOrderId\x12\x18\n" +
-	"\aorderId\x18\x02 \x01(\x04R\aorderId\"\xc4\x03\n" +
+	"\x04body\x18\x01 \x01(\v20.OpenBook.GatewayServicePackage.CancelOrder.BodyR\x04body\x1a!\n" +
+	"\x04Body\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x04R\aorderId\"\xaa\x02\n" +
+	"\x1aCancelOrderAcknowledgement\x12I\n" +
+	"\rresponse_base\x18\x01 \x01(\v2$.OpenBook.CommonPackage.ResponseBaseR\fresponseBase\x12I\n" +
+	"\rfallible_base\x18\x02 \x01(\v2$.OpenBook.CommonPackage.FallibleBaseR\ffallibleBase\x12S\n" +
+	"\x04body\x18\x03 \x01(\v2?.OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.BodyR\x04body\x1a!\n" +
+	"\x04Body\x12\x19\n" +
+	"\border_id\x18\x01 \x01(\x04R\aorderId\"\xcc\x02\n" +
+	"\x17NewOrderAcknowledgement\x12I\n" +
+	"\rresponse_base\x18\x01 \x01(\v2$.OpenBook.CommonPackage.ResponseBaseR\fresponseBase\x12I\n" +
+	"\rfallible_base\x18\x02 \x01(\v2$.OpenBook.CommonPackage.FallibleBaseR\ffallibleBase\x12P\n" +
+	"\x04body\x18\x03 \x01(\v2<.OpenBook.GatewayServicePackage.NewOrderAcknowledgement.BodyR\x04body\x1aI\n" +
+	"\x04Body\x12&\n" +
+	"\x0fclient_order_id\x18\x01 \x01(\x04R\rclientOrderId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\x04R\aorderId\"\xce\x03\n" +
 	"\x05Match\x12>\n" +
-	"\x04body\x18\x01 \x01(\v2*.OpenBook.GatewayServicePackage.Match.BodyR\x04body\x1a\xfa\x02\n" +
-	"\x04Body\x12$\n" +
-	"\rtransactionId\x18\x01 \x01(\x04R\rtransactionId\x12\x18\n" +
-	"\amatchId\x18\x02 \x01(\x04R\amatchId\x12(\n" +
-	"\x0fmatchedQuantity\x18\x03 \x01(\x04R\x0fmatchedQuantity\x12T\n" +
+	"\x04body\x18\x01 \x01(\v2*.OpenBook.GatewayServicePackage.Match.BodyR\x04body\x1a\x84\x03\n" +
+	"\x04Body\x12%\n" +
+	"\x0etransaction_id\x18\x01 \x01(\x04R\rtransactionId\x12\x19\n" +
+	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12)\n" +
+	"\x10matched_quantity\x18\x03 \x01(\x04R\x0fmatchedQuantity\x12U\n" +
+	"\vfill_events\x18\x04 \x03(\v24.OpenBook.GatewayServicePackage.Match.Body.FillEventR\n" +
+	"fillEvents\x1a\xb7\x01\n" +
+	"\tFillEvent\x12\"\n" +
+	"\rfill_event_id\x18\x01 \x01(\x04R\vfillEventId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\x04R\aorderId\x12!\n" +
+	"\fis_aggressor\x18\x03 \x01(\bR\visAggressor\x12'\n" +
+	"\x0fmatched_portion\x18\x04 \x01(\x04R\x0ematchedPortion\x12\x1f\n" +
+	"\vis_complete\x18\x05 \x01(\bR\n" +
+	"isComplete\"\xff\x02\n" +
+	"\x11OrderBookSnapshot\x12(\n" +
+	"\x10leg_security_ids\x18\x01 \x03(\x04R\x0elegSecurityIds\x1a\xbf\x02\n" +
 	"\n" +
-	"fillEvents\x18\x04 \x03(\v24.OpenBook.GatewayServicePackage.Match.Body.FillEventR\n" +
-	"fillEvents\x1a\xb1\x01\n" +
-	"\tFillEvent\x12 \n" +
-	"\vfillEventId\x18\x01 \x01(\x04R\vfillEventId\x12\x18\n" +
-	"\aorderId\x18\x02 \x01(\x04R\aorderId\x12 \n" +
-	"\visAggressor\x18\x03 \x01(\bR\visAggressor\x12&\n" +
-	"\x0ematchedPortion\x18\x04 \x01(\x04R\x0ematchedPortion\x12\x1e\n" +
-	"\n" +
-	"isComplete\x18\x05 \x01(\bR\n" +
-	"isComplete\"\xfb\x02\n" +
-	"\x11OrderBookSnapshot\x12&\n" +
-	"\x0elegSecurityIds\x18\x01 \x03(\x04R\x0elegSecurityIds\x1a\xbd\x02\n" +
-	"\n" +
-	"LineupBook\x12\x16\n" +
-	"\x06isOver\x18\x01 \x03(\bR\x06isOver\x12Z\n" +
-	"\x06levels\x18\x02 \x03(\v2B.OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.LevelR\x06levels\x1a\xba\x01\n" +
+	"LineupBook\x12\x17\n" +
+	"\ais_over\x18\x01 \x03(\bR\x06isOver\x12Z\n" +
+	"\x06levels\x18\x02 \x03(\v2B.OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.LevelR\x06levels\x1a\xbb\x01\n" +
 	"\x05Level\x12\x18\n" +
 	"\aportion\x18\x01 \x01(\x04R\aportion\x12`\n" +
-	"\x06orders\x18\x02 \x03(\v2H.OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.OrderR\x06orders\x1a5\n" +
-	"\x05Order\x12,\n" +
-	"\x11quantityRemaining\x18\x01 \x01(\x04R\x11quantityRemaining2\x8f\x01\n" +
+	"\x06orders\x18\x02 \x03(\v2H.OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.OrderR\x06orders\x1a6\n" +
+	"\x05Order\x12-\n" +
+	"\x12quantity_remaining\x18\x01 \x01(\x04R\x11quantityRemaining2\x8f\x01\n" +
 	"\x14GatewayServerService\x12w\n" +
 	"\x11CreateTradeStream\x12..OpenBook.GatewayServicePackage.BackendMessage\x1a..OpenBook.GatewayServicePackage.GatewayMessage(\x010\x01B\x1fZ\x1dOpenBook/GatewayService/protob\x06proto3"
 
@@ -1201,31 +1201,31 @@ var file_GatewayService_proto_goTypes = []any{
 	(*OrderBookSnapshot_LineupBook)(nil),             // 15: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook
 	(*OrderBookSnapshot_LineupBook_Level)(nil),       // 16: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
 	(*OrderBookSnapshot_LineupBook_Level_Order)(nil), // 17: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
-	(*gen.SequencedMessageBase)(nil),                 // 18: SequencedMessageBase
-	(*gen.ResponseBase)(nil),                         // 19: ResponseBase
-	(*gen.FallibleBase)(nil),                         // 20: FallibleBase
-	(gen.OrderType)(0),                               // 21: OrderType
+	(*gen.SequencedMessageBase)(nil),                 // 18: OpenBook.CommonPackage.SequencedMessageBase
+	(*gen.ResponseBase)(nil),                         // 19: OpenBook.CommonPackage.ResponseBase
+	(*gen.FallibleBase)(nil),                         // 20: OpenBook.CommonPackage.FallibleBase
+	(gen.OrderType)(0),                               // 21: OpenBook.CommonPackage.OrderType
 }
 var file_GatewayService_proto_depIdxs = []int32{
-	2,  // 0: OpenBook.GatewayServicePackage.BackendMessage.newOrder:type_name -> OpenBook.GatewayServicePackage.NewOrder
-	3,  // 1: OpenBook.GatewayServicePackage.BackendMessage.cancelOrder:type_name -> OpenBook.GatewayServicePackage.CancelOrder
-	18, // 2: OpenBook.GatewayServicePackage.GatewayMessage.sequencedMessageBase:type_name -> SequencedMessageBase
-	5,  // 3: OpenBook.GatewayServicePackage.GatewayMessage.newOrderAcknowledgement:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement
-	4,  // 4: OpenBook.GatewayServicePackage.GatewayMessage.cancelOrderAcknowledgement:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement
+	2,  // 0: OpenBook.GatewayServicePackage.BackendMessage.new_order:type_name -> OpenBook.GatewayServicePackage.NewOrder
+	3,  // 1: OpenBook.GatewayServicePackage.BackendMessage.cancel_order:type_name -> OpenBook.GatewayServicePackage.CancelOrder
+	18, // 2: OpenBook.GatewayServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
+	5,  // 3: OpenBook.GatewayServicePackage.GatewayMessage.new_order_acknowledgement:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement
+	4,  // 4: OpenBook.GatewayServicePackage.GatewayMessage.cancel_order_acknowledgement:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement
 	6,  // 5: OpenBook.GatewayServicePackage.GatewayMessage.match:type_name -> OpenBook.GatewayServicePackage.Match
-	7,  // 6: OpenBook.GatewayServicePackage.GatewayMessage.orderBookSnapshot:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot
+	7,  // 6: OpenBook.GatewayServicePackage.GatewayMessage.order_book_snapshot:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot
 	8,  // 7: OpenBook.GatewayServicePackage.NewOrder.body:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body
 	10, // 8: OpenBook.GatewayServicePackage.CancelOrder.body:type_name -> OpenBook.GatewayServicePackage.CancelOrder.Body
-	19, // 9: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.responseBase:type_name -> ResponseBase
-	20, // 10: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.fallibleBase:type_name -> FallibleBase
+	19, // 9: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	20, // 10: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
 	11, // 11: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body
-	19, // 12: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.responseBase:type_name -> ResponseBase
-	20, // 13: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.fallibleBase:type_name -> FallibleBase
+	19, // 12: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	20, // 13: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
 	12, // 14: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body
 	13, // 15: OpenBook.GatewayServicePackage.Match.body:type_name -> OpenBook.GatewayServicePackage.Match.Body
 	9,  // 16: OpenBook.GatewayServicePackage.NewOrder.Body.legs:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body.Leg
-	21, // 17: OpenBook.GatewayServicePackage.NewOrder.Body.orderType:type_name -> OrderType
-	14, // 18: OpenBook.GatewayServicePackage.Match.Body.fillEvents:type_name -> OpenBook.GatewayServicePackage.Match.Body.FillEvent
+	21, // 17: OpenBook.GatewayServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
+	14, // 18: OpenBook.GatewayServicePackage.Match.Body.fill_events:type_name -> OpenBook.GatewayServicePackage.Match.Body.FillEvent
 	16, // 19: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.levels:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
 	17, // 20: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.orders:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
 	0,  // 21: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:input_type -> OpenBook.GatewayServicePackage.BackendMessage

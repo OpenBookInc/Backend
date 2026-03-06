@@ -69,7 +69,7 @@ func (OrderType) EnumDescriptor() ([]byte, []int) {
 
 type SequencedMessageBase struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	SequenceNumber uint64                 `protobuf:"varint,1,opt,name=sequenceNumber,proto3" json:"sequenceNumber,omitempty"`
+	SequenceNumber uint64                 `protobuf:"varint,1,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -113,7 +113,7 @@ func (x *SequencedMessageBase) GetSequenceNumber() uint64 {
 
 type ResponseBase struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
-	RequestSequenceNumber uint64                 `protobuf:"varint,1,opt,name=requestSequenceNumber,proto3" json:"requestSequenceNumber,omitempty"`
+	RequestSequenceNumber uint64                 `protobuf:"varint,1,opt,name=request_sequence_number,json=requestSequenceNumber,proto3" json:"request_sequence_number,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -160,7 +160,7 @@ func (x *ResponseBase) GetRequestSequenceNumber() uint64 {
 type FallibleBase struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Success          bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	ErrorDescription string                 `protobuf:"bytes,2,opt,name=errorDescription,proto3" json:"errorDescription,omitempty"`
+	ErrorDescription string                 `protobuf:"bytes,2,opt,name=error_description,json=errorDescription,proto3" json:"error_description,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -213,14 +213,14 @@ var File_Common_proto protoreflect.FileDescriptor
 
 const file_Common_proto_rawDesc = "" +
 	"\n" +
-	"\fCommon.proto\">\n" +
-	"\x14SequencedMessageBase\x12&\n" +
-	"\x0esequenceNumber\x18\x01 \x01(\x04R\x0esequenceNumber\"D\n" +
-	"\fResponseBase\x124\n" +
-	"\x15requestSequenceNumber\x18\x01 \x01(\x04R\x15requestSequenceNumber\"T\n" +
+	"\fCommon.proto\x12\x16OpenBook.CommonPackage\"?\n" +
+	"\x14SequencedMessageBase\x12'\n" +
+	"\x0fsequence_number\x18\x01 \x01(\x04R\x0esequenceNumber\"F\n" +
+	"\fResponseBase\x126\n" +
+	"\x17request_sequence_number\x18\x01 \x01(\x04R\x15requestSequenceNumber\"U\n" +
 	"\fFallibleBase\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12*\n" +
-	"\x10errorDescription\x18\x02 \x01(\tR\x10errorDescription*\"\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12+\n" +
+	"\x11error_description\x18\x02 \x01(\tR\x10errorDescription*\"\n" +
 	"\tOrderType\x12\t\n" +
 	"\x05LIMIT\x10\x00\x12\n" +
 	"\n" +
@@ -241,10 +241,10 @@ func file_Common_proto_rawDescGZIP() []byte {
 var file_Common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_Common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_Common_proto_goTypes = []any{
-	(OrderType)(0),               // 0: OrderType
-	(*SequencedMessageBase)(nil), // 1: SequencedMessageBase
-	(*ResponseBase)(nil),         // 2: ResponseBase
-	(*FallibleBase)(nil),         // 3: FallibleBase
+	(OrderType)(0),               // 0: OpenBook.CommonPackage.OrderType
+	(*SequencedMessageBase)(nil), // 1: OpenBook.CommonPackage.SequencedMessageBase
+	(*ResponseBase)(nil),         // 2: OpenBook.CommonPackage.ResponseBase
+	(*FallibleBase)(nil),         // 3: OpenBook.CommonPackage.FallibleBase
 }
 var file_Common_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

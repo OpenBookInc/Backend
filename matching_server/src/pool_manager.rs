@@ -109,13 +109,27 @@ impl PoolManager {
         // Track order to pool mapping for cancellation
         self.order_to_pool.insert(order_id, pool_key.clone());
 
+        // Convert optional bytes self_match_id to u128
+        let self_match_id = match &order.self_match_id {
+            Some(bytes) => {
+                if bytes.len() != 16 {
+                    return Err(format!(
+                        "self_match_id must be exactly 16 bytes, got {}",
+                        bytes.len()
+                    ));
+                }
+                Some(u128::from_be_bytes(bytes.as_slice().try_into().unwrap()))
+            }
+            None => None,
+        };
+
         // Create entry parameters
         let params = EntryParameters {
             entry_id: order_id,
             entry_type,
             portion: order.portion,
             quantity: order.quantity,
-            self_match_id: order.self_match_id,
+            self_match_id,
         };
 
         // Submit to the entry pool
@@ -248,6 +262,11 @@ impl PoolManager {
 mod tests {
     use super::*;
     use crate::matching_service_package::new_order::body::Leg as NewOrderLeg;
+
+    // Helper function to create a self_match_id bytes value from a u128
+    fn smid(id: u128) -> Option<Vec<u8>> {
+        Some(id.to_be_bytes().to_vec())
+    }
 
     // Helper function to create legs for testing
     fn create_legs(leg_data: &[(u64, bool)]) -> Vec<NewOrderLeg> {
@@ -777,7 +796,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(1),
+                self_match_id: smid(1),
             })
             .unwrap();
 
@@ -788,7 +807,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(2),
+                self_match_id: smid(2),
             })
             .unwrap();
 
@@ -800,7 +819,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(3),
+                self_match_id: smid(3),
             })
             .unwrap();
 
@@ -819,7 +838,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(42),
+                self_match_id: smid(42),
             })
             .unwrap();
 
@@ -831,7 +850,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(42),
+                self_match_id: smid(42),
             })
             .unwrap();
 
@@ -856,7 +875,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(77),
+                self_match_id: smid(77),
             })
             .unwrap();
 
@@ -867,7 +886,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 200_000,
                 quantity: 200_000,
-                self_match_id: Some(77),
+                self_match_id: smid(77),
             })
             .unwrap();
 
@@ -881,7 +900,7 @@ mod tests {
                 order_type: OrderType::Limit as i32,
                 portion: 250_000,
                 quantity: 250_000,
-                self_match_id: Some(77),
+                self_match_id: smid(77),
             })
             .unwrap();
 

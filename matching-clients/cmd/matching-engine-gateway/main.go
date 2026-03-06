@@ -460,13 +460,13 @@ func (gw *Gateway) ValidateLegSecurityIDs(ctx context.Context, legs []LegRequest
 	return nil
 }
 
-// GetSelfMatchID translates a user ID to a self match ID for the matching engine
+// GetSelfMatchID translates a user ID to a self match ID (16-byte UUID) for the matching engine
 // TODO: STUB - Implement user ID to self match ID translation
-func (gw *Gateway) GetSelfMatchID(ctx context.Context, userID string) (uint64, error) {
-	// TODO: Implement proper mapping from user_id string to selfMatchId uint64
-	// This could be a hash, a database lookup, or another mechanism
-	// For now, return 0 (no self-match protection)
-	return 0, nil
+func (gw *Gateway) GetSelfMatchID(ctx context.Context, userID string) ([]byte, error) {
+	// TODO: Implement proper mapping from user_id string to selfMatchId bytes
+	// This should parse the user's UUID and return the raw 16 bytes
+	// For now, return nil (no self-match protection)
+	return nil, nil
 }
 
 // SubmitOrder validates and submits an order to the matching server
@@ -531,7 +531,7 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 			OrderType:     req.OrderType,
 			Portion:       req.Portion,
 			Quantity:      req.Quantity,
-			SelfMatchId:   &selfMatchID,
+			SelfMatchId:   selfMatchID,
 		},
 	}
 

@@ -52,9 +52,10 @@ message NewOrder {
     OpenBook.CommonPackage.OrderType order_type = 3;
     uint64 portion = 4;
     uint64 quantity = 5;
-    optional uint64 self_match_id =
+    optional bytes self_match_id =
         6; // Protects a user from filling against orders entirely against
-           // themselves. If unpopulated, user gets no protections
+           // themselves. If unpopulated, user gets no protections.
+           // Expected to be a 16-byte UUID.
   }
 
   Body body = 1;

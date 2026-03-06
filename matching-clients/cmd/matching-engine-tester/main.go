@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -467,11 +468,12 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
 
-		// handle optional selfMatchId (pointer presence)
-		var selfMatchIdPtr *uint64
+		// handle optional selfMatchId - parse as uint64, encode as 16-byte big-endian
+		var selfMatchIdBytes []byte
 		if v := r.FormValue("selfMatchId"); v != "" {
 			parsed, _ := strconv.ParseUint(v, 10, 64)
-			selfMatchIdPtr = &parsed
+			selfMatchIdBytes = make([]byte, 16)
+			binary.BigEndian.PutUint64(selfMatchIdBytes[8:], parsed)
 		}
 
 		newOrder := &pb.NewOrder{
@@ -481,7 +483,7 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 				OrderType:     orderType,
 				Portion:       portion,
 				Quantity:      quantity,
-				SelfMatchId:   selfMatchIdPtr,
+				SelfMatchId:   selfMatchIdBytes,
 			},
 		}
 
