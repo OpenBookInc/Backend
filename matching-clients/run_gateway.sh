@@ -32,4 +32,4 @@ echo -e "${BLUE}Starting Matching Engine Gateway...${NC}"
 echo ""
 
 # Run the gateway
-go run cmd/matching-engine-gateway/main.go
+go run ./cmd/matching-engine-gateway/
