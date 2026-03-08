@@ -793,9 +793,6 @@ drained:
 		return fmt.Errorf("stream creation failed: %w", err)
 	}
 
-	// Reconcile stale DB state
-	gw.reconcileAfterReconnect()
-
 	gw.upstreamMu.Lock()
 	gw.upstreamConnected = true
 	gw.upstreamMu.Unlock()
