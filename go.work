@@ -2,6 +2,7 @@ go 1.25.4
 
 use (
 	./database/scripts
+	./dev-tools
 	./matching-clients
 	./shared
 )
