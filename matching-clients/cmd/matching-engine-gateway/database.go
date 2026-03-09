@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"matching-clients/src/utils"
 	"os"
 	"time"
 
@@ -158,11 +159,11 @@ func (gw *Gateway) ValidateLegSecurityIDs(ctx context.Context, legs []LegRequest
 	return nil
 }
 
-// GetSelfMatchID translates a user ID to a self match ID (16-byte UUID) for the matching engine
+// GetSelfMatchID translates a user ID to a self match UUID for the matching engine
 // TODO: STUB - Implement user ID to self match ID translation
-func (gw *Gateway) GetSelfMatchID(ctx context.Context, userID string) ([]byte, error) {
-	// TODO: Implement proper mapping from user_id string to selfMatchId bytes
-	// This should parse the user's UUID and return the raw 16 bytes
+func (gw *Gateway) GetSelfMatchID(ctx context.Context, userID string) (*utils.UUID, error) {
+	// TODO: Implement proper mapping from user_id string to selfMatchId UUID
+	// This should parse the user's UUID and return it
 	// For now, return nil (no self-match protection)
 	return nil, nil
 }

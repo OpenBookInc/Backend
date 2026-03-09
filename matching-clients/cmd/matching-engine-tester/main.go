@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -17,6 +16,7 @@ import (
 
 	common "matching-clients/src/gen"
 	pb "matching-clients/src/gen/matching"
+	"matching-clients/src/utils"
 
 	"github.com/openbook/shared/envloader"
 	"google.golang.org/grpc"
@@ -87,7 +87,7 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 		// Handle new order acknowledgement
 		ack := event.NewOrderAcknowledgement
 		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			clientOrderID := ack.Body.ClientOrderId
+			clientOrderID := ack.Body.ClientOrderId.GetLower()
 			orderID := ack.Body.OrderId
 			var sequenceNumber uint64
 			if resp.SequencedMessageBase != nil {
@@ -100,7 +100,7 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 				legs := make([]Leg, len(pendingOrder.Body.Legs))
 				for i, leg := range pendingOrder.Body.Legs {
 					legs[i] = Leg{
-						LegSecurityID: leg.LegSecurityId,
+						LegSecurityID: utils.UUIDFromUint64(leg.LegSecurityId.GetUpper(), leg.LegSecurityId.GetLower()),
 						IsOver:        leg.IsOver,
 					}
 				}
@@ -452,10 +452,17 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 			isOverStrs := splitAndTrim(isOversStr, ",")
 
 			for i := 0; i < len(legIdStrs) && i < len(isOverStrs); i++ {
-				legId, _ := strconv.ParseUint(legIdStrs[i], 10, 64)
+				var legUUID *common.UUID
+				if parsed, err := utils.ParseUUID(legIdStrs[i]); err == nil {
+					legUUID = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+				} else {
+					// Fallback: treat as a simple uint64 for backwards compat with tester UI
+					legId, _ := strconv.ParseUint(legIdStrs[i], 10, 64)
+					legUUID = &common.UUID{Upper: 0, Lower: legId}
+				}
 				isOver := isOverStrs[i] == "true" || isOverStrs[i] == "1"
 				legs = append(legs, &pb.NewOrder_Body_Leg{
-					LegSecurityId: legId,
+					LegSecurityId: legUUID,
 					IsOver:        isOver,
 				})
 			}
@@ -468,23 +475,26 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
 
-		// handle optional selfMatchId - parse as uint64, encode as 16-byte big-endian
-		var selfMatchIdBytes []byte
+		// handle optional selfMatchId - parse as UUID string
+		newOrderBody := &pb.NewOrder_Body{
+			ClientOrderId: &common.UUID{Upper: 0, Lower: clientOrderId},
+			Legs:          legs,
+			OrderType:     orderType,
+			Portion:       portion,
+			Quantity:      quantity,
+		}
 		if v := r.FormValue("selfMatchId"); v != "" {
-			parsed, _ := strconv.ParseUint(v, 10, 64)
-			selfMatchIdBytes = make([]byte, 16)
-			binary.BigEndian.PutUint64(selfMatchIdBytes[8:], parsed)
+			selfMatchID, err := utils.ParseUUID(v)
+			if err == nil {
+				newOrderBody.SelfMatchId = &common.UUID{
+					Upper: selfMatchID.Upper(),
+					Lower: selfMatchID.Lower(),
+				}
+			}
 		}
 
 		newOrder := &pb.NewOrder{
-			Body: &pb.NewOrder_Body{
-				ClientOrderId: clientOrderId,
-				Legs:          legs,
-				OrderType:     orderType,
-				Portion:       portion,
-				Quantity:      quantity,
-				SelfMatchId:   selfMatchIdBytes,
-			},
+			Body: newOrderBody,
 		}
 
 		gatewayMsg = &pb.GatewayMessage{
@@ -852,8 +862,8 @@ func renderMainPage(w http.ResponseWriter) {
                                 <input type="number" name="quantity" value="5">
                             </div>
                             <div class="form-group">
-                                <label>Self Match ID (optional):</label>
-                                <input type="number" name="selfMatchId" placeholder="Optional">
+                                <label>Self Match ID (optional UUID):</label>
+                                <input type="text" name="selfMatchId" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
                             </div>
                         </div>
                         

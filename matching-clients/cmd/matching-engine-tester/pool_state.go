@@ -1,13 +1,14 @@
 package main
 
 import (
+	"matching-clients/src/utils"
 	"sort"
 	"sync"
 )
 
 // Leg represents a single leg in an order
 type Leg struct {
-	LegSecurityID uint64
+	LegSecurityID utils.UUID
 	IsOver        bool
 }
 
@@ -28,7 +29,7 @@ type LineupState struct {
 
 // PoolState represents a single entry pool
 type PoolState struct {
-	LegSecurityIDs []uint64                  // Sorted leg security IDs (pool key)
+	LegSecurityIDs []utils.UUID              // Sorted leg security IDs (pool key)
 	Lineups        map[uint64]*LineupState   // map[lineup_index]LineupState
 	NumLegs        int
 }
@@ -47,39 +48,42 @@ func NewPoolTracker() *PoolTracker {
 }
 
 // poolKeyToString converts sorted leg IDs to a string key
-func poolKeyToString(legIDs []uint64) string {
-	// Create a simple string representation
+func poolKeyToString(legIDs []utils.UUID) string {
 	result := ""
 	for i, id := range legIDs {
 		if i > 0 {
 			result += ","
 		}
-		result += uintToString(id)
+		result += id.String()
 	}
 	return result
 }
 
-// uintToString converts uint64 to string without fmt
-func uintToString(n uint64) string {
-	if n == 0 {
-		return "0"
+// compareUUIDs returns -1, 0, or 1 comparing two UUIDs lexicographically
+func compareUUIDs(a, b utils.UUID) int {
+	if a.Upper() < b.Upper() {
+		return -1
 	}
-	digits := []byte{}
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
+	if a.Upper() > b.Upper() {
+		return 1
 	}
-	return string(digits)
+	if a.Lower() < b.Lower() {
+		return -1
+	}
+	if a.Lower() > b.Lower() {
+		return 1
+	}
+	return 0
 }
 
 // createSortedLegIDs creates a sorted list of leg security IDs from legs
-func createSortedLegIDs(legs []Leg) []uint64 {
-	ids := make([]uint64, len(legs))
+func createSortedLegIDs(legs []Leg) []utils.UUID {
+	ids := make([]utils.UUID, len(legs))
 	for i, leg := range legs {
 		ids[i] = leg.LegSecurityID
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		return ids[i] < ids[j]
+		return compareUUIDs(ids[i], ids[j]) < 0
 	})
 	return ids
 }
@@ -92,7 +96,7 @@ func calculateLineupIndex(legs []Leg) uint64 {
 	sortedLegs := make([]Leg, len(legs))
 	copy(sortedLegs, legs)
 	sort.Slice(sortedLegs, func(i, j int) bool {
-		return sortedLegs[i].LegSecurityID < sortedLegs[j].LegSecurityID
+		return compareUUIDs(sortedLegs[i].LegSecurityID, sortedLegs[j].LegSecurityID) < 0
 	})
 
 	// Calculate lineup index
@@ -200,7 +204,7 @@ func (pt *PoolTracker) RemoveOrder(orderID uint64) {
 // PoolDisplayData represents data for displaying a pool
 type PoolDisplayData struct {
 	PoolKey        string
-	LegSecurityIDs []uint64
+	LegSecurityIDs []string
 	NumLegs        int
 	TotalUnits     uint64
 	Lineups        []LineupDisplayData
@@ -215,7 +219,7 @@ type LineupDisplayData struct {
 
 // OverUnderDisplay shows the over/under status for a leg
 type OverUnderDisplay struct {
-	LegSecurityID uint64
+	LegSecurityID string
 	IsOver        bool
 }
 
@@ -249,7 +253,7 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 			for i := 0; i < pool.NumLegs; i++ {
 				isOver := (lineupIdx & (1 << uint(i))) != 0
 				overUnders[i] = OverUnderDisplay{
-					LegSecurityID: pool.LegSecurityIDs[i],
+					LegSecurityID: pool.LegSecurityIDs[i].String(),
 					IsOver:        isOver,
 				}
 			}
@@ -284,9 +288,14 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 			})
 		}
 
+		legIDStrings := make([]string, len(pool.LegSecurityIDs))
+		for i, id := range pool.LegSecurityIDs {
+			legIDStrings[i] = id.String()
+		}
+
 		result = append(result, PoolDisplayData{
 			PoolKey:        poolKey,
-			LegSecurityIDs: pool.LegSecurityIDs,
+			LegSecurityIDs: legIDStrings,
 			NumLegs:        pool.NumLegs,
 			TotalUnits:     1_000_000,
 			Lineups:        lineups,

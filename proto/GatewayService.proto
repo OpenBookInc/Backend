@@ -40,11 +40,11 @@ message GatewayMessage {
 message NewOrder {
   message Body {
     message Leg {
-      uint64 leg_security_id = 1;
+      OpenBook.CommonPackage.UUID leg_security_id = 1;
       bool is_over = 2;
     }
 
-    uint64 user_id = 1;
+    OpenBook.CommonPackage.UUID user_id = 1;
     uint64 client_order_id = 2;
     repeated Leg legs = 3;
     OpenBook.CommonPackage.OrderType order_type = 4;
@@ -56,13 +56,13 @@ message NewOrder {
 }
 
 message CancelOrder {
-  message Body { uint64 order_id = 1; }
+  message Body { OpenBook.CommonPackage.UUID order_id = 1; }
 
   Body body = 1;
 }
 
 message CancelOrderAcknowledgement {
-  message Body { uint64 order_id = 1; }
+  message Body { OpenBook.CommonPackage.UUID order_id = 1; }
 
   OpenBook.CommonPackage.ResponseBase response_base = 1;
   OpenBook.CommonPackage.FallibleBase fallible_base = 2;
@@ -72,7 +72,7 @@ message CancelOrderAcknowledgement {
 message NewOrderAcknowledgement {
   message Body {
     uint64 client_order_id = 1;
-    uint64 order_id = 2;
+    OpenBook.CommonPackage.UUID order_id = 2;
   }
 
   OpenBook.CommonPackage.ResponseBase response_base = 1;
@@ -83,8 +83,8 @@ message NewOrderAcknowledgement {
 message Match {
   message Body {
     message FillEvent {
-      uint64 fill_event_id = 1;
-      uint64 order_id = 2;
+      OpenBook.CommonPackage.UUID fill_event_id = 1;
+      OpenBook.CommonPackage.UUID order_id = 2;
       bool is_aggressor = 3;
       uint64 matched_portion = 4;
       bool is_complete =
@@ -94,8 +94,9 @@ message Match {
     uint64 transaction_id =
         1; // If there are multiple matches resulting from one new order, they
            // all share the same transactionId
-    uint64 match_id = 2; // If there are multiple matches resulting from one new
-                         // order, they all have unique matchIds
+    OpenBook.CommonPackage.UUID match_id =
+        2; // If there are multiple matches resulting from one new
+           // order, they all have unique matchIds
     uint64 matched_quantity = 3;
     repeated FillEvent fill_events = 4;
   }
@@ -116,5 +117,5 @@ message OrderBookSnapshot {
     repeated Level levels = 2;
   }
 
-  repeated uint64 leg_security_ids = 1;
+  repeated OpenBook.CommonPackage.UUID leg_security_ids = 1;
 }

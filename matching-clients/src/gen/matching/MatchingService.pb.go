@@ -536,13 +536,13 @@ func (x *Match) GetBody() *Match_Body {
 
 type NewOrder_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"` // Unique identifier (assigned by the matching engine gateway) to tie
+	ClientOrderId *gen.UUID              `protobuf:"bytes,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"` // Unique identifier (assigned by the matching engine gateway) to tie
 	// OrderNewAcknowledgement back to this OrderNew
 	Legs          []*NewOrder_Body_Leg `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
 	OrderType     gen.OrderType        `protobuf:"varint,3,opt,name=order_type,json=orderType,proto3,enum=OpenBook.CommonPackage.OrderType" json:"order_type,omitempty"`
 	Portion       uint64               `protobuf:"varint,4,opt,name=portion,proto3" json:"portion,omitempty"`
 	Quantity      uint64               `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId   []byte               `protobuf:"bytes,6,opt,name=self_match_id,json=selfMatchId,proto3,oneof" json:"self_match_id,omitempty"` // Protects a user from filling against orders entirely against
+	SelfMatchId   *gen.UUID            `protobuf:"bytes,6,opt,name=self_match_id,json=selfMatchId,proto3,oneof" json:"self_match_id,omitempty"` // Protects a user from filling against orders entirely against
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -577,11 +577,11 @@ func (*NewOrder_Body) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *NewOrder_Body) GetClientOrderId() uint64 {
+func (x *NewOrder_Body) GetClientOrderId() *gen.UUID {
 	if x != nil {
 		return x.ClientOrderId
 	}
-	return 0
+	return nil
 }
 
 func (x *NewOrder_Body) GetLegs() []*NewOrder_Body_Leg {
@@ -612,7 +612,7 @@ func (x *NewOrder_Body) GetQuantity() uint64 {
 	return 0
 }
 
-func (x *NewOrder_Body) GetSelfMatchId() []byte {
+func (x *NewOrder_Body) GetSelfMatchId() *gen.UUID {
 	if x != nil {
 		return x.SelfMatchId
 	}
@@ -621,7 +621,7 @@ func (x *NewOrder_Body) GetSelfMatchId() []byte {
 
 type NewOrder_Body_Leg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	LegSecurityId uint64                 `protobuf:"varint,1,opt,name=leg_security_id,json=legSecurityId,proto3" json:"leg_security_id,omitempty"`
+	LegSecurityId *gen.UUID              `protobuf:"bytes,1,opt,name=leg_security_id,json=legSecurityId,proto3" json:"leg_security_id,omitempty"`
 	IsOver        bool                   `protobuf:"varint,2,opt,name=is_over,json=isOver,proto3" json:"is_over,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -657,11 +657,11 @@ func (*NewOrder_Body_Leg) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{2, 0, 0}
 }
 
-func (x *NewOrder_Body_Leg) GetLegSecurityId() uint64 {
+func (x *NewOrder_Body_Leg) GetLegSecurityId() *gen.UUID {
 	if x != nil {
 		return x.LegSecurityId
 	}
-	return 0
+	return nil
 }
 
 func (x *NewOrder_Body_Leg) GetIsOver() bool {
@@ -673,7 +673,7 @@ func (x *NewOrder_Body_Leg) GetIsOver() bool {
 
 type NewOrderAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClientOrderId uint64                 `protobuf:"varint,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
+	ClientOrderId *gen.UUID              `protobuf:"bytes,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
 	OrderId       uint64                 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -709,11 +709,11 @@ func (*NewOrderAcknowledgement_Body) Descriptor() ([]byte, []int) {
 	return file_MatchingService_proto_rawDescGZIP(), []int{3, 0}
 }
 
-func (x *NewOrderAcknowledgement_Body) GetClientOrderId() uint64 {
+func (x *NewOrderAcknowledgement_Body) GetClientOrderId() *gen.UUID {
 	if x != nil {
 		return x.ClientOrderId
 	}
-	return 0
+	return nil
 }
 
 func (x *NewOrderAcknowledgement_Body) GetOrderId() uint64 {
@@ -1025,27 +1025,27 @@ const file_MatchingService_proto_rawDesc = "" +
 	"\x1ccancel_order_acknowledgement\x18\x03 \x01(\v2;.OpenBook.MatchingServicePackage.CancelOrderAcknowledgementH\x00R\x1acancelOrderAcknowledgement\x12U\n" +
 	"\velimination\x18\x04 \x01(\v21.OpenBook.MatchingServicePackage.OrderEliminationH\x00R\velimination\x12>\n" +
 	"\x05match\x18\x05 \x01(\v2&.OpenBook.MatchingServicePackage.MatchH\x00R\x05matchB\a\n" +
-	"\x05event\"\xc2\x03\n" +
+	"\x05event\"\x9c\x04\n" +
 	"\bNewOrder\x12B\n" +
-	"\x04body\x18\x01 \x01(\v2..OpenBook.MatchingServicePackage.NewOrder.BodyR\x04body\x1a\xf1\x02\n" +
-	"\x04Body\x12&\n" +
-	"\x0fclient_order_id\x18\x01 \x01(\x04R\rclientOrderId\x12F\n" +
+	"\x04body\x18\x01 \x01(\v2..OpenBook.MatchingServicePackage.NewOrder.BodyR\x04body\x1a\xcb\x03\n" +
+	"\x04Body\x12D\n" +
+	"\x0fclient_order_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rclientOrderId\x12F\n" +
 	"\x04legs\x18\x02 \x03(\v22.OpenBook.MatchingServicePackage.NewOrder.Body.LegR\x04legs\x12@\n" +
 	"\n" +
 	"order_type\x18\x03 \x01(\x0e2!.OpenBook.CommonPackage.OrderTypeR\torderType\x12\x18\n" +
 	"\aportion\x18\x04 \x01(\x04R\aportion\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12'\n" +
-	"\rself_match_id\x18\x06 \x01(\fH\x00R\vselfMatchId\x88\x01\x01\x1aF\n" +
-	"\x03Leg\x12&\n" +
-	"\x0fleg_security_id\x18\x01 \x01(\x04R\rlegSecurityId\x12\x17\n" +
+	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12E\n" +
+	"\rself_match_id\x18\x06 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDH\x00R\vselfMatchId\x88\x01\x01\x1ad\n" +
+	"\x03Leg\x12D\n" +
+	"\x0fleg_security_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rlegSecurityId\x12\x17\n" +
 	"\ais_over\x18\x02 \x01(\bR\x06isOverB\x10\n" +
-	"\x0e_self_match_id\"\xcd\x02\n" +
+	"\x0e_self_match_id\"\xeb\x02\n" +
 	"\x17NewOrderAcknowledgement\x12I\n" +
 	"\rresponse_base\x18\x01 \x01(\v2$.OpenBook.CommonPackage.ResponseBaseR\fresponseBase\x12I\n" +
 	"\rfallible_base\x18\x02 \x01(\v2$.OpenBook.CommonPackage.FallibleBaseR\ffallibleBase\x12Q\n" +
-	"\x04body\x18\x03 \x01(\v2=.OpenBook.MatchingServicePackage.NewOrderAcknowledgement.BodyR\x04body\x1aI\n" +
-	"\x04Body\x12&\n" +
-	"\x0fclient_order_id\x18\x01 \x01(\x04R\rclientOrderId\x12\x19\n" +
+	"\x04body\x18\x03 \x01(\v2=.OpenBook.MatchingServicePackage.NewOrderAcknowledgement.BodyR\x04body\x1ag\n" +
+	"\x04Body\x12D\n" +
+	"\x0fclient_order_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rclientOrderId\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\x04R\aorderId\"w\n" +
 	"\vCancelOrder\x12E\n" +
 	"\x04body\x18\x01 \x01(\v21.OpenBook.MatchingServicePackage.CancelOrder.BodyR\x04body\x1a!\n" +
@@ -1113,7 +1113,8 @@ var file_MatchingService_proto_goTypes = []any{
 	(*gen.SequencedMessageBase)(nil),        // 16: OpenBook.CommonPackage.SequencedMessageBase
 	(*gen.ResponseBase)(nil),                // 17: OpenBook.CommonPackage.ResponseBase
 	(*gen.FallibleBase)(nil),                // 18: OpenBook.CommonPackage.FallibleBase
-	(gen.OrderType)(0),                      // 19: OpenBook.CommonPackage.OrderType
+	(*gen.UUID)(nil),                        // 19: OpenBook.CommonPackage.UUID
+	(gen.OrderType)(0),                      // 20: OpenBook.CommonPackage.OrderType
 }
 var file_MatchingService_proto_depIdxs = []int32{
 	16, // 0: OpenBook.MatchingServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
@@ -1134,16 +1135,20 @@ var file_MatchingService_proto_depIdxs = []int32{
 	12, // 15: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.Body
 	13, // 16: OpenBook.MatchingServicePackage.OrderElimination.body:type_name -> OpenBook.MatchingServicePackage.OrderElimination.Body
 	14, // 17: OpenBook.MatchingServicePackage.Match.body:type_name -> OpenBook.MatchingServicePackage.Match.Body
-	9,  // 18: OpenBook.MatchingServicePackage.NewOrder.Body.legs:type_name -> OpenBook.MatchingServicePackage.NewOrder.Body.Leg
-	19, // 19: OpenBook.MatchingServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
-	15, // 20: OpenBook.MatchingServicePackage.Match.Body.fill_events:type_name -> OpenBook.MatchingServicePackage.Match.Body.FillEvent
-	0,  // 21: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:input_type -> OpenBook.MatchingServicePackage.GatewayMessage
-	1,  // 22: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:output_type -> OpenBook.MatchingServicePackage.EngineMessage
-	22, // [22:23] is the sub-list for method output_type
-	21, // [21:22] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	19, // 18: OpenBook.MatchingServicePackage.NewOrder.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
+	9,  // 19: OpenBook.MatchingServicePackage.NewOrder.Body.legs:type_name -> OpenBook.MatchingServicePackage.NewOrder.Body.Leg
+	20, // 20: OpenBook.MatchingServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
+	19, // 21: OpenBook.MatchingServicePackage.NewOrder.Body.self_match_id:type_name -> OpenBook.CommonPackage.UUID
+	19, // 22: OpenBook.MatchingServicePackage.NewOrder.Body.Leg.leg_security_id:type_name -> OpenBook.CommonPackage.UUID
+	19, // 23: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
+	15, // 24: OpenBook.MatchingServicePackage.Match.Body.fill_events:type_name -> OpenBook.MatchingServicePackage.Match.Body.FillEvent
+	0,  // 25: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:input_type -> OpenBook.MatchingServicePackage.GatewayMessage
+	1,  // 26: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:output_type -> OpenBook.MatchingServicePackage.EngineMessage
+	26, // [26:27] is the sub-list for method output_type
+	25, // [25:26] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_MatchingService_proto_init() }

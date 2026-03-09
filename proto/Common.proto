@@ -4,6 +4,11 @@ package OpenBook.CommonPackage;
 
 option go_package = "OpenBook/Common/proto";
 
+message UUID {
+  uint64 upper = 1;
+  uint64 lower = 2;
+}
+
 enum OrderType {
   LIMIT = 0;
   MARKET = 1;

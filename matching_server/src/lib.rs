@@ -17,4 +17,5 @@ pub mod matching_service_package {
     pub use super::common::SequencedMessageBase;
     pub use super::common::ResponseBase;
     pub use super::common::FallibleBase;
+    pub use super::common::Uuid;
 }

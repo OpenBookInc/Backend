@@ -39,14 +39,19 @@ pub fn is_full(participants: &[u64], total_units: u64) -> bool {
 /// Represents a leg with its security ID and over/under status
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Leg {
-    pub leg_security_id: u64,
+    pub leg_security_id: u128,
     pub is_over: bool,
+}
+
+/// Converts a proto UUID to a u128 for internal use.
+pub fn uuid_to_u128(uuid: &crate::common::Uuid) -> u128 {
+    ((uuid.upper as u128) << 64) | (uuid.lower as u128)
 }
 
 /// Creates a canonical pool key from a list of leg security IDs.
 /// The key is the sorted list of security IDs, ensuring that different
 /// orderings of the same securities map to the same pool.
-pub fn create_pool_key(leg_security_ids: &[u64]) -> Vec<u64> {
+pub fn create_pool_key(leg_security_ids: &[u128]) -> Vec<u128> {
     let mut sorted = leg_security_ids.to_vec();
     sorted.sort_unstable();
     sorted
@@ -135,13 +140,13 @@ mod tests {
 
     #[test]
     fn test_create_pool_key() {
-        let key1 = create_pool_key(&[101, 102, 103]);
-        let key2 = create_pool_key(&[103, 101, 102]);
-        let key3 = create_pool_key(&[102, 103, 101]);
+        let key1 = create_pool_key(&[101u128, 102, 103]);
+        let key2 = create_pool_key(&[103u128, 101, 102]);
+        let key3 = create_pool_key(&[102u128, 103, 101]);
 
-        assert_eq!(key1, vec![101, 102, 103]);
-        assert_eq!(key2, vec![101, 102, 103]);
-        assert_eq!(key3, vec![101, 102, 103]);
+        assert_eq!(key1, vec![101u128, 102, 103]);
+        assert_eq!(key2, vec![101u128, 102, 103]);
+        assert_eq!(key3, vec![101u128, 102, 103]);
         assert_eq!(key1, key2);
         assert_eq!(key2, key3);
     }

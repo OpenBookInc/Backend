@@ -67,6 +67,58 @@ func (OrderType) EnumDescriptor() ([]byte, []int) {
 	return file_Common_proto_rawDescGZIP(), []int{0}
 }
 
+type UUID struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Upper         uint64                 `protobuf:"varint,1,opt,name=upper,proto3" json:"upper,omitempty"`
+	Lower         uint64                 `protobuf:"varint,2,opt,name=lower,proto3" json:"lower,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UUID) Reset() {
+	*x = UUID{}
+	mi := &file_Common_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UUID) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UUID) ProtoMessage() {}
+
+func (x *UUID) ProtoReflect() protoreflect.Message {
+	mi := &file_Common_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UUID.ProtoReflect.Descriptor instead.
+func (*UUID) Descriptor() ([]byte, []int) {
+	return file_Common_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *UUID) GetUpper() uint64 {
+	if x != nil {
+		return x.Upper
+	}
+	return 0
+}
+
+func (x *UUID) GetLower() uint64 {
+	if x != nil {
+		return x.Lower
+	}
+	return 0
+}
+
 type SequencedMessageBase struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SequenceNumber uint64                 `protobuf:"varint,1,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
@@ -76,7 +128,7 @@ type SequencedMessageBase struct {
 
 func (x *SequencedMessageBase) Reset() {
 	*x = SequencedMessageBase{}
-	mi := &file_Common_proto_msgTypes[0]
+	mi := &file_Common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88,7 +140,7 @@ func (x *SequencedMessageBase) String() string {
 func (*SequencedMessageBase) ProtoMessage() {}
 
 func (x *SequencedMessageBase) ProtoReflect() protoreflect.Message {
-	mi := &file_Common_proto_msgTypes[0]
+	mi := &file_Common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -101,7 +153,7 @@ func (x *SequencedMessageBase) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SequencedMessageBase.ProtoReflect.Descriptor instead.
 func (*SequencedMessageBase) Descriptor() ([]byte, []int) {
-	return file_Common_proto_rawDescGZIP(), []int{0}
+	return file_Common_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SequencedMessageBase) GetSequenceNumber() uint64 {
@@ -120,7 +172,7 @@ type ResponseBase struct {
 
 func (x *ResponseBase) Reset() {
 	*x = ResponseBase{}
-	mi := &file_Common_proto_msgTypes[1]
+	mi := &file_Common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -132,7 +184,7 @@ func (x *ResponseBase) String() string {
 func (*ResponseBase) ProtoMessage() {}
 
 func (x *ResponseBase) ProtoReflect() protoreflect.Message {
-	mi := &file_Common_proto_msgTypes[1]
+	mi := &file_Common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -145,7 +197,7 @@ func (x *ResponseBase) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseBase.ProtoReflect.Descriptor instead.
 func (*ResponseBase) Descriptor() ([]byte, []int) {
-	return file_Common_proto_rawDescGZIP(), []int{1}
+	return file_Common_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ResponseBase) GetRequestSequenceNumber() uint64 {
@@ -167,7 +219,7 @@ type FallibleBase struct {
 
 func (x *FallibleBase) Reset() {
 	*x = FallibleBase{}
-	mi := &file_Common_proto_msgTypes[2]
+	mi := &file_Common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +231,7 @@ func (x *FallibleBase) String() string {
 func (*FallibleBase) ProtoMessage() {}
 
 func (x *FallibleBase) ProtoReflect() protoreflect.Message {
-	mi := &file_Common_proto_msgTypes[2]
+	mi := &file_Common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +244,7 @@ func (x *FallibleBase) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FallibleBase.ProtoReflect.Descriptor instead.
 func (*FallibleBase) Descriptor() ([]byte, []int) {
-	return file_Common_proto_rawDescGZIP(), []int{2}
+	return file_Common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *FallibleBase) GetSuccess() bool {
@@ -213,7 +265,10 @@ var File_Common_proto protoreflect.FileDescriptor
 
 const file_Common_proto_rawDesc = "" +
 	"\n" +
-	"\fCommon.proto\x12\x16OpenBook.CommonPackage\"?\n" +
+	"\fCommon.proto\x12\x16OpenBook.CommonPackage\"2\n" +
+	"\x04UUID\x12\x14\n" +
+	"\x05upper\x18\x01 \x01(\x04R\x05upper\x12\x14\n" +
+	"\x05lower\x18\x02 \x01(\x04R\x05lower\"?\n" +
 	"\x14SequencedMessageBase\x12'\n" +
 	"\x0fsequence_number\x18\x01 \x01(\x04R\x0esequenceNumber\"F\n" +
 	"\fResponseBase\x126\n" +
@@ -239,12 +294,13 @@ func file_Common_proto_rawDescGZIP() []byte {
 }
 
 var file_Common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_Common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_Common_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_Common_proto_goTypes = []any{
 	(OrderType)(0),               // 0: OpenBook.CommonPackage.OrderType
-	(*SequencedMessageBase)(nil), // 1: OpenBook.CommonPackage.SequencedMessageBase
-	(*ResponseBase)(nil),         // 2: OpenBook.CommonPackage.ResponseBase
-	(*FallibleBase)(nil),         // 3: OpenBook.CommonPackage.FallibleBase
+	(*UUID)(nil),                 // 1: OpenBook.CommonPackage.UUID
+	(*SequencedMessageBase)(nil), // 2: OpenBook.CommonPackage.SequencedMessageBase
+	(*ResponseBase)(nil),         // 3: OpenBook.CommonPackage.ResponseBase
+	(*FallibleBase)(nil),         // 4: OpenBook.CommonPackage.FallibleBase
 }
 var file_Common_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -265,7 +321,7 @@ func file_Common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_Common_proto_rawDesc), len(file_Common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

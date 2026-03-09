@@ -41,21 +41,20 @@ message EngineMessage {
 message NewOrder {
   message Body {
     message Leg {
-      uint64 leg_security_id = 1;
+      OpenBook.CommonPackage.UUID leg_security_id = 1;
       bool is_over = 2;
     }
 
-    uint64 client_order_id =
+    OpenBook.CommonPackage.UUID client_order_id =
         1; // Unique identifier (assigned by the matching engine gateway) to tie
            // OrderNewAcknowledgement back to this OrderNew
     repeated Leg legs = 2;
     OpenBook.CommonPackage.OrderType order_type = 3;
     uint64 portion = 4;
     uint64 quantity = 5;
-    optional bytes self_match_id =
+    optional OpenBook.CommonPackage.UUID self_match_id =
         6; // Protects a user from filling against orders entirely against
            // themselves. If unpopulated, user gets no protections.
-           // Expected to be a 16-byte UUID.
   }
 
   Body body = 1;
@@ -63,7 +62,7 @@ message NewOrder {
 
 message NewOrderAcknowledgement {
   message Body {
-    uint64 client_order_id = 1;
+    OpenBook.CommonPackage.UUID client_order_id = 1;
     uint64 order_id = 2;
   }
 

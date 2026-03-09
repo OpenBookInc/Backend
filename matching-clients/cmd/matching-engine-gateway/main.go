@@ -13,6 +13,7 @@ import (
 
 	common "matching-clients/src/gen"
 	pb "matching-clients/src/gen/matching"
+	"matching-clients/src/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -73,7 +74,7 @@ type Gateway struct {
 	sendChan    chan *pb.GatewayMessage
 
 	// Track pending orders by clientOrderId to map responses back
-	pendingOrders   map[uint64]*PendingOrder
+	pendingOrders   map[utils.UUID]*PendingOrder
 	pendingOrdersMu sync.RWMutex
 
 	// Track confirmed orders by matching engine orderId for fills/eliminations
@@ -82,7 +83,7 @@ type Gateway struct {
 	confirmedOrdersMu sync.RWMutex
 
 	// Client stream tracking - maps clientOrderId to the client's response stream
-	clientStreams   map[uint64]pb.MatchingServerService_CreateTradeStreamServer
+	clientStreams   map[utils.UUID]pb.MatchingServerService_CreateTradeStreamServer
 	clientStreamsMu sync.RWMutex
 
 	// Sequence number for messages to upstream matching server
@@ -103,7 +104,7 @@ type Gateway struct {
 
 // PendingOrder tracks an order that has been submitted but not yet acknowledged
 type PendingOrder struct {
-	ClientOrderID uint64
+	ClientOrderID utils.UUID
 	UserID        string
 	WagerAmount   int64
 	DBRecordID    int64 // The confirmed_bets.id
@@ -128,7 +129,7 @@ type OrderRequest struct {
 
 // LegRequest represents a leg in an order
 type LegRequest struct {
-	LegSecurityID uint64
+	LegSecurityID *common.UUID
 	IsOver        bool
 }
 
@@ -185,9 +186,9 @@ func NewGateway(ctx context.Context, config *Config) (*Gateway, error) {
 
 	gw := &Gateway{
 		config:          config,
-		pendingOrders:   make(map[uint64]*PendingOrder),
+		pendingOrders:   make(map[utils.UUID]*PendingOrder),
 		confirmedOrders: make(map[uint64]int64),
-		clientStreams:   make(map[uint64]pb.MatchingServerService_CreateTradeStreamServer),
+		clientStreams:   make(map[utils.UUID]pb.MatchingServerService_CreateTradeStreamServer),
 		sendChan:        make(chan *pb.GatewayMessage, 100),
 		ctx:             ctx,
 		cancel:          cancel,
@@ -334,10 +335,12 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 	}
 
 	// Step 3: Get next client order ID (using sequence number)
-	clientOrderID := gw.getNextSequenceNumber()
+	seq := gw.getNextSequenceNumber()
+	clientOrderID := utils.UUIDFromUint64(0, seq)
+	clientOrderProto := &common.UUID{Upper: 0, Lower: seq}
 
 	// Step 4: Insert into confirmed_bets with status 'submitted_to_matching_engine'
-	dbRecordID, err := gw.InsertConfirmedBet(ctx, req, clientOrderID)
+	dbRecordID, err := gw.InsertConfirmedBet(ctx, req, seq)
 	if err != nil {
 		return fmt.Errorf("failed to insert bet record: %w", err)
 	}
@@ -363,20 +366,27 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 	legs := make([]*pb.NewOrder_Body_Leg, len(req.Legs))
 	for i, leg := range req.Legs {
 		legs[i] = &pb.NewOrder_Body_Leg{
-			LegSecurityId: leg.LegSecurityID,
+			LegSecurityId: &common.UUID{Upper: leg.LegSecurityID.GetUpper(), Lower: leg.LegSecurityID.GetLower()},
 			IsOver:        leg.IsOver,
 		}
 	}
 
+	newOrderBody := &pb.NewOrder_Body{
+		ClientOrderId: clientOrderProto,
+		Legs:          legs,
+		OrderType:     req.OrderType,
+		Portion:       req.Portion,
+		Quantity:      req.Quantity,
+	}
+	if selfMatchID != nil {
+		newOrderBody.SelfMatchId = &common.UUID{
+			Upper: selfMatchID.Upper(),
+			Lower: selfMatchID.Lower(),
+		}
+	}
+
 	newOrder := &pb.NewOrder{
-		Body: &pb.NewOrder_Body{
-			ClientOrderId: clientOrderID,
-			Legs:          legs,
-			OrderType:     req.OrderType,
-			Portion:       req.Portion,
-			Quantity:      req.Quantity,
-			SelfMatchId:   selfMatchID,
-		},
+		Body: newOrderBody,
 	}
 
 	gatewayMsg := &pb.GatewayMessage{
@@ -391,7 +401,7 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 	// Send via channel (non-blocking with timeout)
 	select {
 	case gw.sendChan <- gatewayMsg:
-		log.Printf("Submitted order clientOrderId=%d for user %s to matching server\n", clientOrderID, req.UserID)
+		log.Printf("Submitted order clientOrderId=%s for user %s to matching server\n", clientOrderID.String(), req.UserID)
 	case <-time.After(5 * time.Second):
 		// Clean up on failure
 		gw.pendingOrdersMu.Lock()
@@ -428,7 +438,7 @@ func (gw *Gateway) handleTradeStreamResponses() {
 }
 
 // forwardToClient sends an engine message to the connected client
-func (gw *Gateway) forwardToClient(clientOrderID uint64, msg *pb.EngineMessage) {
+func (gw *Gateway) forwardToClient(clientOrderID utils.UUID, msg *pb.EngineMessage) {
 	gw.clientStreamsMu.RLock()
 	clientStream, exists := gw.clientStreams[clientOrderID]
 	gw.clientStreamsMu.RUnlock()
@@ -439,7 +449,7 @@ func (gw *Gateway) forwardToClient(clientOrderID uint64, msg *pb.EngineMessage) 
 	}
 
 	if err := clientStream.Send(msg); err != nil {
-		log.Printf("Failed to forward response to client for clientOrderId=%d: %v\n", clientOrderID, err)
+		log.Printf("Failed to forward response to client for clientOrderId=%s: %v\n", clientOrderID.String(), err)
 	}
 }
 
@@ -484,7 +494,7 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 		return
 	}
 
-	clientOrderID := ack.Body.ClientOrderId
+	clientOrderID := utils.UUIDFromUint64(ack.Body.ClientOrderId.GetUpper(), ack.Body.ClientOrderId.GetLower())
 	orderID := ack.Body.OrderId
 
 	gw.pendingOrdersMu.RLock()
@@ -492,13 +502,13 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 	gw.pendingOrdersMu.RUnlock()
 
 	if !exists {
-		log.Printf("WARNING: Received acknowledgement for unknown clientOrderId=%d\n", clientOrderID)
+		log.Printf("WARNING: Received acknowledgement for unknown clientOrderId=%s\n", clientOrderID.String())
 		return
 	}
 
 	if ack.FallibleBase != nil && ack.FallibleBase.Success {
 		// Order accepted - deduct balance and update status
-		log.Printf("Order acknowledged: clientOrderId=%d, orderId=%d\n", clientOrderID, orderID)
+		log.Printf("Order acknowledged: clientOrderId=%s, orderId=%d\n", clientOrderID.String(), orderID)
 
 		// Track the confirmed order for later fills/eliminations
 		gw.confirmedOrdersMu.Lock()
@@ -521,7 +531,7 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 		if ack.FallibleBase != nil {
 			errorDesc = ack.FallibleBase.ErrorDescription
 		}
-		log.Printf("Order rejected: clientOrderId=%d, error=%s\n", clientOrderID, errorDesc)
+		log.Printf("Order rejected: clientOrderId=%s, error=%s\n", clientOrderID.String(), errorDesc)
 		// Don't deduct balance, order was not accepted
 		// TODO: Consider updating order status to indicate rejection
 	}
@@ -884,13 +894,14 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 		return errors.New("order body is nil")
 	}
 
-	clientOrderID := order.Body.ClientOrderId
+	clientOrderProto := order.Body.ClientOrderId
+	clientOrderID := utils.UUIDFromUint64(clientOrderProto.GetUpper(), clientOrderProto.GetLower())
 
 	if !gw.isUpstreamConnected() {
-		return gw.sendOrderRejection(clientStream, clientOrderID, "matching server is not available")
+		return gw.sendOrderRejection(clientStream, clientOrderProto, "matching server is not available")
 	}
 
-	log.Printf("Processing new order from client: clientOrderId=%d\n", clientOrderID)
+	log.Printf("Processing new order from client: clientOrderId=%s\n", clientOrderID.String())
 
 	// For now, use dummy values for user/wager - in production these would come from auth/session
 	// TODO: Extract user info from gRPC metadata or session
@@ -902,11 +913,11 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 	if err != nil {
 		log.Printf("Balance check failed: %v\n", err)
 		// Send rejection back to client
-		return gw.sendOrderRejection(clientStream, clientOrderID, fmt.Sprintf("balance check failed: %v", err))
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("balance check failed: %v", err))
 	}
 	if !hasBalance {
-		log.Printf("Insufficient balance for clientOrderId=%d\n", clientOrderID)
-		return gw.sendOrderRejection(clientStream, clientOrderID, "insufficient balance")
+		log.Printf("Insufficient balance for clientOrderId=%s\n", clientOrderID.String())
+		return gw.sendOrderRejection(clientStream, clientOrderProto, "insufficient balance")
 	}
 
 	// Step 2: Validate leg security IDs (using stub)
@@ -917,9 +928,10 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 			IsOver:        leg.IsOver,
 		}
 	}
+
 	if err := gw.ValidateLegSecurityIDs(ctx, legs); err != nil {
 		log.Printf("Leg validation failed: %v\n", err)
-		return gw.sendOrderRejection(clientStream, clientOrderID, fmt.Sprintf("leg validation failed: %v", err))
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("leg validation failed: %v", err))
 	}
 
 	// Step 3: Create OrderRequest for database insertion
@@ -937,10 +949,10 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 	}
 
 	// Step 4: Insert into confirmed_bets (using stub)
-	dbRecordID, err := gw.InsertConfirmedBet(ctx, orderReq, clientOrderID)
+	dbRecordID, err := gw.InsertConfirmedBet(ctx, orderReq, clientOrderID.Lower())
 	if err != nil {
 		log.Printf("Failed to insert bet record: %v\n", err)
-		return gw.sendOrderRejection(clientStream, clientOrderID, fmt.Sprintf("failed to insert bet: %v", err))
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to insert bet: %v", err))
 	}
 
 	// Step 5: Track the pending order and client stream
@@ -970,7 +982,7 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 
 	select {
 	case gw.sendChan <- gatewayMsg:
-		log.Printf("Forwarded order clientOrderId=%d to matching server\n", clientOrderID)
+		log.Printf("Forwarded order clientOrderId=%s to matching server\n", clientOrderID.String())
 	case <-time.After(5 * time.Second):
 		// Clean up on failure
 		gw.pendingOrdersMu.Lock()
@@ -979,7 +991,7 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 		gw.clientStreamsMu.Lock()
 		delete(gw.clientStreams, clientOrderID)
 		gw.clientStreamsMu.Unlock()
-		return gw.sendOrderRejection(clientStream, clientOrderID, "timeout forwarding to matching server")
+		return gw.sendOrderRejection(clientStream, clientOrderProto, "timeout forwarding to matching server")
 	}
 
 	return nil
@@ -1020,7 +1032,7 @@ func (gw *Gateway) handleClientCancelOrder(ctx context.Context, clientStream pb.
 }
 
 // sendOrderRejection sends a rejection acknowledgement back to the client
-func (gw *Gateway) sendOrderRejection(clientStream pb.MatchingServerService_CreateTradeStreamServer, clientOrderID uint64, reason string) error {
+func (gw *Gateway) sendOrderRejection(clientStream pb.MatchingServerService_CreateTradeStreamServer, clientOrderID *common.UUID, reason string) error {
 	resp := &pb.EngineMessage{
 		SequencedMessageBase: &common.SequencedMessageBase{
 			SequenceNumber: 0, // Gateway-generated response
@@ -1053,7 +1065,7 @@ func CreateDummyOrderRequest(userID string, wagerAmount int64) *OrderRequest {
 		TotalPayout: wagerAmount * 2,   // Placeholder calculation
 		Commission:  wagerAmount / 100, // 1% commission placeholder
 		Legs: []LegRequest{
-			{LegSecurityID: 1001, IsOver: true},
+			{LegSecurityID: &common.UUID{Upper: 0, Lower: 1001}, IsOver: true},
 		},
 		OrderType: common.OrderType_LIMIT,
 		Portion:   5000, // 50.00% as basis points
