@@ -25,10 +25,9 @@ type SlateAndLineups struct {
 }
 
 type SlateInfo struct {
-	ID         utils.UUID     `json:"id"`
-	MarketType gen.MarketEntity `json:"market_type"`
-	MarketIDs  []utils.UUID   `json:"market_ids"`
-	TotalUnits int64          `json:"total_units"`
+	ID         utils.UUID   `json:"id"`
+	MarketIDs  []utils.UUID `json:"market_ids"`
+	TotalUnits int64        `json:"total_units"`
 }
 
 type LineupInfo struct {
@@ -43,19 +42,19 @@ type LineupLeg struct {
 	Side     gen.MarketSide `json:"side"`
 }
 
-// slateCache caches slate+lineup results keyed by "marketType|sortedMarketID1,sortedMarketID2,..."
+// slateCache caches slate+lineup results keyed by "sortedMarketID1,sortedMarketID2,..."
 var (
 	slateCache   = make(map[string]*SlateAndLineups)
 	slateCacheMu sync.RWMutex
 )
 
-func buildSlateCacheKey(marketType gen.MarketEntity, marketIDs []utils.UUID) string {
+func buildSlateCacheKey(marketIDs []utils.UUID) string {
 	strs := make([]string, len(marketIDs))
 	for i, id := range marketIDs {
 		strs[i] = id.String()
 	}
 	sort.Strings(strs)
-	return string(marketType) + "|" + strings.Join(strs, ",")
+	return strings.Join(strs, ",")
 }
 
 // connectDB establishes a connection to the PostgreSQL database
@@ -110,8 +109,8 @@ func (gw *Gateway) connectDB(ctx context.Context) error {
 
 // EnsureSlateAndLineups ensures a slate and its lineups exist for the given markets.
 // Results are cached locally so repeated calls for the same set of markets avoid DB round-trips.
-func (gw *Gateway) EnsureSlateAndLineups(ctx context.Context, marketType gen.MarketEntity, marketIDs []utils.UUID, totalUnits int64) (*SlateAndLineups, error) {
-	cacheKey := buildSlateCacheKey(marketType, marketIDs)
+func (gw *Gateway) EnsureSlateAndLineups(ctx context.Context, marketIDs []utils.UUID, totalUnits int64) (*SlateAndLineups, error) {
+	cacheKey := buildSlateCacheKey(marketIDs)
 
 	slateCacheMu.RLock()
 	if cached, ok := slateCache[cacheKey]; ok {
@@ -127,8 +126,8 @@ func (gw *Gateway) EnsureSlateAndLineups(ctx context.Context, marketType gen.Mar
 
 	var resultJSON []byte
 	err := gw.db.QueryRow(ctx,
-		"SELECT ensure_exchange_slate_and_lineups($1::market_entity_type, $2::uuid[], $3)",
-		string(marketType), marketIDStrs, totalUnits,
+		"SELECT ensure_exchange_slate_and_lineups($1::uuid[], $2)",
+		marketIDStrs, totalUnits,
 	).Scan(&resultJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure slate and lineups: %w", err)

@@ -98,8 +98,7 @@ type ConfirmedOrder struct {
 // OrderRequest represents an incoming order request from the app backend
 type OrderRequest struct {
 	UserID     utils.UUID
-	MarketType gen.MarketEntity
-	TotalUnits int64  // total_units for the exchange slate
+	TotalUnits int64 // total_units for the exchange slate
 	Legs       []LegRequest
 	OrderType  common.OrderType
 	Portion    uint64
@@ -320,7 +319,7 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 	for i := range req.Legs {
 		marketIDs[i] = req.Legs[i].LegSecurityIDAsUUID()
 	}
-	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, req.MarketType, marketIDs, req.TotalUnits)
+	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, marketIDs, req.TotalUnits)
 	if err != nil {
 		return fmt.Errorf("failed to ensure slate and lineups: %w", err)
 	}
@@ -892,15 +891,14 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 		}
 	}
 
-	// TODO: MarketType and TotalUnits should come from the order or be derived
-	marketType := gen.MarketEntityNbaMarket // Placeholder
-	totalUnits := int64(len(legs))                  // Placeholder
+	// TODO: TotalUnits should come from the order or be derived
+	totalUnits := int64(len(legs)) // Placeholder
 
 	marketIDs := make([]utils.UUID, len(legs))
 	for i := range legs {
 		marketIDs[i] = legs[i].LegSecurityIDAsUUID()
 	}
-	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, marketType, marketIDs, totalUnits)
+	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, marketIDs, totalUnits)
 	if err != nil {
 		log.Printf("Failed to ensure slate and lineups: %v\n", err)
 		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to ensure slate: %v", err))
@@ -1042,7 +1040,6 @@ func (gw *Gateway) sendOrderRejection(clientStream pb.MatchingServerService_Crea
 func CreateDummyOrderRequest(userID utils.UUID, quantity uint64) *OrderRequest {
 	return &OrderRequest{
 		UserID:     userID,
-		MarketType: gen.MarketEntityNbaMarket,
 		TotalUnits: 1,
 		Legs: []LegRequest{
 			{LegSecurityID: &common.UUID{Upper: 0, Lower: 1001}, IsOver: true},
