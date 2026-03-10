@@ -36,53 +36,9 @@ pub fn is_full(participants: &[u64], total_units: u64) -> bool {
     sum_units(participants) == total_units
 }
 
-/// Represents a leg with its security ID and over/under status
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Leg {
-    pub leg_security_id: u128,
-    pub is_over: bool,
-}
-
 /// Converts a proto UUID to a u128 for internal use.
 pub fn uuid_to_u128(uuid: &crate::common::Uuid) -> u128 {
     ((uuid.upper as u128) << 64) | (uuid.lower as u128)
-}
-
-/// Creates a canonical pool key from a list of leg security IDs.
-/// The key is the sorted list of security IDs, ensuring that different
-/// orderings of the same securities map to the same pool.
-pub fn create_pool_key(leg_security_ids: &[u128]) -> Vec<u128> {
-    let mut sorted = leg_security_ids.to_vec();
-    sorted.sort_unstable();
-    sorted
-}
-
-/// Calculates the lineup index from a list of legs.
-/// The lineup index is calculated based on the isOver values in canonical order
-/// (sorted by leg_security_id).
-///
-/// # Formula
-/// For legs sorted by leg_security_id:
-/// lineup_index = sum(is_over[i] * 2^i for i in 0..n)
-///
-/// # Example
-/// legs = [{legSecurityId: 102, isOver: true}, {legSecurityId: 101, isOver: false}]
-/// Sorted by ID: [{legSecurityId: 101, isOver: false}, {legSecurityId: 102, isOver: true}]
-/// lineup_index = false * 2^0 + true * 2^1 = 0 + 2 = 2
-pub fn calculate_lineup_index(legs: &[Leg]) -> u64 {
-    // Create a sorted copy of the legs by leg_security_id
-    let mut sorted_legs = legs.to_vec();
-    sorted_legs.sort_by_key(|leg| leg.leg_security_id);
-
-    // Calculate lineup index using binary representation
-    let mut lineup_index: u64 = 0;
-    for (i, leg) in sorted_legs.iter().enumerate() {
-        if leg.is_over {
-            lineup_index |= 1 << i;
-        }
-    }
-
-    lineup_index
 }
 
 #[cfg(test)]
@@ -136,87 +92,5 @@ mod tests {
         let participants: Vec<u64> = vec![];
         assert_eq!(calculate_remaining_units(&participants, total), 100);
         assert!(!is_full(&participants, total));
-    }
-
-    #[test]
-    fn test_create_pool_key() {
-        let key1 = create_pool_key(&[101u128, 102, 103]);
-        let key2 = create_pool_key(&[103u128, 101, 102]);
-        let key3 = create_pool_key(&[102u128, 103, 101]);
-
-        assert_eq!(key1, vec![101u128, 102, 103]);
-        assert_eq!(key2, vec![101u128, 102, 103]);
-        assert_eq!(key3, vec![101u128, 102, 103]);
-        assert_eq!(key1, key2);
-        assert_eq!(key2, key3);
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_simple() {
-        // Two legs: [101, 102] with isOver [false, true]
-        let legs = vec![
-            Leg { leg_security_id: 101, is_over: false },
-            Leg { leg_security_id: 102, is_over: true },
-        ];
-        assert_eq!(calculate_lineup_index(&legs), 2); // 0 * 2^0 + 1 * 2^1 = 2
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_order_independent() {
-        // Same legs, different order
-        let legs1 = vec![
-            Leg { leg_security_id: 101, is_over: false },
-            Leg { leg_security_id: 102, is_over: true },
-        ];
-        let legs2 = vec![
-            Leg { leg_security_id: 102, is_over: true },
-            Leg { leg_security_id: 101, is_over: false },
-        ];
-
-        assert_eq!(calculate_lineup_index(&legs1), calculate_lineup_index(&legs2));
-        assert_eq!(calculate_lineup_index(&legs1), 2);
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_three_legs() {
-        // Three legs: [101, 102, 103] with isOver [true, false, true]
-        let legs = vec![
-            Leg { leg_security_id: 101, is_over: true },
-            Leg { leg_security_id: 102, is_over: false },
-            Leg { leg_security_id: 103, is_over: true },
-        ];
-        // 1 * 2^0 + 0 * 2^1 + 1 * 2^2 = 1 + 0 + 4 = 5
-        assert_eq!(calculate_lineup_index(&legs), 5);
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_three_legs_reordered() {
-        // Same as above but in different order
-        let legs = vec![
-            Leg { leg_security_id: 103, is_over: true },
-            Leg { leg_security_id: 101, is_over: true },
-            Leg { leg_security_id: 102, is_over: false },
-        ];
-        assert_eq!(calculate_lineup_index(&legs), 5);
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_all_over() {
-        let legs = vec![
-            Leg { leg_security_id: 101, is_over: true },
-            Leg { leg_security_id: 102, is_over: true },
-        ];
-        // 1 * 2^0 + 1 * 2^1 = 1 + 2 = 3
-        assert_eq!(calculate_lineup_index(&legs), 3);
-    }
-
-    #[test]
-    fn test_calculate_lineup_index_all_under() {
-        let legs = vec![
-            Leg { leg_security_id: 101, is_over: false },
-            Leg { leg_security_id: 102, is_over: false },
-        ];
-        // 0 * 2^0 + 0 * 2^1 = 0
-        assert_eq!(calculate_lineup_index(&legs), 0);
     }
 }

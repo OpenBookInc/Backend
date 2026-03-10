@@ -170,33 +170,27 @@ impl fmt::Display for BookState {
 /// Complete state of the pool across all lineups
 #[derive(Debug, Clone)]
 pub struct PoolState {
-    /// Total units in the pool (e.g., 1000)
+    /// Total units in the pool (e.g., 1_000_000)
     pub total_units: u64,
-    /// Number of legs in the slate
-    pub num_legs: usize,
-    /// Book for each lineup (2^num_legs books total)
+    /// Number of lineups in the pool
+    pub num_lineups: usize,
+    /// Book for each lineup
     pub books: Vec<BookState>,
 }
 
 impl PoolState {
     /// Creates a new pool state with empty books for each lineup
-    pub fn new(total_units: u64, num_legs: usize) -> Self {
-        let num_lineups = 1 << num_legs; // 2^num_legs
+    pub fn new(total_units: u64, num_lineups: usize) -> Self {
         let mut books = Vec::with_capacity(num_lineups);
         for _ in 0..num_lineups {
             books.push(BookState::new());
         }
-        
+
         PoolState {
             total_units,
-            num_legs,
+            num_lineups,
             books,
         }
-    }
-    
-    /// Returns the number of lineups (2^num_legs)
-    pub fn num_lineups(&self) -> usize {
-        self.books.len()
     }
 }
 
@@ -204,7 +198,7 @@ impl fmt::Display for PoolState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "PoolState:")?;
         writeln!(f, "  Total Units: {}", self.total_units)?;
-        writeln!(f, "  Legs: {} (Lineups: {})", self.num_legs, self.num_lineups())?;
+        writeln!(f, "  Lineups: {}", self.num_lineups)?;
         writeln!(f, "  Books:")?;
         for (lineup_idx, book) in self.books.iter().enumerate() {
             writeln!(f, "    Lineup {}:", lineup_idx)?;
@@ -288,11 +282,11 @@ impl EntryPool {
     /// Creates a new EntryPool
     ///
     /// # Arguments
-    /// * `total_units` - Total capacity of the pool (e.g., 1000)
-    /// * `num_legs` - Number of legs in the slate (creates 2^num_legs lineups)
-    pub fn new(total_units: u64, num_legs: usize) -> Self {
+    /// * `total_units` - Total capacity of the pool (e.g., 1_000_000)
+    /// * `num_lineups` - Number of lineups in the pool
+    pub fn new(total_units: u64, num_lineups: usize) -> Self {
         EntryPool {
-            state: PoolState::new(total_units, num_legs),
+            state: PoolState::new(total_units, num_lineups),
             next_sequence: 0,
         }
     }
@@ -323,11 +317,11 @@ impl EntryPool {
         params: EntryParameters,
     ) -> SubmitResult {
         // Validate lineup index
-        if lineup_index >= self.state.num_lineups() {
+        if lineup_index >= self.state.num_lineups {
             return Err(format!(
                 "Invalid lineup_index: {} (must be 0 to {})",
                 lineup_index,
-                self.state.num_lineups() - 1
+                self.state.num_lineups - 1
             ));
         }
         
@@ -349,7 +343,7 @@ impl EntryPool {
                 // For market entries, calculate the portion needed to complete the pool
                 // If other lineups already sum to >= total_units, we'll use portion=1
                 // and let the fill logic reduce passive entries as needed
-                let other_lineups: Vec<usize> = (0..self.state.num_lineups())
+                let other_lineups: Vec<usize> = (0..self.state.num_lineups)
                     .filter(|&i| i != lineup_index)
                     .collect();
                 
@@ -633,7 +627,7 @@ mod tests {
     
     #[test]
     fn test_basic_limit_entry() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to all 4 lineups (quantity=1 means willing to provide portion once)
         let submit0 = pool.submit_entry(0, EntryParameters {
@@ -683,7 +677,7 @@ mod tests {
     
     #[test]
     fn test_aggressor_portion_reduction() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Submit passive entries
         pool.submit_entry(0, EntryParameters {
@@ -738,7 +732,7 @@ mod tests {
     
     #[test]
     fn test_market_entry_success() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Submit passive entries totaling 700
         pool.submit_entry(0, EntryParameters {
@@ -790,7 +784,7 @@ mod tests {
     
     #[test]
     fn test_market_entry_rejection() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Only 2 lineups have entries
         pool.submit_entry(0, EntryParameters {
@@ -821,7 +815,7 @@ mod tests {
     
     #[test]
     fn test_multiple_fill_events_from_one_aggressor() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Submit passive entries with quantity=2 (can match 2 times each)
         pool.submit_entry(0, EntryParameters {
@@ -874,7 +868,7 @@ mod tests {
     
     #[test]
     fn test_priority_ordering() {
-        let mut pool = EntryPool::new(1000, 1); // 2 lineups
+        let mut pool = EntryPool::new(1000, 2); // 2 lineups
         
         // Submit entries with different portions to lineup 0
         pool.submit_entry(0, EntryParameters {
@@ -906,7 +900,7 @@ mod tests {
     
     #[test]
     fn test_market_entry_no_match_doesnt_rest() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Submit valid entries to only 2 lineups, with quantities that don't allow matching
         let submit_zero_quantity = pool.submit_entry(0, EntryParameters {
@@ -953,7 +947,7 @@ mod tests {
     
     #[test]
     fn test_market_entry_partial_fill_cleared() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Submit passive entries with quantity=1
         pool.submit_entry(0, EntryParameters {
@@ -1008,7 +1002,7 @@ mod tests {
     
     #[test]
     fn test_passive_entry_reduction() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Create the scenario: 3 passive entries at portion=999 each
         pool.submit_entry(1, EntryParameters {
@@ -1083,7 +1077,7 @@ mod tests {
     
     #[test]
     fn test_passive_entry_reduction_with_limit_aggressor() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
         
         // Create 3 passive entries at portion=400 each (total=1200)
         pool.submit_entry(1, EntryParameters {
@@ -1157,7 +1151,7 @@ mod tests {
     
     #[test]
     fn test_cancel_entry_success() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit an entry
         pool.submit_entry(0, EntryParameters {
@@ -1184,7 +1178,7 @@ mod tests {
 
     #[test]
     fn test_cancel_entry_not_found() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Try to cancel an entry that doesn't exist
         let result = pool.cancel_entry(999);
@@ -1194,7 +1188,7 @@ mod tests {
 
     #[test]
     fn test_cancelled_entry_does_not_fill() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to all 4 lineups
         pool.submit_entry(0, EntryParameters {
@@ -1280,7 +1274,7 @@ mod tests {
 
     #[test]
     fn test_cancel_entry_with_multiple_in_same_book() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit multiple entries to the same lineup
         pool.submit_entry(0, EntryParameters {
@@ -1322,7 +1316,7 @@ mod tests {
 
     #[test]
     fn test_is_complete_single_fill() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries with quantity=1 each - will all be completed after one fill
         pool.submit_entry(0, EntryParameters {
@@ -1367,7 +1361,7 @@ mod tests {
 
     #[test]
     fn test_is_complete_partial_fill() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries with quantity=2 each, except one with quantity=1
         pool.submit_entry(0, EntryParameters {
@@ -1417,7 +1411,7 @@ mod tests {
 
     #[test]
     fn test_is_complete_multiple_fills_aggressor() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit passive entries with quantity=2 each
         pool.submit_entry(0, EntryParameters {
@@ -1495,7 +1489,7 @@ mod tests {
         // This test specifically addresses the requirement:
         // "if a resting (non-aggressor) order gets filled multiple times as the result of one OrderNew,
         // but only the final match should have "isComplete" as true for that order"
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit TWO entries to lineup 0 with quantity=1 each (to create 2 matches)
         pool.submit_entry(0, EntryParameters {
@@ -1583,7 +1577,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_cancels_when_all_lineups_covered() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to lineups 1, 2, and 3 with same self_match_id
         pool.submit_entry(1, EntryParameters {
@@ -1644,7 +1638,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_no_cancel_when_not_all_lineups_covered() {
-        let mut pool = EntryPool::new(1000, 3); // 8 lineups (avoids matching with only 4 filled)
+        let mut pool = EntryPool::new(1000, 8); // 8 lineups (avoids matching with only 4 filled)
 
         // Submit entries with mixed self_match_ids to different lineups
         pool.submit_entry(1, EntryParameters {
@@ -1693,7 +1687,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_same_lineup_allowed() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit multiple entries to the same lineup (0) with same self_match_id
         pool.submit_entry(0, EntryParameters {
@@ -1731,7 +1725,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_none_no_cancellation() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to different lineups with self_match_id=None
         pool.submit_entry(0, EntryParameters {
@@ -1768,7 +1762,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_different_ids_no_cancellation() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to different lineups with different self_match_ids
         pool.submit_entry(0, EntryParameters {
@@ -1805,7 +1799,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_cancellation_then_match() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries to all 4 lineups with same self_match_id=42
         pool.submit_entry(0, EntryParameters {
@@ -1887,7 +1881,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_market_entry_cancellation() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit limit entries to lineups 0, 1, 2 all with same self_match_id
         pool.submit_entry(0, EntryParameters {
@@ -1949,7 +1943,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_market_entry_no_cancel_when_not_all_covered() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit limit entries to lineups 0, 1, 2 with different self_match_ids
         pool.submit_entry(0, EntryParameters {
@@ -1993,7 +1987,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_multiple_entries_same_id_cancelled() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit multiple entries to lineup 1 with same self_match_id
         // They should NOT cancel each other (same lineup)
@@ -2065,7 +2059,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_two_lineups() {
-        let mut pool = EntryPool::new(1000, 1); // 2 lineups
+        let mut pool = EntryPool::new(1000, 2); // 2 lineups
 
         // Submit entry to lineup 0 with self_match_id=42
         pool.submit_entry(0, EntryParameters {
@@ -2098,7 +2092,7 @@ mod tests {
 
     #[test]
     fn test_self_match_id_no_cancel_until_all_covered() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+        let mut pool = EntryPool::new(1000, 4); // 4 lineups
 
         // Submit entries one by one, verifying no cancellation until all lineups covered
         let submit0 = pool.submit_entry(0, EntryParameters {

@@ -23,6 +23,7 @@ message GatewayMessage {
   oneof msg {
     NewOrder new_order = 2;
     CancelOrder cancel_order = 3;
+    DefinePool define_pool = 4;
   }
 }
 
@@ -35,25 +36,45 @@ message EngineMessage {
     CancelOrderAcknowledgement cancel_order_acknowledgement = 3;
     OrderElimination elimination = 4;
     Match match = 5;
+    DefinePoolAcknowledgement define_pool_acknowledgement = 6;
   }
+}
+
+// Sent from gateway to engine to define a pool before orders can be placed.
+// The engine rejects duplicate definitions (even if fields are identical)
+// and rejects orders targeting an undefined pool.
+message DefinePool {
+  message Body {
+    OpenBook.CommonPackage.UUID slate_id = 1;
+    uint64 total_units = 2;
+    uint64 num_lineups = 3;
+  }
+
+  Body body = 1;
+}
+
+message DefinePoolAcknowledgement {
+  message Body {
+    OpenBook.CommonPackage.UUID slate_id = 1;
+  }
+
+  OpenBook.CommonPackage.ResponseBase response_base = 1;
+  OpenBook.CommonPackage.FallibleBase fallible_base = 2;
+  Body body = 3;
 }
 
 message NewOrder {
   message Body {
-    message Leg {
-      OpenBook.CommonPackage.UUID leg_security_id = 1;
-      bool is_over = 2;
-    }
-
     OpenBook.CommonPackage.UUID client_order_id =
         1; // Unique identifier (assigned by the matching engine gateway) to tie
            // OrderNewAcknowledgement back to this OrderNew
-    repeated Leg legs = 2;
-    OpenBook.CommonPackage.OrderType order_type = 3;
-    uint64 portion = 4;
-    uint64 quantity = 5;
+    OpenBook.CommonPackage.UUID slate_id = 2; // Pool this order belongs to
+    uint64 lineup_index = 3; // Which lineup within the pool
+    OpenBook.CommonPackage.OrderType order_type = 4;
+    uint64 portion = 5;
+    uint64 quantity = 6;
     optional OpenBook.CommonPackage.UUID self_match_id =
-        6; // Protects a user from filling against orders entirely against
+        7; // Protects a user from filling against orders entirely against
            // themselves. If unpopulated, user gets no protections.
   }
 

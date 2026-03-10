@@ -29,9 +29,12 @@ type LineupState struct {
 
 // PoolState represents a single entry pool
 type PoolState struct {
-	LegSecurityIDs []utils.UUID              // Sorted leg security IDs (pool key)
-	Lineups        map[uint64]*LineupState   // map[lineup_index]LineupState
-	NumLegs        int
+	LegSecurityIDs []utils.UUID            // Sorted leg security IDs (pool key) - legs mode
+	SlateID        string                  // Slate ID string - slate mode
+	Lineups        map[uint64]*LineupState // map[lineup_index]LineupState
+	NumLegs        int                     // Number of legs - legs mode
+	NumLineups     uint64                  // Number of lineups - slate mode (from DefinePool)
+	TotalUnits     uint64                  // Total units - slate mode (from DefinePool)
 }
 
 // PoolTracker manages all entry pools
@@ -44,6 +47,23 @@ type PoolTracker struct {
 func NewPoolTracker() *PoolTracker {
 	return &PoolTracker{
 		pools: make(map[string]*PoolState),
+	}
+}
+
+// DefinePool registers a pool by slate ID for slate-based tracking
+func (pt *PoolTracker) DefinePool(slateID string, totalUnits uint64, numLineups uint64) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if _, exists := pt.pools[slateID]; exists {
+		return
+	}
+
+	pt.pools[slateID] = &PoolState{
+		SlateID:    slateID,
+		Lineups:    make(map[uint64]*LineupState),
+		NumLineups: numLineups,
+		TotalUnits: totalUnits,
 	}
 }
 
@@ -159,6 +179,47 @@ func (pt *PoolTracker) AddOrder(
 	}
 }
 
+// AddOrderBySlateID adds an order using slate ID and lineup index (matching server mode)
+func (pt *PoolTracker) AddOrderBySlateID(
+	orderID string,
+	clientOrderID uint64,
+	slateID string,
+	lineupIndex uint64,
+	portion uint64,
+	quantity uint64,
+	sequenceNumber uint64,
+) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	pool, exists := pt.pools[slateID]
+	if !exists {
+		pool = &PoolState{
+			SlateID:    slateID,
+			Lineups:    make(map[uint64]*LineupState),
+			NumLineups: lineupIndex + 1,
+		}
+		pt.pools[slateID] = pool
+	}
+
+	lineup, exists := pool.Lineups[lineupIndex]
+	if !exists {
+		lineup = &LineupState{
+			Orders: make(map[string]*OrderState),
+		}
+		pool.Lineups[lineupIndex] = lineup
+	}
+
+	lineup.Orders[orderID] = &OrderState{
+		OrderID:           orderID,
+		ClientOrderID:     clientOrderID,
+		Portion:           portion,
+		OriginalQuantity:  quantity,
+		RemainingQuantity: quantity,
+		SequenceNumber:    sequenceNumber,
+	}
+}
+
 // UpdateFromFill updates order quantities based on a fill event
 func (pt *PoolTracker) UpdateFromFill(orderID string, matchedQuantity uint64, isComplete bool) {
 	pt.mu.Lock()
@@ -205,7 +266,9 @@ func (pt *PoolTracker) RemoveOrder(orderID string) {
 type PoolDisplayData struct {
 	PoolKey        string
 	LegSecurityIDs []string
+	SlateID        string
 	NumLegs        int
+	NumLineups     uint64
 	TotalUnits     uint64
 	Lineups        []LineupDisplayData
 }
@@ -233,6 +296,31 @@ type OrderDisplayData struct {
 	SequenceNumber    uint64
 }
 
+// getOrdersDisplay extracts and sorts orders from a lineup for display
+func getOrdersDisplay(lineup *LineupState) []OrderDisplayData {
+	orders := make([]OrderDisplayData, 0)
+	if lineup == nil {
+		return orders
+	}
+	for _, order := range lineup.Orders {
+		orders = append(orders, OrderDisplayData{
+			OrderID:           order.OrderID,
+			ClientOrderID:     order.ClientOrderID,
+			Portion:           order.Portion,
+			OriginalQuantity:  order.OriginalQuantity,
+			RemainingQuantity: order.RemainingQuantity,
+			SequenceNumber:    order.SequenceNumber,
+		})
+	}
+	sort.Slice(orders, func(i, j int) bool {
+		if orders[i].Portion != orders[j].Portion {
+			return orders[i].Portion > orders[j].Portion
+		}
+		return orders[i].SequenceNumber < orders[j].SequenceNumber
+	})
+	return orders
+}
+
 // GetAllPoolsDisplay returns all pools formatted for display
 func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 	pt.mu.RLock()
@@ -241,65 +329,58 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 	result := make([]PoolDisplayData, 0, len(pt.pools))
 
 	for poolKey, pool := range pt.pools {
-		// Calculate number of possible lineups (2^num_legs)
-		numLineups := uint64(1 << uint(pool.NumLegs))
-
-		// Create lineup display data for all possible lineups (even empty ones)
-		lineups := make([]LineupDisplayData, 0, numLineups)
-
-		for lineupIdx := uint64(0); lineupIdx < numLineups; lineupIdx++ {
-			// Calculate over/under combination for this lineup
-			overUnders := make([]OverUnderDisplay, pool.NumLegs)
-			for i := 0; i < pool.NumLegs; i++ {
-				isOver := (lineupIdx & (1 << uint(i))) != 0
-				overUnders[i] = OverUnderDisplay{
-					LegSecurityID: pool.LegSecurityIDs[i].String(),
-					IsOver:        isOver,
-				}
+		if pool.SlateID != "" {
+			// Slate-based pool
+			lineups := make([]LineupDisplayData, 0, pool.NumLineups)
+			for lineupIdx := uint64(0); lineupIdx < pool.NumLineups; lineupIdx++ {
+				lineups = append(lineups, LineupDisplayData{
+					LineupIndex: lineupIdx,
+					Orders:      getOrdersDisplay(pool.Lineups[lineupIdx]),
+				})
 			}
 
-			// Get orders for this lineup
-			orders := make([]OrderDisplayData, 0)
-			if lineup, exists := pool.Lineups[lineupIdx]; exists {
-				for _, order := range lineup.Orders {
-					orders = append(orders, OrderDisplayData{
-						OrderID:           order.OrderID,
-						ClientOrderID:     order.ClientOrderID,
-						Portion:           order.Portion,
-						OriginalQuantity:  order.OriginalQuantity,
-						RemainingQuantity: order.RemainingQuantity,
-						SequenceNumber:    order.SequenceNumber,
-					})
+			result = append(result, PoolDisplayData{
+				PoolKey:    poolKey,
+				SlateID:    pool.SlateID,
+				NumLineups: pool.NumLineups,
+				TotalUnits: pool.TotalUnits,
+				Lineups:    lineups,
+			})
+		} else {
+			// Legs-based pool
+			numLineups := uint64(1 << uint(pool.NumLegs))
+			lineups := make([]LineupDisplayData, 0, numLineups)
+
+			for lineupIdx := uint64(0); lineupIdx < numLineups; lineupIdx++ {
+				overUnders := make([]OverUnderDisplay, pool.NumLegs)
+				for i := 0; i < pool.NumLegs; i++ {
+					isOver := (lineupIdx & (1 << uint(i))) != 0
+					overUnders[i] = OverUnderDisplay{
+						LegSecurityID: pool.LegSecurityIDs[i].String(),
+						IsOver:        isOver,
+					}
 				}
+
+				lineups = append(lineups, LineupDisplayData{
+					LineupIndex: lineupIdx,
+					OverUnders:  overUnders,
+					Orders:      getOrdersDisplay(pool.Lineups[lineupIdx]),
+				})
 			}
 
-			// Sort orders: highest portion first, then by sequence number (FIFO)
-			sort.Slice(orders, func(i, j int) bool {
-				if orders[i].Portion != orders[j].Portion {
-					return orders[i].Portion > orders[j].Portion
-				}
-				return orders[i].SequenceNumber < orders[j].SequenceNumber
-			})
+			legIDStrings := make([]string, len(pool.LegSecurityIDs))
+			for i, id := range pool.LegSecurityIDs {
+				legIDStrings[i] = id.String()
+			}
 
-			lineups = append(lineups, LineupDisplayData{
-				LineupIndex: lineupIdx,
-				OverUnders:  overUnders,
-				Orders:      orders,
+			result = append(result, PoolDisplayData{
+				PoolKey:        poolKey,
+				LegSecurityIDs: legIDStrings,
+				NumLegs:        pool.NumLegs,
+				TotalUnits:     1_000_000,
+				Lineups:        lineups,
 			})
 		}
-
-		legIDStrings := make([]string, len(pool.LegSecurityIDs))
-		for i, id := range pool.LegSecurityIDs {
-			legIDStrings[i] = id.String()
-		}
-
-		result = append(result, PoolDisplayData{
-			PoolKey:        poolKey,
-			LegSecurityIDs: legIDStrings,
-			NumLegs:        pool.NumLegs,
-			TotalUnits:     1_000_000,
-			Lineups:        lineups,
-		})
 	}
 
 	// Sort pools by pool key for consistent display

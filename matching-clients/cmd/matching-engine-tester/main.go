@@ -28,9 +28,11 @@ import (
 
 // PendingOrderInfo stores pending order data in a mode-agnostic way for pool tracking
 type PendingOrderInfo struct {
-	Legs     []Leg
-	Portion  uint64
-	Quantity uint64
+	Legs        []Leg
+	SlateID     string // matching server mode: slate ID for pool tracker
+	LineupIndex uint64 // matching server mode: lineup index for pool tracker
+	Portion     uint64
+	Quantity    uint64
 }
 
 type WebClient struct {
@@ -113,14 +115,26 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 			}
 
 			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
-				wc.poolTracker.AddOrder(
-					orderIDStr,
-					clientOrderID,
-					pendingOrder.Legs,
-					pendingOrder.Portion,
-					pendingOrder.Quantity,
-					sequenceNumber,
-				)
+				if pendingOrder.SlateID != "" {
+					wc.poolTracker.AddOrderBySlateID(
+						orderIDStr,
+						clientOrderID,
+						pendingOrder.SlateID,
+						pendingOrder.LineupIndex,
+						pendingOrder.Portion,
+						pendingOrder.Quantity,
+						sequenceNumber,
+					)
+				} else {
+					wc.poolTracker.AddOrder(
+						orderIDStr,
+						clientOrderID,
+						pendingOrder.Legs,
+						pendingOrder.Portion,
+						pendingOrder.Quantity,
+						sequenceNumber,
+					)
+				}
 				delete(wc.pendingOrders, clientOrderID)
 			}
 		}
@@ -148,6 +162,9 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 				)
 			}
 		}
+
+	case *pb.EngineMessage_DefinePoolAcknowledgement:
+		// DefinePool acknowledgements are logged in the response list but don't affect pool tracker state
 	}
 }
 
@@ -604,15 +621,16 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 	switch messageType {
 	case "NewOrder":
 		clientOrderId, _ := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
-		trackerLegs, legUUIDs := parseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
+		trackerLegs, _ := parseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
+		_ = trackerLegs // used for pool tracker below
 
-		var protoLegs []*pb.NewOrder_Body_Leg
-		for i, uuid := range legUUIDs {
-			protoLegs = append(protoLegs, &pb.NewOrder_Body_Leg{
-				LegSecurityId: uuid,
-				IsOver:        trackerLegs[i].IsOver,
-			})
+		var slateIDProto *common.UUID
+		if v := r.FormValue("slateId"); v != "" {
+			if parsed, err := utils.ParseUUID(v); err == nil {
+				slateIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+			}
 		}
+		lineupIndex, _ := strconv.ParseUint(r.FormValue("lineupIndex"), 10, 64)
 
 		orderType := common.OrderType_LIMIT
 		if r.FormValue("orderType") == "MARKET" {
@@ -623,7 +641,8 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 
 		newOrderBody := &pb.NewOrder_Body{
 			ClientOrderId: &common.UUID{Upper: 0, Lower: clientOrderId},
-			Legs:          protoLegs,
+			SlateId:       slateIDProto,
+			LineupIndex:   lineupIndex,
 			OrderType:     orderType,
 			Portion:       portion,
 			Quantity:      quantity,
@@ -648,9 +667,11 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 
 		wc.mu.Lock()
 		wc.pendingOrders[clientOrderId] = &PendingOrderInfo{
-			Legs:     trackerLegs,
-			Portion:  portion,
-			Quantity: quantity,
+			Legs:        trackerLegs,
+			SlateID:     r.FormValue("slateId"),
+			LineupIndex: lineupIndex,
+			Portion:     portion,
+			Quantity:    quantity,
 		}
 		wc.mu.Unlock()
 
@@ -665,6 +686,37 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 					Body: &pb.CancelOrder_Body{OrderId: orderId},
 				},
 			},
+		}
+
+	case "DefinePool":
+		var slateIDProto *common.UUID
+		if v := r.FormValue("dpSlateId"); v != "" {
+			if parsed, err := utils.ParseUUID(v); err == nil {
+				slateIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+			}
+		}
+		totalUnits, _ := strconv.ParseUint(r.FormValue("dpTotalUnits"), 10, 64)
+		numLineups, _ := strconv.ParseUint(r.FormValue("dpNumLineups"), 10, 64)
+
+		gatewayMsg = &pb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
+				SequenceNumber: seqNum,
+			},
+			Msg: &pb.GatewayMessage_DefinePool{
+				DefinePool: &pb.DefinePool{
+					Body: &pb.DefinePool_Body{
+						SlateId:    slateIDProto,
+						TotalUnits: totalUnits,
+						NumLineups: numLineups,
+					},
+				},
+			},
+		}
+
+		// Track pool definition for visualization
+		if slateIDProto != nil {
+			slateID := utils.UUIDFromUint64(slateIDProto.Upper, slateIDProto.Lower)
+			wc.poolTracker.DefinePool(slateID.String(), totalUnits, numLineups)
 		}
 
 	default:
@@ -1093,6 +1145,7 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
                     <div class="message-type-selector">
                         <label><input type="radio" name="messageType" value="NewOrder" checked> New Order</label>
                         <label><input type="radio" name="messageType" value="CancelOrder"> Cancel Order</label>
+                        <label class="matching-server-only"><input type="radio" name="messageType" value="DefinePool"> Define Pool</label>
                     </div>
 
                     <div class="form-group matching-server-only">
@@ -1123,6 +1176,14 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
                                 <input type="number" name="quantity" value="5">
                             </div>
                             <div class="form-group matching-server-only">
+                                <label>Slate ID (UUID):</label>
+                                <input type="text" name="slateId" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
+                            </div>
+                            <div class="form-group matching-server-only">
+                                <label>Lineup Index:</label>
+                                <input type="number" name="lineupIndex" value="0">
+                            </div>
+                            <div class="form-group matching-server-only">
                                 <label>Self Match ID (optional UUID):</label>
                                 <input type="text" name="selfMatchId" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
                             </div>
@@ -1136,8 +1197,8 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
                             </div>
                         </div>
                         
-                        <!-- Legs Section -->
-                        <div class="form-group" style="margin-top: 15px;">
+                        <!-- Legs Section (gateway mode only) -->
+                        <div class="form-group gateway-only" style="margin-top: 15px;">
                             <label>Legs:</label>
                             <div id="legsContainer"></div>
                             <button type="button" id="addLegBtn" class="add-leg-btn">+ Add Leg</button>
@@ -1153,6 +1214,24 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
                         <div class="form-group">
                             <label id="cancelOrderLabel">Order ID:</label>
                             <input type="text" name="orderId" id="cancelOrderInput" style="width: 300px;">
+                        </div>
+                    </div>
+
+                    <!-- Define Pool Fields (matching server only) -->
+                    <div id="definePoolFields" class="form-fields">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                            <div class="form-group">
+                                <label>Slate ID (UUID):</label>
+                                <input type="text" name="dpSlateId" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
+                            </div>
+                            <div class="form-group">
+                                <label>Total Units:</label>
+                                <input type="number" name="dpTotalUnits" value="1000000">
+                            </div>
+                            <div class="form-group">
+                                <label>Num Lineups:</label>
+                                <input type="number" name="dpNumLineups" value="4">
+                            </div>
                         </div>
                     </div>
 
@@ -1326,14 +1405,18 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
         }
 
         // ============ Form Type Toggle ============
+        const definePoolFields = document.getElementById('definePoolFields');
         messageTypeRadios.forEach(radio => {
             radio.addEventListener('change', function() {
+                newOrderFields.classList.remove('active');
+                cancelOrderFields.classList.remove('active');
+                definePoolFields.classList.remove('active');
                 if (this.value === 'NewOrder') {
                     newOrderFields.classList.add('active');
-                    cancelOrderFields.classList.remove('active');
-                } else {
-                    newOrderFields.classList.remove('active');
+                } else if (this.value === 'CancelOrder') {
                     cancelOrderFields.classList.add('active');
+                } else if (this.value === 'DefinePool') {
+                    definePoolFields.classList.add('active');
                 }
             });
         });
@@ -1514,18 +1597,25 @@ func renderMainPage(w http.ResponseWriter, data TemplateData) {
             let html = '';
             for (const pool of pools) {
                 html += '<div class="pool-card">';
-                html += '<div class="pool-header">Pool [' + pool.LegSecurityIDs.join(', ') + ']</div>';
-                html += '<div class="pool-info">' + pool.NumLegs + ' legs, ' + formatNumber(pool.TotalUnits) + ' total units</div>';
+                if (pool.SlateID) {
+                    html += '<div class="pool-header">Pool ' + pool.SlateID + '</div>';
+                    html += '<div class="pool-info">' + pool.NumLineups + ' lineups, ' + formatNumber(pool.TotalUnits) + ' total units</div>';
+                } else {
+                    html += '<div class="pool-header">Pool [' + pool.LegSecurityIDs.join(', ') + ']</div>';
+                    html += '<div class="pool-info">' + pool.NumLegs + ' legs, ' + formatNumber(pool.TotalUnits) + ' total units</div>';
+                }
                 html += '<div class="lineups-container">';
 
                 for (const lineup of pool.Lineups) {
                     html += '<div class="lineup-column">';
                     html += '<div class="lineup-header">' + lineup.LineupIndex + '</div>';
 
-                    let ouStr = lineup.OverUnders.map(ou =>
-                        (ou.IsOver ? 'O' : 'U')
-                    ).join('');
-                    html += '<div class="lineup-subheader">[' + ouStr + ']</div>';
+                    if (lineup.OverUnders && lineup.OverUnders.length > 0) {
+                        let ouStr = lineup.OverUnders.map(ou =>
+                            (ou.IsOver ? 'O' : 'U')
+                        ).join('');
+                        html += '<div class="lineup-subheader">[' + ouStr + ']</div>';
+                    }
 
                     if (!lineup.Orders || lineup.Orders.length === 0) {
                         html += '<div class="empty-lineup">Empty</div>';

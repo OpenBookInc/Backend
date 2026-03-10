@@ -23,6 +23,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// TotalUnits is the fixed total units value for all exchange slates.
+const TotalUnits int64 = 1_000_000
+
 // Config holds configuration for the gateway
 type Config struct {
 	// Database Configuration
@@ -83,6 +86,10 @@ type Gateway struct {
 
 	// gRPC server for incoming connections
 	grpcServer *grpc.Server
+
+	// Pools that have been defined on the current upstream connection (keyed by slate ID string)
+	definedPools   map[string]bool
+	definedPoolsMu sync.RWMutex
 
 	// Upstream matching server connection state
 	upstreamConnected bool
@@ -192,6 +199,7 @@ func NewGateway(ctx context.Context, config *Config) (*Gateway, error) {
 		confirmedOrders:   make(map[uint64]*ConfirmedOrder),
 		dbToEngineOrderID: make(map[utils.UUID]uint64),
 		clientStreams:     make(map[utils.UUID]gwpb.GatewayServerService_CreateTradeStreamServer),
+		definedPools:      make(map[string]bool),
 		sendChan:          make(chan *pb.GatewayMessage, 100),
 		ctx:               ctx,
 		cancel:            cancel,
@@ -367,7 +375,70 @@ func (gw *Gateway) processEngineMessage(resp *pb.EngineMessage) {
 
 	case *pb.EngineMessage_Match:
 		gw.handleMatch(ctx, event.Match)
+
+	case *pb.EngineMessage_DefinePoolAcknowledgement:
+		gw.handleDefinePoolAcknowledgement(event.DefinePoolAcknowledgement)
 	}
+}
+
+// handleDefinePoolAcknowledgement processes a define pool acknowledgement from the matching engine
+func (gw *Gateway) handleDefinePoolAcknowledgement(ack *pb.DefinePoolAcknowledgement) {
+	if ack.FallibleBase != nil && ack.FallibleBase.Success {
+		slateID := ""
+		if ack.Body != nil && ack.Body.SlateId != nil {
+			slateID = utils.UUIDFromUint64(ack.Body.SlateId.GetUpper(), ack.Body.SlateId.GetLower()).String()
+		}
+		log.Printf("Pool definition confirmed: slateId=%s\n", slateID)
+	} else {
+		errorDesc := ""
+		if ack.FallibleBase != nil {
+			errorDesc = ack.FallibleBase.ErrorDescription
+		}
+		log.Printf("ERROR: Pool definition rejected: %s\n", errorDesc)
+	}
+}
+
+// ensurePoolDefined sends a DefinePool message upstream if the pool for the given
+// slate has not yet been defined on this connection. Stream ordering guarantees
+// the DefinePool arrives before any subsequent NewOrder.
+func (gw *Gateway) ensurePoolDefined(slateAndLineups *SlateAndLineups) {
+	slateIDStr := slateAndLineups.Slate.ID.String()
+
+	gw.definedPoolsMu.RLock()
+	defined := gw.definedPools[slateIDStr]
+	gw.definedPoolsMu.RUnlock()
+
+	if defined {
+		return
+	}
+
+	gw.definedPoolsMu.Lock()
+	// Double-check under write lock
+	if gw.definedPools[slateIDStr] {
+		gw.definedPoolsMu.Unlock()
+		return
+	}
+	gw.definedPools[slateIDStr] = true
+	gw.definedPoolsMu.Unlock()
+
+	msg := &pb.GatewayMessage{
+		SequencedMessageBase: &common.SequencedMessageBase{
+			SequenceNumber: gw.getNextUpstreamSequenceNumber(),
+		},
+		Msg: &pb.GatewayMessage_DefinePool{
+			DefinePool: &pb.DefinePool{
+				Body: &pb.DefinePool_Body{
+					SlateId:    uuidToProto(slateAndLineups.Slate.ID),
+					TotalUnits: uint64(slateAndLineups.Slate.TotalUnits),
+					NumLineups: uint64(len(slateAndLineups.Lineups)),
+				},
+			},
+		},
+	}
+
+	gw.sendChan <- msg
+	log.Printf("Sent DefinePool for slateId=%s (totalUnits=%d, numLineups=%d)\n",
+		slateIDStr, slateAndLineups.Slate.TotalUnits, len(slateAndLineups.Lineups))
 }
 
 // forwardToClient sends a gateway proto message to the connected client for the given order
@@ -796,7 +867,7 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream gwpb.G
 		}
 	}
 
-	totalUnits := int64(len(legs)) // TODO: derive from order
+	totalUnits := TotalUnits
 	marketIDs := make([]utils.UUID, len(legs))
 	for i := range legs {
 		marketIDs[i] = legs[i].LegSecurityIDAsUUID()
@@ -807,11 +878,14 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream gwpb.G
 		return gw.sendOrderRejection(clientStream, backendClientOrderID, fmt.Sprintf("failed to ensure slate: %v", err))
 	}
 
-	lineupID, err := FindLineupID(slateAndLineups, legs)
+	lineupID, lineupIndex, err := FindLineup(slateAndLineups, legs)
 	if err != nil {
 		log.Printf("Failed to find lineup: %v\n", err)
 		return gw.sendOrderRejection(clientStream, backendClientOrderID, fmt.Sprintf("failed to find lineup: %v", err))
 	}
+
+	// Ensure the pool is defined on the upstream matching server before sending orders
+	gw.ensurePoolDefined(slateAndLineups)
 
 	// Step 2: Create exchange order in DB (atomically deducts balance)
 	dbRecordID, err := gw.CreateExchangeOrder(ctx, lineupID, userID, protoOrderTypeToEnum(order.Body.OrderType), order.Body.Portion, order.Body.Quantity, backendClientOrderID, gen.ExchangeOrderStatusReceivedByBackend)
@@ -838,17 +912,10 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream gwpb.G
 	selfMatchID := gw.GetSelfMatchID(ctx, userID)
 
 	// Step 5: Build matching proto NewOrder for upstream
-	matchingLegs := make([]*pb.NewOrder_Body_Leg, len(order.Body.Legs))
-	for i, leg := range order.Body.Legs {
-		matchingLegs[i] = &pb.NewOrder_Body_Leg{
-			LegSecurityId: leg.LegSecurityId,
-			IsOver:        leg.IsOver,
-		}
-	}
-
 	matchingOrderBody := &pb.NewOrder_Body{
 		ClientOrderId: uuidToProto(dbRecordID),
-		Legs:          matchingLegs,
+		SlateId:       uuidToProto(slateAndLineups.Slate.ID),
+		LineupIndex:   uint64(lineupIndex),
 		OrderType:     order.Body.OrderType,
 		Portion:       order.Body.Portion,
 		Quantity:      order.Body.Quantity,
@@ -1046,6 +1113,11 @@ func (gw *Gateway) attemptReconnect() error {
 		}
 	}
 drained:
+
+	// Clear defined pools for the new connection
+	gw.definedPoolsMu.Lock()
+	gw.definedPools = make(map[string]bool)
+	gw.definedPoolsMu.Unlock()
 
 	// Initialize trade stream
 	if err := gw.initializeTradeStream(); err != nil {

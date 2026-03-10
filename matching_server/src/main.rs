@@ -12,6 +12,7 @@ use matching_server::matching_service_package::{
     engine_message::Event,
     SequencedMessageBase, ResponseBase, FallibleBase,
     NewOrderAcknowledgement, CancelOrderAcknowledgement, OrderElimination, Match,
+    DefinePoolAcknowledgement,
 };
 
 use matching_server::pool_manager::PoolManager;
@@ -261,6 +262,63 @@ impl MatcherService {
 
                         tx.send(Ok(ack_message)).await.map_err(|_| {
                             Status::internal("Failed to send CancelOrderAcknowledgement")
+                        })?;
+                    }
+                }
+            }
+            Some(Msg::DefinePool(define_pool)) => {
+                println!("Processing DefinePool: {:?}", define_pool);
+
+                let body = define_pool
+                    .body
+                    .ok_or_else(|| Status::invalid_argument("Missing define_pool body"))?;
+
+                let result = {
+                    let mut pool_manager = self.state.pool_manager.lock().unwrap();
+                    pool_manager.define_pool(body)
+                };
+
+                match result {
+                    Ok(ack_body) => {
+                        let ack_message = EngineMessage {
+                            sequenced_message_base: Some(SequencedMessageBase {
+                                sequence_number: self.get_next_response_sequence(),
+                            }),
+                            event: Some(Event::DefinePoolAcknowledgement(DefinePoolAcknowledgement {
+                                response_base: Some(ResponseBase {
+                                    request_sequence_number,
+                                }),
+                                fallible_base: Some(FallibleBase {
+                                    success: true,
+                                    error_description: String::new(),
+                                }),
+                                body: Some(ack_body),
+                            })),
+                        };
+
+                        tx.send(Ok(ack_message)).await.map_err(|_| {
+                            Status::internal("Failed to send DefinePoolAcknowledgement")
+                        })?;
+                    }
+                    Err(error_msg) => {
+                        let ack_message = EngineMessage {
+                            sequenced_message_base: Some(SequencedMessageBase {
+                                sequence_number: self.get_next_response_sequence(),
+                            }),
+                            event: Some(Event::DefinePoolAcknowledgement(DefinePoolAcknowledgement {
+                                response_base: Some(ResponseBase {
+                                    request_sequence_number,
+                                }),
+                                fallible_base: Some(FallibleBase {
+                                    success: false,
+                                    error_description: error_msg,
+                                }),
+                                body: None,
+                            })),
+                        };
+
+                        tx.send(Ok(ack_message)).await.map_err(|_| {
+                            Status::internal("Failed to send DefinePoolAcknowledgement")
                         })?;
                     }
                 }

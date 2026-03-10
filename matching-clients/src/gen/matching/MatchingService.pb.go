@@ -30,6 +30,7 @@ type GatewayMessage struct {
 	//
 	//	*GatewayMessage_NewOrder
 	//	*GatewayMessage_CancelOrder
+	//	*GatewayMessage_DefinePool
 	Msg           isGatewayMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -97,6 +98,15 @@ func (x *GatewayMessage) GetCancelOrder() *CancelOrder {
 	return nil
 }
 
+func (x *GatewayMessage) GetDefinePool() *DefinePool {
+	if x != nil {
+		if x, ok := x.Msg.(*GatewayMessage_DefinePool); ok {
+			return x.DefinePool
+		}
+	}
+	return nil
+}
+
 type isGatewayMessage_Msg interface {
 	isGatewayMessage_Msg()
 }
@@ -109,9 +119,15 @@ type GatewayMessage_CancelOrder struct {
 	CancelOrder *CancelOrder `protobuf:"bytes,3,opt,name=cancel_order,json=cancelOrder,proto3,oneof"`
 }
 
+type GatewayMessage_DefinePool struct {
+	DefinePool *DefinePool `protobuf:"bytes,4,opt,name=define_pool,json=definePool,proto3,oneof"`
+}
+
 func (*GatewayMessage_NewOrder) isGatewayMessage_Msg() {}
 
 func (*GatewayMessage_CancelOrder) isGatewayMessage_Msg() {}
+
+func (*GatewayMessage_DefinePool) isGatewayMessage_Msg() {}
 
 // Messages sent from engine → gateway
 type EngineMessage struct {
@@ -123,6 +139,7 @@ type EngineMessage struct {
 	//	*EngineMessage_CancelOrderAcknowledgement
 	//	*EngineMessage_Elimination
 	//	*EngineMessage_Match
+	//	*EngineMessage_DefinePoolAcknowledgement
 	Event         isEngineMessage_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -208,6 +225,15 @@ func (x *EngineMessage) GetMatch() *Match {
 	return nil
 }
 
+func (x *EngineMessage) GetDefinePoolAcknowledgement() *DefinePoolAcknowledgement {
+	if x != nil {
+		if x, ok := x.Event.(*EngineMessage_DefinePoolAcknowledgement); ok {
+			return x.DefinePoolAcknowledgement
+		}
+	}
+	return nil
+}
+
 type isEngineMessage_Event interface {
 	isEngineMessage_Event()
 }
@@ -228,6 +254,10 @@ type EngineMessage_Match struct {
 	Match *Match `protobuf:"bytes,5,opt,name=match,proto3,oneof"`
 }
 
+type EngineMessage_DefinePoolAcknowledgement struct {
+	DefinePoolAcknowledgement *DefinePoolAcknowledgement `protobuf:"bytes,6,opt,name=define_pool_acknowledgement,json=definePoolAcknowledgement,proto3,oneof"`
+}
+
 func (*EngineMessage_NewOrderAcknowledgement) isEngineMessage_Event() {}
 
 func (*EngineMessage_CancelOrderAcknowledgement) isEngineMessage_Event() {}
@@ -235,6 +265,115 @@ func (*EngineMessage_CancelOrderAcknowledgement) isEngineMessage_Event() {}
 func (*EngineMessage_Elimination) isEngineMessage_Event() {}
 
 func (*EngineMessage_Match) isEngineMessage_Event() {}
+
+func (*EngineMessage_DefinePoolAcknowledgement) isEngineMessage_Event() {}
+
+// Sent from gateway to engine to define a pool before orders can be placed.
+// The engine rejects duplicate definitions (even if fields are identical)
+// and rejects orders targeting an undefined pool.
+type DefinePool struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Body          *DefinePool_Body       `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DefinePool) Reset() {
+	*x = DefinePool{}
+	mi := &file_MatchingService_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DefinePool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DefinePool) ProtoMessage() {}
+
+func (x *DefinePool) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DefinePool.ProtoReflect.Descriptor instead.
+func (*DefinePool) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DefinePool) GetBody() *DefinePool_Body {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+type DefinePoolAcknowledgement struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	ResponseBase  *gen.ResponseBase               `protobuf:"bytes,1,opt,name=response_base,json=responseBase,proto3" json:"response_base,omitempty"`
+	FallibleBase  *gen.FallibleBase               `protobuf:"bytes,2,opt,name=fallible_base,json=fallibleBase,proto3" json:"fallible_base,omitempty"`
+	Body          *DefinePoolAcknowledgement_Body `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DefinePoolAcknowledgement) Reset() {
+	*x = DefinePoolAcknowledgement{}
+	mi := &file_MatchingService_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DefinePoolAcknowledgement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DefinePoolAcknowledgement) ProtoMessage() {}
+
+func (x *DefinePoolAcknowledgement) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DefinePoolAcknowledgement.ProtoReflect.Descriptor instead.
+func (*DefinePoolAcknowledgement) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DefinePoolAcknowledgement) GetResponseBase() *gen.ResponseBase {
+	if x != nil {
+		return x.ResponseBase
+	}
+	return nil
+}
+
+func (x *DefinePoolAcknowledgement) GetFallibleBase() *gen.FallibleBase {
+	if x != nil {
+		return x.FallibleBase
+	}
+	return nil
+}
+
+func (x *DefinePoolAcknowledgement) GetBody() *DefinePoolAcknowledgement_Body {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
 
 type NewOrder struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -245,7 +384,7 @@ type NewOrder struct {
 
 func (x *NewOrder) Reset() {
 	*x = NewOrder{}
-	mi := &file_MatchingService_proto_msgTypes[2]
+	mi := &file_MatchingService_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -257,7 +396,7 @@ func (x *NewOrder) String() string {
 func (*NewOrder) ProtoMessage() {}
 
 func (x *NewOrder) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[2]
+	mi := &file_MatchingService_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -270,7 +409,7 @@ func (x *NewOrder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewOrder.ProtoReflect.Descriptor instead.
 func (*NewOrder) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{2}
+	return file_MatchingService_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NewOrder) GetBody() *NewOrder_Body {
@@ -291,7 +430,7 @@ type NewOrderAcknowledgement struct {
 
 func (x *NewOrderAcknowledgement) Reset() {
 	*x = NewOrderAcknowledgement{}
-	mi := &file_MatchingService_proto_msgTypes[3]
+	mi := &file_MatchingService_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -303,7 +442,7 @@ func (x *NewOrderAcknowledgement) String() string {
 func (*NewOrderAcknowledgement) ProtoMessage() {}
 
 func (x *NewOrderAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[3]
+	mi := &file_MatchingService_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -316,7 +455,7 @@ func (x *NewOrderAcknowledgement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewOrderAcknowledgement.ProtoReflect.Descriptor instead.
 func (*NewOrderAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{3}
+	return file_MatchingService_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NewOrderAcknowledgement) GetResponseBase() *gen.ResponseBase {
@@ -349,7 +488,7 @@ type CancelOrder struct {
 
 func (x *CancelOrder) Reset() {
 	*x = CancelOrder{}
-	mi := &file_MatchingService_proto_msgTypes[4]
+	mi := &file_MatchingService_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -361,7 +500,7 @@ func (x *CancelOrder) String() string {
 func (*CancelOrder) ProtoMessage() {}
 
 func (x *CancelOrder) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[4]
+	mi := &file_MatchingService_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -374,7 +513,7 @@ func (x *CancelOrder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOrder.ProtoReflect.Descriptor instead.
 func (*CancelOrder) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{4}
+	return file_MatchingService_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CancelOrder) GetBody() *CancelOrder_Body {
@@ -395,7 +534,7 @@ type CancelOrderAcknowledgement struct {
 
 func (x *CancelOrderAcknowledgement) Reset() {
 	*x = CancelOrderAcknowledgement{}
-	mi := &file_MatchingService_proto_msgTypes[5]
+	mi := &file_MatchingService_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -407,7 +546,7 @@ func (x *CancelOrderAcknowledgement) String() string {
 func (*CancelOrderAcknowledgement) ProtoMessage() {}
 
 func (x *CancelOrderAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[5]
+	mi := &file_MatchingService_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -420,7 +559,7 @@ func (x *CancelOrderAcknowledgement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOrderAcknowledgement.ProtoReflect.Descriptor instead.
 func (*CancelOrderAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{5}
+	return file_MatchingService_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CancelOrderAcknowledgement) GetResponseBase() *gen.ResponseBase {
@@ -455,7 +594,7 @@ type OrderElimination struct {
 
 func (x *OrderElimination) Reset() {
 	*x = OrderElimination{}
-	mi := &file_MatchingService_proto_msgTypes[6]
+	mi := &file_MatchingService_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +606,7 @@ func (x *OrderElimination) String() string {
 func (*OrderElimination) ProtoMessage() {}
 
 func (x *OrderElimination) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[6]
+	mi := &file_MatchingService_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +619,7 @@ func (x *OrderElimination) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderElimination.ProtoReflect.Descriptor instead.
 func (*OrderElimination) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{6}
+	return file_MatchingService_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OrderElimination) GetBody() *OrderElimination_Body {
@@ -499,7 +638,7 @@ type Match struct {
 
 func (x *Match) Reset() {
 	*x = Match{}
-	mi := &file_MatchingService_proto_msgTypes[7]
+	mi := &file_MatchingService_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +650,7 @@ func (x *Match) String() string {
 func (*Match) ProtoMessage() {}
 
 func (x *Match) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[7]
+	mi := &file_MatchingService_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +663,7 @@ func (x *Match) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Match.ProtoReflect.Descriptor instead.
 func (*Match) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7}
+	return file_MatchingService_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Match) GetBody() *Match_Body {
@@ -534,22 +673,127 @@ func (x *Match) GetBody() *Match_Body {
 	return nil
 }
 
+type DefinePool_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlateId       *gen.UUID              `protobuf:"bytes,1,opt,name=slate_id,json=slateId,proto3" json:"slate_id,omitempty"`
+	TotalUnits    uint64                 `protobuf:"varint,2,opt,name=total_units,json=totalUnits,proto3" json:"total_units,omitempty"`
+	NumLineups    uint64                 `protobuf:"varint,3,opt,name=num_lineups,json=numLineups,proto3" json:"num_lineups,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DefinePool_Body) Reset() {
+	*x = DefinePool_Body{}
+	mi := &file_MatchingService_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DefinePool_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DefinePool_Body) ProtoMessage() {}
+
+func (x *DefinePool_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DefinePool_Body.ProtoReflect.Descriptor instead.
+func (*DefinePool_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *DefinePool_Body) GetSlateId() *gen.UUID {
+	if x != nil {
+		return x.SlateId
+	}
+	return nil
+}
+
+func (x *DefinePool_Body) GetTotalUnits() uint64 {
+	if x != nil {
+		return x.TotalUnits
+	}
+	return 0
+}
+
+func (x *DefinePool_Body) GetNumLineups() uint64 {
+	if x != nil {
+		return x.NumLineups
+	}
+	return 0
+}
+
+type DefinePoolAcknowledgement_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlateId       *gen.UUID              `protobuf:"bytes,1,opt,name=slate_id,json=slateId,proto3" json:"slate_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DefinePoolAcknowledgement_Body) Reset() {
+	*x = DefinePoolAcknowledgement_Body{}
+	mi := &file_MatchingService_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DefinePoolAcknowledgement_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DefinePoolAcknowledgement_Body) ProtoMessage() {}
+
+func (x *DefinePoolAcknowledgement_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_MatchingService_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DefinePoolAcknowledgement_Body.ProtoReflect.Descriptor instead.
+func (*DefinePoolAcknowledgement_Body) Descriptor() ([]byte, []int) {
+	return file_MatchingService_proto_rawDescGZIP(), []int{3, 0}
+}
+
+func (x *DefinePoolAcknowledgement_Body) GetSlateId() *gen.UUID {
+	if x != nil {
+		return x.SlateId
+	}
+	return nil
+}
+
 type NewOrder_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ClientOrderId *gen.UUID              `protobuf:"bytes,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"` // Unique identifier (assigned by the matching engine gateway) to tie
 	// OrderNewAcknowledgement back to this OrderNew
-	Legs          []*NewOrder_Body_Leg `protobuf:"bytes,2,rep,name=legs,proto3" json:"legs,omitempty"`
-	OrderType     gen.OrderType        `protobuf:"varint,3,opt,name=order_type,json=orderType,proto3,enum=OpenBook.CommonPackage.OrderType" json:"order_type,omitempty"`
-	Portion       uint64               `protobuf:"varint,4,opt,name=portion,proto3" json:"portion,omitempty"`
-	Quantity      uint64               `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	SelfMatchId   *gen.UUID            `protobuf:"bytes,6,opt,name=self_match_id,json=selfMatchId,proto3,oneof" json:"self_match_id,omitempty"` // Protects a user from filling against orders entirely against
+	SlateId       *gen.UUID     `protobuf:"bytes,2,opt,name=slate_id,json=slateId,proto3" json:"slate_id,omitempty"`              // Pool this order belongs to
+	LineupIndex   uint64        `protobuf:"varint,3,opt,name=lineup_index,json=lineupIndex,proto3" json:"lineup_index,omitempty"` // Which lineup within the pool
+	OrderType     gen.OrderType `protobuf:"varint,4,opt,name=order_type,json=orderType,proto3,enum=OpenBook.CommonPackage.OrderType" json:"order_type,omitempty"`
+	Portion       uint64        `protobuf:"varint,5,opt,name=portion,proto3" json:"portion,omitempty"`
+	Quantity      uint64        `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	SelfMatchId   *gen.UUID     `protobuf:"bytes,7,opt,name=self_match_id,json=selfMatchId,proto3,oneof" json:"self_match_id,omitempty"` // Protects a user from filling against orders entirely against
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NewOrder_Body) Reset() {
 	*x = NewOrder_Body{}
-	mi := &file_MatchingService_proto_msgTypes[8]
+	mi := &file_MatchingService_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -561,7 +805,7 @@ func (x *NewOrder_Body) String() string {
 func (*NewOrder_Body) ProtoMessage() {}
 
 func (x *NewOrder_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[8]
+	mi := &file_MatchingService_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -574,7 +818,7 @@ func (x *NewOrder_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewOrder_Body.ProtoReflect.Descriptor instead.
 func (*NewOrder_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{2, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{4, 0}
 }
 
 func (x *NewOrder_Body) GetClientOrderId() *gen.UUID {
@@ -584,11 +828,18 @@ func (x *NewOrder_Body) GetClientOrderId() *gen.UUID {
 	return nil
 }
 
-func (x *NewOrder_Body) GetLegs() []*NewOrder_Body_Leg {
+func (x *NewOrder_Body) GetSlateId() *gen.UUID {
 	if x != nil {
-		return x.Legs
+		return x.SlateId
 	}
 	return nil
+}
+
+func (x *NewOrder_Body) GetLineupIndex() uint64 {
+	if x != nil {
+		return x.LineupIndex
+	}
+	return 0
 }
 
 func (x *NewOrder_Body) GetOrderType() gen.OrderType {
@@ -619,58 +870,6 @@ func (x *NewOrder_Body) GetSelfMatchId() *gen.UUID {
 	return nil
 }
 
-type NewOrder_Body_Leg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LegSecurityId *gen.UUID              `protobuf:"bytes,1,opt,name=leg_security_id,json=legSecurityId,proto3" json:"leg_security_id,omitempty"`
-	IsOver        bool                   `protobuf:"varint,2,opt,name=is_over,json=isOver,proto3" json:"is_over,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewOrder_Body_Leg) Reset() {
-	*x = NewOrder_Body_Leg{}
-	mi := &file_MatchingService_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewOrder_Body_Leg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewOrder_Body_Leg) ProtoMessage() {}
-
-func (x *NewOrder_Body_Leg) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewOrder_Body_Leg.ProtoReflect.Descriptor instead.
-func (*NewOrder_Body_Leg) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{2, 0, 0}
-}
-
-func (x *NewOrder_Body_Leg) GetLegSecurityId() *gen.UUID {
-	if x != nil {
-		return x.LegSecurityId
-	}
-	return nil
-}
-
-func (x *NewOrder_Body_Leg) GetIsOver() bool {
-	if x != nil {
-		return x.IsOver
-	}
-	return false
-}
-
 type NewOrderAcknowledgement_Body struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ClientOrderId *gen.UUID              `protobuf:"bytes,1,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
@@ -681,7 +880,7 @@ type NewOrderAcknowledgement_Body struct {
 
 func (x *NewOrderAcknowledgement_Body) Reset() {
 	*x = NewOrderAcknowledgement_Body{}
-	mi := &file_MatchingService_proto_msgTypes[10]
+	mi := &file_MatchingService_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -693,7 +892,7 @@ func (x *NewOrderAcknowledgement_Body) String() string {
 func (*NewOrderAcknowledgement_Body) ProtoMessage() {}
 
 func (x *NewOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[10]
+	mi := &file_MatchingService_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -706,7 +905,7 @@ func (x *NewOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewOrderAcknowledgement_Body.ProtoReflect.Descriptor instead.
 func (*NewOrderAcknowledgement_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{3, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *NewOrderAcknowledgement_Body) GetClientOrderId() *gen.UUID {
@@ -732,7 +931,7 @@ type CancelOrder_Body struct {
 
 func (x *CancelOrder_Body) Reset() {
 	*x = CancelOrder_Body{}
-	mi := &file_MatchingService_proto_msgTypes[11]
+	mi := &file_MatchingService_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -744,7 +943,7 @@ func (x *CancelOrder_Body) String() string {
 func (*CancelOrder_Body) ProtoMessage() {}
 
 func (x *CancelOrder_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[11]
+	mi := &file_MatchingService_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -757,7 +956,7 @@ func (x *CancelOrder_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOrder_Body.ProtoReflect.Descriptor instead.
 func (*CancelOrder_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{4, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
 }
 
 func (x *CancelOrder_Body) GetOrderId() uint64 {
@@ -776,7 +975,7 @@ type CancelOrderAcknowledgement_Body struct {
 
 func (x *CancelOrderAcknowledgement_Body) Reset() {
 	*x = CancelOrderAcknowledgement_Body{}
-	mi := &file_MatchingService_proto_msgTypes[12]
+	mi := &file_MatchingService_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -788,7 +987,7 @@ func (x *CancelOrderAcknowledgement_Body) String() string {
 func (*CancelOrderAcknowledgement_Body) ProtoMessage() {}
 
 func (x *CancelOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[12]
+	mi := &file_MatchingService_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -801,7 +1000,7 @@ func (x *CancelOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOrderAcknowledgement_Body.ProtoReflect.Descriptor instead.
 func (*CancelOrderAcknowledgement_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{5, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
 }
 
 func (x *CancelOrderAcknowledgement_Body) GetOrderId() uint64 {
@@ -821,7 +1020,7 @@ type OrderElimination_Body struct {
 
 func (x *OrderElimination_Body) Reset() {
 	*x = OrderElimination_Body{}
-	mi := &file_MatchingService_proto_msgTypes[13]
+	mi := &file_MatchingService_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -833,7 +1032,7 @@ func (x *OrderElimination_Body) String() string {
 func (*OrderElimination_Body) ProtoMessage() {}
 
 func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[13]
+	mi := &file_MatchingService_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -846,7 +1045,7 @@ func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderElimination_Body.ProtoReflect.Descriptor instead.
 func (*OrderElimination_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{6, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{8, 0}
 }
 
 func (x *OrderElimination_Body) GetOrderId() uint64 {
@@ -877,7 +1076,7 @@ type Match_Body struct {
 
 func (x *Match_Body) Reset() {
 	*x = Match_Body{}
-	mi := &file_MatchingService_proto_msgTypes[14]
+	mi := &file_MatchingService_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -889,7 +1088,7 @@ func (x *Match_Body) String() string {
 func (*Match_Body) ProtoMessage() {}
 
 func (x *Match_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[14]
+	mi := &file_MatchingService_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -902,7 +1101,7 @@ func (x *Match_Body) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Match_Body.ProtoReflect.Descriptor instead.
 func (*Match_Body) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{9, 0}
 }
 
 func (x *Match_Body) GetTransactionId() uint64 {
@@ -946,7 +1145,7 @@ type Match_Body_FillEvent struct {
 
 func (x *Match_Body_FillEvent) Reset() {
 	*x = Match_Body_FillEvent{}
-	mi := &file_MatchingService_proto_msgTypes[15]
+	mi := &file_MatchingService_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -958,7 +1157,7 @@ func (x *Match_Body_FillEvent) String() string {
 func (*Match_Body_FillEvent) ProtoMessage() {}
 
 func (x *Match_Body_FillEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_MatchingService_proto_msgTypes[15]
+	mi := &file_MatchingService_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -971,7 +1170,7 @@ func (x *Match_Body_FillEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Match_Body_FillEvent.ProtoReflect.Descriptor instead.
 func (*Match_Body_FillEvent) Descriptor() ([]byte, []int) {
-	return file_MatchingService_proto_rawDescGZIP(), []int{7, 0, 0}
+	return file_MatchingService_proto_rawDescGZIP(), []int{9, 0, 0}
 }
 
 func (x *Match_Body_FillEvent) GetFillEventId() uint64 {
@@ -1013,32 +1212,48 @@ var File_MatchingService_proto protoreflect.FileDescriptor
 
 const file_MatchingService_proto_rawDesc = "" +
 	"\n" +
-	"\x15MatchingService.proto\x12\x1fOpenBook.MatchingServicePackage\x1a\fCommon.proto\"\x98\x02\n" +
+	"\x15MatchingService.proto\x12\x1fOpenBook.MatchingServicePackage\x1a\fCommon.proto\"\xe8\x02\n" +
 	"\x0eGatewayMessage\x12b\n" +
 	"\x16sequenced_message_base\x18\x01 \x01(\v2,.OpenBook.CommonPackage.SequencedMessageBaseR\x14sequencedMessageBase\x12H\n" +
 	"\tnew_order\x18\x02 \x01(\v2).OpenBook.MatchingServicePackage.NewOrderH\x00R\bnewOrder\x12Q\n" +
-	"\fcancel_order\x18\x03 \x01(\v2,.OpenBook.MatchingServicePackage.CancelOrderH\x00R\vcancelOrderB\x05\n" +
-	"\x03msg\"\x8c\x04\n" +
+	"\fcancel_order\x18\x03 \x01(\v2,.OpenBook.MatchingServicePackage.CancelOrderH\x00R\vcancelOrder\x12N\n" +
+	"\vdefine_pool\x18\x04 \x01(\v2+.OpenBook.MatchingServicePackage.DefinePoolH\x00R\n" +
+	"definePoolB\x05\n" +
+	"\x03msg\"\x8a\x05\n" +
 	"\rEngineMessage\x12b\n" +
 	"\x16sequenced_message_base\x18\x01 \x01(\v2,.OpenBook.CommonPackage.SequencedMessageBaseR\x14sequencedMessageBase\x12v\n" +
 	"\x19new_order_acknowledgement\x18\x02 \x01(\v28.OpenBook.MatchingServicePackage.NewOrderAcknowledgementH\x00R\x17newOrderAcknowledgement\x12\x7f\n" +
 	"\x1ccancel_order_acknowledgement\x18\x03 \x01(\v2;.OpenBook.MatchingServicePackage.CancelOrderAcknowledgementH\x00R\x1acancelOrderAcknowledgement\x12U\n" +
 	"\velimination\x18\x04 \x01(\v21.OpenBook.MatchingServicePackage.OrderEliminationH\x00R\velimination\x12>\n" +
-	"\x05match\x18\x05 \x01(\v2&.OpenBook.MatchingServicePackage.MatchH\x00R\x05matchB\a\n" +
-	"\x05event\"\x9c\x04\n" +
-	"\bNewOrder\x12B\n" +
-	"\x04body\x18\x01 \x01(\v2..OpenBook.MatchingServicePackage.NewOrder.BodyR\x04body\x1a\xcb\x03\n" +
-	"\x04Body\x12D\n" +
-	"\x0fclient_order_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rclientOrderId\x12F\n" +
-	"\x04legs\x18\x02 \x03(\v22.OpenBook.MatchingServicePackage.NewOrder.Body.LegR\x04legs\x12@\n" +
+	"\x05match\x18\x05 \x01(\v2&.OpenBook.MatchingServicePackage.MatchH\x00R\x05match\x12|\n" +
+	"\x1bdefine_pool_acknowledgement\x18\x06 \x01(\v2:.OpenBook.MatchingServicePackage.DefinePoolAcknowledgementH\x00R\x19definePoolAcknowledgementB\a\n" +
+	"\x05event\"\xd6\x01\n" +
 	"\n" +
-	"order_type\x18\x03 \x01(\x0e2!.OpenBook.CommonPackage.OrderTypeR\torderType\x12\x18\n" +
-	"\aportion\x18\x04 \x01(\x04R\aportion\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x04R\bquantity\x12E\n" +
-	"\rself_match_id\x18\x06 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDH\x00R\vselfMatchId\x88\x01\x01\x1ad\n" +
-	"\x03Leg\x12D\n" +
-	"\x0fleg_security_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rlegSecurityId\x12\x17\n" +
-	"\ais_over\x18\x02 \x01(\bR\x06isOverB\x10\n" +
+	"DefinePool\x12D\n" +
+	"\x04body\x18\x01 \x01(\v20.OpenBook.MatchingServicePackage.DefinePool.BodyR\x04body\x1a\x81\x01\n" +
+	"\x04Body\x127\n" +
+	"\bslate_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aslateId\x12\x1f\n" +
+	"\vtotal_units\x18\x02 \x01(\x04R\n" +
+	"totalUnits\x12\x1f\n" +
+	"\vnum_lineups\x18\x03 \x01(\x04R\n" +
+	"numLineups\"\xc7\x02\n" +
+	"\x19DefinePoolAcknowledgement\x12I\n" +
+	"\rresponse_base\x18\x01 \x01(\v2$.OpenBook.CommonPackage.ResponseBaseR\fresponseBase\x12I\n" +
+	"\rfallible_base\x18\x02 \x01(\v2$.OpenBook.CommonPackage.FallibleBaseR\ffallibleBase\x12S\n" +
+	"\x04body\x18\x03 \x01(\v2?.OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.BodyR\x04body\x1a?\n" +
+	"\x04Body\x127\n" +
+	"\bslate_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aslateId\"\xca\x03\n" +
+	"\bNewOrder\x12B\n" +
+	"\x04body\x18\x01 \x01(\v2..OpenBook.MatchingServicePackage.NewOrder.BodyR\x04body\x1a\xf9\x02\n" +
+	"\x04Body\x12D\n" +
+	"\x0fclient_order_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\rclientOrderId\x127\n" +
+	"\bslate_id\x18\x02 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aslateId\x12!\n" +
+	"\flineup_index\x18\x03 \x01(\x04R\vlineupIndex\x12@\n" +
+	"\n" +
+	"order_type\x18\x04 \x01(\x0e2!.OpenBook.CommonPackage.OrderTypeR\torderType\x12\x18\n" +
+	"\aportion\x18\x05 \x01(\x04R\aportion\x12\x1a\n" +
+	"\bquantity\x18\x06 \x01(\x04R\bquantity\x12E\n" +
+	"\rself_match_id\x18\a \x01(\v2\x1c.OpenBook.CommonPackage.UUIDH\x00R\vselfMatchId\x88\x01\x01B\x10\n" +
 	"\x0e_self_match_id\"\xeb\x02\n" +
 	"\x17NewOrderAcknowledgement\x12I\n" +
 	"\rresponse_base\x18\x01 \x01(\v2$.OpenBook.CommonPackage.ResponseBaseR\fresponseBase\x12I\n" +
@@ -1092,63 +1307,73 @@ func file_MatchingService_proto_rawDescGZIP() []byte {
 	return file_MatchingService_proto_rawDescData
 }
 
-var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_MatchingService_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_MatchingService_proto_goTypes = []any{
 	(*GatewayMessage)(nil),                  // 0: OpenBook.MatchingServicePackage.GatewayMessage
 	(*EngineMessage)(nil),                   // 1: OpenBook.MatchingServicePackage.EngineMessage
-	(*NewOrder)(nil),                        // 2: OpenBook.MatchingServicePackage.NewOrder
-	(*NewOrderAcknowledgement)(nil),         // 3: OpenBook.MatchingServicePackage.NewOrderAcknowledgement
-	(*CancelOrder)(nil),                     // 4: OpenBook.MatchingServicePackage.CancelOrder
-	(*CancelOrderAcknowledgement)(nil),      // 5: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement
-	(*OrderElimination)(nil),                // 6: OpenBook.MatchingServicePackage.OrderElimination
-	(*Match)(nil),                           // 7: OpenBook.MatchingServicePackage.Match
-	(*NewOrder_Body)(nil),                   // 8: OpenBook.MatchingServicePackage.NewOrder.Body
-	(*NewOrder_Body_Leg)(nil),               // 9: OpenBook.MatchingServicePackage.NewOrder.Body.Leg
-	(*NewOrderAcknowledgement_Body)(nil),    // 10: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body
-	(*CancelOrder_Body)(nil),                // 11: OpenBook.MatchingServicePackage.CancelOrder.Body
-	(*CancelOrderAcknowledgement_Body)(nil), // 12: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.Body
-	(*OrderElimination_Body)(nil),           // 13: OpenBook.MatchingServicePackage.OrderElimination.Body
-	(*Match_Body)(nil),                      // 14: OpenBook.MatchingServicePackage.Match.Body
-	(*Match_Body_FillEvent)(nil),            // 15: OpenBook.MatchingServicePackage.Match.Body.FillEvent
-	(*gen.SequencedMessageBase)(nil),        // 16: OpenBook.CommonPackage.SequencedMessageBase
-	(*gen.ResponseBase)(nil),                // 17: OpenBook.CommonPackage.ResponseBase
-	(*gen.FallibleBase)(nil),                // 18: OpenBook.CommonPackage.FallibleBase
-	(*gen.UUID)(nil),                        // 19: OpenBook.CommonPackage.UUID
-	(gen.OrderType)(0),                      // 20: OpenBook.CommonPackage.OrderType
+	(*DefinePool)(nil),                      // 2: OpenBook.MatchingServicePackage.DefinePool
+	(*DefinePoolAcknowledgement)(nil),       // 3: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement
+	(*NewOrder)(nil),                        // 4: OpenBook.MatchingServicePackage.NewOrder
+	(*NewOrderAcknowledgement)(nil),         // 5: OpenBook.MatchingServicePackage.NewOrderAcknowledgement
+	(*CancelOrder)(nil),                     // 6: OpenBook.MatchingServicePackage.CancelOrder
+	(*CancelOrderAcknowledgement)(nil),      // 7: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement
+	(*OrderElimination)(nil),                // 8: OpenBook.MatchingServicePackage.OrderElimination
+	(*Match)(nil),                           // 9: OpenBook.MatchingServicePackage.Match
+	(*DefinePool_Body)(nil),                 // 10: OpenBook.MatchingServicePackage.DefinePool.Body
+	(*DefinePoolAcknowledgement_Body)(nil),  // 11: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.Body
+	(*NewOrder_Body)(nil),                   // 12: OpenBook.MatchingServicePackage.NewOrder.Body
+	(*NewOrderAcknowledgement_Body)(nil),    // 13: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body
+	(*CancelOrder_Body)(nil),                // 14: OpenBook.MatchingServicePackage.CancelOrder.Body
+	(*CancelOrderAcknowledgement_Body)(nil), // 15: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.Body
+	(*OrderElimination_Body)(nil),           // 16: OpenBook.MatchingServicePackage.OrderElimination.Body
+	(*Match_Body)(nil),                      // 17: OpenBook.MatchingServicePackage.Match.Body
+	(*Match_Body_FillEvent)(nil),            // 18: OpenBook.MatchingServicePackage.Match.Body.FillEvent
+	(*gen.SequencedMessageBase)(nil),        // 19: OpenBook.CommonPackage.SequencedMessageBase
+	(*gen.ResponseBase)(nil),                // 20: OpenBook.CommonPackage.ResponseBase
+	(*gen.FallibleBase)(nil),                // 21: OpenBook.CommonPackage.FallibleBase
+	(*gen.UUID)(nil),                        // 22: OpenBook.CommonPackage.UUID
+	(gen.OrderType)(0),                      // 23: OpenBook.CommonPackage.OrderType
 }
 var file_MatchingService_proto_depIdxs = []int32{
-	16, // 0: OpenBook.MatchingServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
-	2,  // 1: OpenBook.MatchingServicePackage.GatewayMessage.new_order:type_name -> OpenBook.MatchingServicePackage.NewOrder
-	4,  // 2: OpenBook.MatchingServicePackage.GatewayMessage.cancel_order:type_name -> OpenBook.MatchingServicePackage.CancelOrder
-	16, // 3: OpenBook.MatchingServicePackage.EngineMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
-	3,  // 4: OpenBook.MatchingServicePackage.EngineMessage.new_order_acknowledgement:type_name -> OpenBook.MatchingServicePackage.NewOrderAcknowledgement
-	5,  // 5: OpenBook.MatchingServicePackage.EngineMessage.cancel_order_acknowledgement:type_name -> OpenBook.MatchingServicePackage.CancelOrderAcknowledgement
-	6,  // 6: OpenBook.MatchingServicePackage.EngineMessage.elimination:type_name -> OpenBook.MatchingServicePackage.OrderElimination
-	7,  // 7: OpenBook.MatchingServicePackage.EngineMessage.match:type_name -> OpenBook.MatchingServicePackage.Match
-	8,  // 8: OpenBook.MatchingServicePackage.NewOrder.body:type_name -> OpenBook.MatchingServicePackage.NewOrder.Body
-	17, // 9: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
-	18, // 10: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
-	10, // 11: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body
-	11, // 12: OpenBook.MatchingServicePackage.CancelOrder.body:type_name -> OpenBook.MatchingServicePackage.CancelOrder.Body
-	17, // 13: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
-	18, // 14: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
-	12, // 15: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.Body
-	13, // 16: OpenBook.MatchingServicePackage.OrderElimination.body:type_name -> OpenBook.MatchingServicePackage.OrderElimination.Body
-	14, // 17: OpenBook.MatchingServicePackage.Match.body:type_name -> OpenBook.MatchingServicePackage.Match.Body
-	19, // 18: OpenBook.MatchingServicePackage.NewOrder.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
-	9,  // 19: OpenBook.MatchingServicePackage.NewOrder.Body.legs:type_name -> OpenBook.MatchingServicePackage.NewOrder.Body.Leg
-	20, // 20: OpenBook.MatchingServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
-	19, // 21: OpenBook.MatchingServicePackage.NewOrder.Body.self_match_id:type_name -> OpenBook.CommonPackage.UUID
-	19, // 22: OpenBook.MatchingServicePackage.NewOrder.Body.Leg.leg_security_id:type_name -> OpenBook.CommonPackage.UUID
-	19, // 23: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
-	15, // 24: OpenBook.MatchingServicePackage.Match.Body.fill_events:type_name -> OpenBook.MatchingServicePackage.Match.Body.FillEvent
-	0,  // 25: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:input_type -> OpenBook.MatchingServicePackage.GatewayMessage
-	1,  // 26: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:output_type -> OpenBook.MatchingServicePackage.EngineMessage
-	26, // [26:27] is the sub-list for method output_type
-	25, // [25:26] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	19, // 0: OpenBook.MatchingServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
+	4,  // 1: OpenBook.MatchingServicePackage.GatewayMessage.new_order:type_name -> OpenBook.MatchingServicePackage.NewOrder
+	6,  // 2: OpenBook.MatchingServicePackage.GatewayMessage.cancel_order:type_name -> OpenBook.MatchingServicePackage.CancelOrder
+	2,  // 3: OpenBook.MatchingServicePackage.GatewayMessage.define_pool:type_name -> OpenBook.MatchingServicePackage.DefinePool
+	19, // 4: OpenBook.MatchingServicePackage.EngineMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
+	5,  // 5: OpenBook.MatchingServicePackage.EngineMessage.new_order_acknowledgement:type_name -> OpenBook.MatchingServicePackage.NewOrderAcknowledgement
+	7,  // 6: OpenBook.MatchingServicePackage.EngineMessage.cancel_order_acknowledgement:type_name -> OpenBook.MatchingServicePackage.CancelOrderAcknowledgement
+	8,  // 7: OpenBook.MatchingServicePackage.EngineMessage.elimination:type_name -> OpenBook.MatchingServicePackage.OrderElimination
+	9,  // 8: OpenBook.MatchingServicePackage.EngineMessage.match:type_name -> OpenBook.MatchingServicePackage.Match
+	3,  // 9: OpenBook.MatchingServicePackage.EngineMessage.define_pool_acknowledgement:type_name -> OpenBook.MatchingServicePackage.DefinePoolAcknowledgement
+	10, // 10: OpenBook.MatchingServicePackage.DefinePool.body:type_name -> OpenBook.MatchingServicePackage.DefinePool.Body
+	20, // 11: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	21, // 12: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
+	11, // 13: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.Body
+	12, // 14: OpenBook.MatchingServicePackage.NewOrder.body:type_name -> OpenBook.MatchingServicePackage.NewOrder.Body
+	20, // 15: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	21, // 16: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
+	13, // 17: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body
+	14, // 18: OpenBook.MatchingServicePackage.CancelOrder.body:type_name -> OpenBook.MatchingServicePackage.CancelOrder.Body
+	20, // 19: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	21, // 20: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
+	15, // 21: OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.MatchingServicePackage.CancelOrderAcknowledgement.Body
+	16, // 22: OpenBook.MatchingServicePackage.OrderElimination.body:type_name -> OpenBook.MatchingServicePackage.OrderElimination.Body
+	17, // 23: OpenBook.MatchingServicePackage.Match.body:type_name -> OpenBook.MatchingServicePackage.Match.Body
+	22, // 24: OpenBook.MatchingServicePackage.DefinePool.Body.slate_id:type_name -> OpenBook.CommonPackage.UUID
+	22, // 25: OpenBook.MatchingServicePackage.DefinePoolAcknowledgement.Body.slate_id:type_name -> OpenBook.CommonPackage.UUID
+	22, // 26: OpenBook.MatchingServicePackage.NewOrder.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
+	22, // 27: OpenBook.MatchingServicePackage.NewOrder.Body.slate_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 28: OpenBook.MatchingServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
+	22, // 29: OpenBook.MatchingServicePackage.NewOrder.Body.self_match_id:type_name -> OpenBook.CommonPackage.UUID
+	22, // 30: OpenBook.MatchingServicePackage.NewOrderAcknowledgement.Body.client_order_id:type_name -> OpenBook.CommonPackage.UUID
+	18, // 31: OpenBook.MatchingServicePackage.Match.Body.fill_events:type_name -> OpenBook.MatchingServicePackage.Match.Body.FillEvent
+	0,  // 32: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:input_type -> OpenBook.MatchingServicePackage.GatewayMessage
+	1,  // 33: OpenBook.MatchingServicePackage.MatchingServerService.CreateTradeStream:output_type -> OpenBook.MatchingServicePackage.EngineMessage
+	33, // [33:34] is the sub-list for method output_type
+	32, // [32:33] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_MatchingService_proto_init() }
@@ -1159,21 +1384,23 @@ func file_MatchingService_proto_init() {
 	file_MatchingService_proto_msgTypes[0].OneofWrappers = []any{
 		(*GatewayMessage_NewOrder)(nil),
 		(*GatewayMessage_CancelOrder)(nil),
+		(*GatewayMessage_DefinePool)(nil),
 	}
 	file_MatchingService_proto_msgTypes[1].OneofWrappers = []any{
 		(*EngineMessage_NewOrderAcknowledgement)(nil),
 		(*EngineMessage_CancelOrderAcknowledgement)(nil),
 		(*EngineMessage_Elimination)(nil),
 		(*EngineMessage_Match)(nil),
+		(*EngineMessage_DefinePoolAcknowledgement)(nil),
 	}
-	file_MatchingService_proto_msgTypes[8].OneofWrappers = []any{}
+	file_MatchingService_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_MatchingService_proto_rawDesc), len(file_MatchingService_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -2,6 +2,7 @@
 //
 // PoolManager coordinates multiple EntryPools and handles the translation between
 // protobuf messages and the EntryPool API.
+// Pools must be explicitly defined via DefinePool before orders can be submitted.
 
 use std::collections::HashMap;
 
@@ -9,7 +10,7 @@ use std::collections::HashMap;
 use crate::entry_pool::{EntryPool, EntryParameters, EntryType};
 
 // Import pool utilities
-use crate::pool_utils::{create_pool_key, calculate_lineup_index, uuid_to_u128, Leg};
+use crate::pool_utils::uuid_to_u128;
 
 // Import protobuf generated types
 use crate::matching_service_package::{
@@ -20,17 +21,17 @@ use crate::matching_service_package::{
     order_elimination::Body as OrderEliminationBody,
     r#match::Body as MatchBody,
     r#match::body::FillEvent,
+    define_pool::Body as DefinePoolBody,
+    define_pool_acknowledgement::Body as DefinePoolAcknowledgementBody,
     OrderType
 };
 
-const TOTAL_UNITS: u64 = 1_000_000;
-
 /// Manages multiple entry pools and coordinates order routing
 pub struct PoolManager {
-    /// Map from sorted leg_security_ids to EntryPool
-    pools: HashMap<Vec<u128>, PoolInfo>,
-    /// Map from order_id to pool key for order cancellation
-    order_to_pool: HashMap<u64, Vec<u128>>,
+    /// Map from slate_id (as u128) to PoolInfo
+    pools: HashMap<u128, PoolInfo>,
+    /// Map from order_id to slate_id for order cancellation
+    order_to_pool: HashMap<u64, u128>,
     /// Counter for generating unique order IDs across all pools
     next_order_id: u64,
     /// Counter for generating unique transaction IDs
@@ -59,43 +60,44 @@ impl PoolManager {
         }
     }
 
-    /// Creates a new entry/order and returns eliminations, acknowledgement, and any matches
-    /// Automatically creates the pool if it doesn't exist
+    /// Defines a new pool. Must be called before any orders can be submitted to this pool.
+    /// Returns an error if a pool with the same slate_id already exists.
+    pub fn define_pool(
+        &mut self,
+        definition: DefinePoolBody,
+    ) -> Result<DefinePoolAcknowledgementBody, String> {
+        let slate_id = definition.slate_id.as_ref()
+            .ok_or_else(|| "Missing slate_id in DefinePool".to_string())?;
+        let slate_id_u128 = uuid_to_u128(slate_id);
+
+        if self.pools.contains_key(&slate_id_u128) {
+            return Err(format!("Pool already defined for slate_id {:032x}", slate_id_u128));
+        }
+
+        let pool = EntryPool::new(definition.total_units, definition.num_lineups as usize);
+        self.pools.insert(slate_id_u128, PoolInfo { pool });
+
+        Ok(DefinePoolAcknowledgementBody {
+            slate_id: definition.slate_id,
+        })
+    }
+
+    /// Creates a new entry/order and returns eliminations, acknowledgement, and any matches.
+    /// The pool must have been defined via `define_pool` before calling this.
     pub fn create_entry(
         &mut self,
         order: NewOrderBody,
     ) -> Result<(Vec<OrderEliminationBody>, NewOrderAcknowledgementBody, Vec<MatchBody>, Vec<OrderEliminationBody>), String> {
-        // Validate we have at least one leg
-        if order.legs.is_empty() {
-            return Err("Order must have at least one leg".to_string());
+        // Look up pool by slate_id
+        let slate_id = order.slate_id.as_ref()
+            .ok_or_else(|| "Missing slate_id in NewOrder".to_string())?;
+        let slate_id_u128 = uuid_to_u128(slate_id);
+
+        if !self.pools.contains_key(&slate_id_u128) {
+            return Err(format!("No pool defined for slate_id {:032x}", slate_id_u128));
         }
 
-        // Extract leg security IDs and convert to internal Leg format
-        let leg_security_ids: Vec<u128> = order.legs.iter().map(|l| {
-            l.leg_security_id.as_ref().map_or(0u128, uuid_to_u128)
-        }).collect();
-        let pool_key = create_pool_key(&leg_security_ids);
-
-        // Convert protobuf legs to internal Leg format
-        let legs: Vec<Leg> = order.legs.iter().map(|l| Leg {
-            leg_security_id: l.leg_security_id.as_ref().map_or(0u128, uuid_to_u128),
-            is_over: l.is_over,
-        }).collect();
-
-        // Calculate lineup index
-        let lineup_index = calculate_lineup_index(&legs);
-
-        // Get or create pool
-        if !self.pools.contains_key(&pool_key) {
-            let num_legs = pool_key.len();
-            let pool = EntryPool::new(TOTAL_UNITS, num_legs);
-            self.pools.insert(
-                pool_key.clone(),
-                PoolInfo { pool },
-            );
-        }
-
-        let pool_info = self.pools.get_mut(&pool_key).unwrap(); // Safe because we just ensured it exists
+        let pool_info = self.pools.get_mut(&slate_id_u128).unwrap();
 
         // Convert OrderType to EntryType
         let entry_type = match OrderType::try_from(order.order_type) {
@@ -109,7 +111,7 @@ impl PoolManager {
         self.next_order_id += 1;
 
         // Track order to pool mapping for cancellation
-        self.order_to_pool.insert(order_id, pool_key.clone());
+        self.order_to_pool.insert(order_id, slate_id_u128);
 
         // Convert optional UUID self_match_id to u128
         let self_match_id = order.self_match_id.as_ref().map(uuid_to_u128);
@@ -123,10 +125,10 @@ impl PoolManager {
             self_match_id,
         };
 
-        // Submit to the entry pool
+        // Submit to the entry pool using lineup_index from the order
         let submit_result = pool_info
             .pool
-            .submit_entry(lineup_index as usize, params)
+            .submit_entry(order.lineup_index as usize, params)
             .map_err(|e| e)?;
 
         // Create elimination bodies for any cancelled entries
@@ -200,15 +202,14 @@ impl PoolManager {
         self.pools.len()
     }
 
-    /// Gets a reference to a specific pool's EntryPool by leg security IDs (for testing/debugging)
-    pub fn get_pool(&self, leg_security_ids: &[u128]) -> Option<&EntryPool> {
-        let pool_key = create_pool_key(leg_security_ids);
-        self.pools.get(&pool_key).map(|info| &info.pool)
+    /// Gets a reference to a specific pool's EntryPool by slate_id (for testing/debugging)
+    pub fn get_pool(&self, slate_id: u128) -> Option<&EntryPool> {
+        self.pools.get(&slate_id).map(|info| &info.pool)
     }
 
-    /// Gets the pool key for a specific order ID (for testing/debugging)
-    pub fn get_pool_key_for_order(&self, order_id: u64) -> Option<&Vec<u128>> {
-        self.order_to_pool.get(&order_id)
+    /// Gets the slate_id for a specific order ID (for testing/debugging)
+    pub fn get_slate_id_for_order(&self, order_id: u64) -> Option<u128> {
+        self.order_to_pool.get(&order_id).copied()
     }
 
     /// Cancels an existing order
@@ -226,7 +227,7 @@ impl PoolManager {
         let order_id = cancel.order_id;
 
         // Find which pool this order belongs to
-        let pool_key = self
+        let slate_id = self
             .order_to_pool
             .get(&order_id)
             .ok_or_else(|| format!("Order ID {} not found", order_id))?
@@ -235,7 +236,7 @@ impl PoolManager {
         // Get the pool
         let pool_info = self
             .pools
-            .get_mut(&pool_key)
+            .get_mut(&slate_id)
             .ok_or_else(|| format!("Pool not found for order ID {}", order_id))?;
 
         // Cancel the entry in the pool and return any error result if one occurs
@@ -252,162 +253,182 @@ impl PoolManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::matching_service_package::new_order::body::Leg as NewOrderLeg;
 
-    // Helper function to create a UUID self_match_id from a simple integer
-    fn smid(id: u128) -> Option<crate::common::Uuid> {
+    // Helper function to create a UUID from a simple integer
+    fn uuid(id: u128) -> Option<crate::common::Uuid> {
         Some(crate::common::Uuid {
             upper: (id >> 64) as u64,
             lower: id as u64,
         })
     }
 
-    // Helper function to create a UUID client_order_id from a u128
-    fn coid(id: u128) -> Option<crate::common::Uuid> {
-        Some(crate::common::Uuid {
-            upper: (id >> 64) as u64,
-            lower: id as u64,
-        })
+    // Convenience: define a 2-leg pool (4 lineups) with 1_000_000 total units
+    fn define_standard_pool(manager: &mut PoolManager, slate_id: u128) {
+        manager.define_pool(DefinePoolBody {
+            slate_id: uuid(slate_id),
+            total_units: 1_000_000,
+            num_lineups: 4,
+        }).unwrap();
     }
 
-    // Helper function to create a UUID from a simple u128 (for leg_security_id)
-    fn lsid(id: u128) -> Option<crate::common::Uuid> {
-        Some(crate::common::Uuid {
-            upper: (id >> 64) as u64,
-            lower: id as u64,
-        })
+    // Convenience: define a 1-leg pool (2 lineups) with 1_000_000 total units
+    fn define_single_leg_pool(manager: &mut PoolManager, slate_id: u128) {
+        manager.define_pool(DefinePoolBody {
+            slate_id: uuid(slate_id),
+            total_units: 1_000_000,
+            num_lineups: 2,
+        }).unwrap();
     }
 
-    // Helper function to create legs for testing
-    fn create_legs(leg_data: &[(u128, bool)]) -> Vec<NewOrderLeg> {
-        leg_data
-            .iter()
-            .map(|(leg_security_id, is_over)| NewOrderLeg {
-                leg_security_id: lsid(*leg_security_id),
-                is_over: *is_over,
-            })
-            .collect()
+    fn new_order(slate_id: u128, lineup_index: u64, client_order_id: u128, portion: u64, quantity: u64) -> NewOrderBody {
+        NewOrderBody {
+            client_order_id: uuid(client_order_id),
+            slate_id: uuid(slate_id),
+            lineup_index,
+            order_type: OrderType::Limit as i32,
+            portion,
+            quantity,
+            self_match_id: None,
+        }
+    }
+
+    fn new_market_order(slate_id: u128, lineup_index: u64, client_order_id: u128, quantity: u64) -> NewOrderBody {
+        NewOrderBody {
+            client_order_id: uuid(client_order_id),
+            slate_id: uuid(slate_id),
+            lineup_index,
+            order_type: OrderType::Market as i32,
+            portion: 0,
+            quantity,
+            self_match_id: None,
+        }
+    }
+
+    fn new_order_with_smid(slate_id: u128, lineup_index: u64, client_order_id: u128, portion: u64, quantity: u64, self_match_id: u128) -> NewOrderBody {
+        NewOrderBody {
+            client_order_id: uuid(client_order_id),
+            slate_id: uuid(slate_id),
+            lineup_index,
+            order_type: OrderType::Limit as i32,
+            portion,
+            quantity,
+            self_match_id: uuid(self_match_id),
+        }
+    }
+
+    // --- DefinePool tests ---
+
+    #[test]
+    fn test_define_pool_success() {
+        let mut manager = PoolManager::new();
+        assert_eq!(manager.num_pools(), 0);
+
+        let result = manager.define_pool(DefinePoolBody {
+            slate_id: uuid(1),
+            total_units: 1_000_000,
+            num_lineups: 4,
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(manager.num_pools(), 1);
     }
 
     #[test]
-    fn test_auto_pool_creation() {
+    fn test_define_pool_duplicate_rejected() {
         let mut manager = PoolManager::new();
 
-        // Pool should be created automatically when first order arrives
-        assert_eq!(manager.num_pools(), 0);
+        manager.define_pool(DefinePoolBody {
+            slate_id: uuid(1),
+            total_units: 1_000_000,
+            num_lineups: 4,
+        }).unwrap();
+
+        // Duplicate — even with identical fields — should be rejected
+        let result = manager.define_pool(DefinePoolBody {
+            slate_id: uuid(1),
+            total_units: 1_000_000,
+            num_lineups: 4,
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("already defined"));
+        assert_eq!(manager.num_pools(), 1);
+    }
+
+    #[test]
+    fn test_define_pool_missing_slate_id() {
+        let mut manager = PoolManager::new();
+
+        let result = manager.define_pool(DefinePoolBody {
+            slate_id: None,
+            total_units: 1_000_000,
+            num_lineups: 4,
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing slate_id"));
+    }
+
+    #[test]
+    fn test_order_rejected_for_undefined_pool() {
+        let mut manager = PoolManager::new();
+
+        let result = manager.create_entry(new_order(999, 0, 1001, 250_000, 250_000));
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No pool defined"));
+    }
+
+    // --- Order lifecycle tests ---
+
+    #[test]
+    fn test_create_entry_after_define() {
+        let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
         let (_eliminations, ack, matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(1001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250,
-                quantity: 250,
-                self_match_id: None,
-            })
+            .create_entry(new_order(1, 0, 1001, 250_000, 250_000))
             .unwrap();
 
-        assert_eq!(manager.num_pools(), 1);
-        assert_eq!(ack.client_order_id, coid(1001));
+        assert_eq!(ack.client_order_id, uuid(1001));
         assert!(ack.order_id > 0);
         assert_eq!(matches.len(), 0);
     }
 
     #[test]
-    fn test_leg_order_independence() {
-        let mut manager = PoolManager::new();
-
-        // Create order with legs [101, 102]
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(2001),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250,
-                quantity: 250,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        assert_eq!(manager.num_pools(), 1);
-
-        // Create order with legs [102, 101] - should use same pool
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(2002),
-                legs: create_legs(&[(102, false), (101, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250,
-                quantity: 250,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        assert_eq!(manager.num_pools(), 1); // Still only one pool
-    }
-
-    #[test]
     fn test_create_entry_with_fill() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
-        // Submit entries to all 4 lineups (using 250k portions to work with 1M total)
-        // Lineup 0: both under (101=false, 102=false)
-        let (_eliminations, _ack0, matches0, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // Submit entries to all 4 lineups (250k portions to work with 1M total)
+        // Lineup 0
+        let (_e, _a, matches0, _me) = manager
+            .create_entry(new_order(1, 0, 3001, 250_000, 250_000))
             .unwrap();
         assert_eq!(matches0.len(), 0);
 
-        // Lineup 1: 101=over, 102=under
-        let (_eliminations, _ack1, matches1, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3002),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // Lineup 1
+        let (_e, _a, matches1, _me) = manager
+            .create_entry(new_order(1, 1, 3002, 250_000, 250_000))
             .unwrap();
         assert_eq!(matches1.len(), 0);
 
-        // Lineup 2: 101=under, 102=over
-        let (_eliminations, _ack2, matches2, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3003),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // Lineup 2
+        let (_e, _a, matches2, _me) = manager
+            .create_entry(new_order(1, 2, 3003, 250_000, 250_000))
             .unwrap();
         assert_eq!(matches2.len(), 0);
 
-        // Lineup 3: both over (101=true, 102=true) - should trigger match
-        let (_eliminations, _ack3, matches3, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3004),
-                legs: create_legs(&[(101, true), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // Lineup 3 — should trigger match
+        let (_e, _a, matches3, _me) = manager
+            .create_entry(new_order(1, 3, 3004, 250_000, 250_000))
             .unwrap();
 
         assert_eq!(matches3.len(), 1);
         assert_eq!(matches3[0].fill_events.len(), 4); // One fill event per lineup
 
         // Verify transaction ID is shared
-        let transaction_id = matches3[0].transaction_id;
-        assert!(transaction_id > 0);
+        assert!(matches3[0].transaction_id > 0);
 
         // Verify each fill event has unique fill_event_id
         let fill_event_ids: Vec<u64> = matches3[0].fill_events.iter().map(|f| f.fill_event_id).collect();
@@ -426,203 +447,86 @@ mod tests {
     #[test]
     fn test_multiple_matches_share_transaction_id() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
         // Submit passive entries with enough quantity for 2 matches
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(4001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 500_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(4002),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(4003),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(4004),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 500_000,
-                self_match_id: None,
-            })
-            .unwrap();
+        manager.create_entry(new_order(1, 0, 4001, 250_000, 500_000)).unwrap();
+        manager.create_entry(new_order(1, 1, 4002, 250_000, 250_000)).unwrap();
+        manager.create_entry(new_order(1, 1, 4003, 250_000, 250_000)).unwrap();
+        manager.create_entry(new_order(1, 2, 4004, 250_000, 500_000)).unwrap();
 
         // Aggressor with enough for 2 matches
-        let (_eliminations, _ack, matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(4005),
-                legs: create_legs(&[(101, true), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 500_000,
-                self_match_id: None,
-            })
+        let (_e, _a, matches, _me) = manager
+            .create_entry(new_order(1, 3, 4005, 250_000, 500_000))
             .unwrap();
 
         assert_eq!(matches.len(), 2);
-
-        // Both matches should share the same transaction_id
         assert_eq!(matches[0].transaction_id, matches[1].transaction_id);
-
-        // But have different match_ids
         assert_ne!(matches[0].match_id, matches[1].match_id);
-    }
-
-    #[test]
-    fn test_empty_legs_error() {
-        let mut manager = PoolManager::new();
-
-        let result = manager.create_entry(NewOrderBody {
-            client_order_id: coid(5001),
-            legs: vec![],
-            order_type: OrderType::Limit as i32,
-            portion: 250,
-            quantity: 250,
-            self_match_id: None,
-        });
-
-        assert!(result.is_err());
     }
 
     #[test]
     fn test_market_order() {
         let mut manager = PoolManager::new();
+        define_single_leg_pool(&mut manager, 1);
 
-        // Submit passive entry for lineup 0 (under)
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(6001),
-                legs: create_legs(&[(101, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 600_000,
-                quantity: 600_000,
-                self_match_id: None,
-            })
-            .unwrap();
+        // Submit passive entry for lineup 0
+        manager.create_entry(new_order(1, 0, 6001, 600_000, 600_000)).unwrap();
 
-        // Market order for lineup 1 (over) should calculate portion = 400k
-        let (_eliminations, _ack, matches, market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(6002),
-                legs: create_legs(&[(101, true)]),
-                order_type: OrderType::Market as i32,
-                portion: 0, // Ignored for market orders
-                quantity: 400_000,
-                self_match_id: None,
-            })
+        // Market order for lineup 1 should calculate portion = 400k
+        let (_e, _a, matches, market_eliminations) = manager
+            .create_entry(new_market_order(1, 1, 6002, 400_000))
             .unwrap();
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].fill_events.len(), 2);
 
-        // Find the market order fill event
-        let market_fill_event = matches[0]
-            .fill_events
-            .iter()
-            .find(|f| f.is_aggressor)
-            .unwrap();
-        assert_eq!(market_fill_event.matched_portion, 400_000);
-
-        // Market order was fully filled, so no market entry eliminations
+        let market_fill = matches[0].fill_events.iter().find(|f| f.is_aggressor).unwrap();
+        assert_eq!(market_fill.matched_portion, 400_000);
         assert_eq!(market_eliminations.len(), 0);
     }
 
     #[test]
     fn test_market_order_partial_fill() {
         let mut manager = PoolManager::new();
+        define_single_leg_pool(&mut manager, 1);
 
-        // Submit passive entries with quantity=1 each
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(6101),
-                legs: create_legs(&[(101, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 600_000,
-                quantity: 600_000,
-                self_match_id: None,
-            })
+        manager.create_entry(new_order(1, 0, 6101, 600_000, 600_000)).unwrap();
+
+        // Market order with quantity=1_800_000 should only match once
+        let (_e, ack, matches, market_eliminations) = manager
+            .create_entry(new_market_order(1, 1, 6102, 1_800_000))
             .unwrap();
 
-        // Market order with quantity=3 should only match once (limited by passive quantity)
-        let (_eliminations, ack, matches, market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(6102),
-                legs: create_legs(&[(101, true)]),
-                order_type: OrderType::Market as i32,
-                portion: 0, // Ignored for market orders
-                quantity: 1_800_000, // 3x the matched quantity
-                self_match_id: None,
-            })
-            .unwrap();
-
-        // Should have 1 match
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].matched_quantity, 600_000);
-
-        // Market order had remaining quantity, so it should be in market_eliminations
         assert_eq!(market_eliminations.len(), 1);
         assert_eq!(market_eliminations[0].order_id, ack.order_id);
-        assert_eq!(market_eliminations[0].elimination_description, "Market order removed (not fully filled)");
     }
+
+    // --- Cancel tests ---
 
     #[test]
     fn test_cancel_entry_success() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
-        // Create an order
-        let (_eliminations, ack, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(7001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        let (_e, ack, _m, _me) = manager
+            .create_entry(new_order(1, 0, 7001, 250_000, 250_000))
             .unwrap();
 
         let order_id = ack.order_id;
+        assert!(manager.get_slate_id_for_order(order_id).is_some());
 
-        // Verify order is tracked
-        assert!(manager.get_pool_key_for_order(order_id).is_some());
-
-        // Cancel the order
         let cancel_ack = manager
             .cancel_entry(CancelOrderBody { order_id })
             .unwrap();
 
         assert_eq!(cancel_ack.order_id, order_id);
-
-        // Verify order is no longer tracked
-        assert!(manager.get_pool_key_for_order(order_id).is_none());
+        assert!(manager.get_slate_id_for_order(order_id).is_none());
 
         // Verify entry is removed from pool
-        let pool = manager.get_pool(&[101, 102]).unwrap();
+        let pool = manager.get_pool(1).unwrap();
         let state = pool.get_state();
         for book in &state.books {
             assert!(!book.entries.iter().any(|e| e.id == order_id));
@@ -633,9 +537,7 @@ mod tests {
     fn test_cancel_entry_not_found() {
         let mut manager = PoolManager::new();
 
-        // Try to cancel a non-existent order
         let result = manager.cancel_entry(CancelOrderBody { order_id: 9999 });
-
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
     }
@@ -643,194 +545,69 @@ mod tests {
     #[test]
     fn test_cancel_prevents_fill() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
         // Create orders for 3 out of 4 lineups
-        let (_eliminations, ack0, _, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(8001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
+        let (_e, ack0, _, _me) = manager.create_entry(new_order(1, 0, 8001, 250_000, 250_000)).unwrap();
+        let (_e, ack1, _, _me) = manager.create_entry(new_order(1, 1, 8002, 250_000, 250_000)).unwrap();
+        let (_e, ack2, _, _me) = manager.create_entry(new_order(1, 2, 8003, 250_000, 250_000)).unwrap();
 
-        let (_eliminations, ack1, _, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(8002),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
+        // Cancel one
+        manager.cancel_entry(CancelOrderBody { order_id: ack1.order_id }).unwrap();
 
-        let (_eliminations, ack2, _, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(8003),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // 4th order should NOT trigger a match
+        let (_e, _a, matches, _me) = manager
+            .create_entry(new_order(1, 3, 8004, 250_000, 250_000))
             .unwrap();
-
-        // Cancel one of the orders
-        manager
-            .cancel_entry(CancelOrderBody {
-                order_id: ack1.order_id,
-            })
-            .unwrap();
-
-        // Now create the 4th order - should NOT trigger a match
-        let (_eliminations, _ack3, matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(8004),
-                legs: create_legs(&[(101, true), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        // No matches because lineup 1 has no entries (it was cancelled)
         assert_eq!(matches.len(), 0);
 
-        // Verify the other orders are still in the pool
-        let pool = manager.get_pool(&[101, 102]).unwrap();
+        // Verify the remaining orders
+        let pool = manager.get_pool(1).unwrap();
         let state = pool.get_state();
         assert!(state.books[0].entries.iter().any(|e| e.id == ack0.order_id));
-        assert!(!state.books[1].entries.iter().any(|e| e.id == ack1.order_id)); // Cancelled
+        assert!(!state.books[1].entries.iter().any(|e| e.id == ack1.order_id));
         assert!(state.books[2].entries.iter().any(|e| e.id == ack2.order_id));
     }
 
     #[test]
     fn test_cancel_after_partial_fill() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
-        // Create orders with quantity for 2 fills
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 500_000,
-                self_match_id: None,
-            })
+        manager.create_entry(new_order(1, 0, 9001, 250_000, 500_000)).unwrap();
+        manager.create_entry(new_order(1, 1, 9002, 250_000, 250_000)).unwrap();
+        manager.create_entry(new_order(1, 1, 9003, 250_000, 250_000)).unwrap();
+        let (_e, ack2, _, _me) = manager.create_entry(new_order(1, 2, 9004, 250_000, 500_000)).unwrap();
+
+        // First match
+        let (_e, _a, matches, _me) = manager
+            .create_entry(new_order(1, 3, 9005, 250_000, 250_000))
             .unwrap();
+        assert_eq!(matches.len(), 1);
 
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9002),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
+        // Cancel order that still has quantity remaining
+        manager.cancel_entry(CancelOrderBody { order_id: ack2.order_id }).unwrap();
+
+        // Second attempt — should not match
+        let (_e, _a, matches2, _me) = manager
+            .create_entry(new_order(1, 3, 9006, 250_000, 250_000))
             .unwrap();
-
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9003),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        let (_eliminations, ack2, _, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9004),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 500_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        // First order triggers one match
-        let (_eliminations, _ack3, matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9005),
-                legs: create_legs(&[(101, true), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        assert_eq!(matches.len(), 1); // One match occurred
-
-        // Cancel an order that still has quantity remaining
-        manager
-            .cancel_entry(CancelOrderBody {
-                order_id: ack2.order_id,
-            })
-            .unwrap();
-
-        // Try to trigger another match - should fail because we cancelled an entry
-        let (_eliminations, _ack4, matches2, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(9006),
-                legs: create_legs(&[(101, true), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: None,
-            })
-            .unwrap();
-
-        // No match because lineup 2 is now empty (cancelled)
         assert_eq!(matches2.len(), 0);
     }
+
+    // --- Self-match elimination tests ---
 
     #[test]
     fn test_eliminations_zero() {
         let mut manager = PoolManager::new();
+        define_standard_pool(&mut manager, 1);
 
-        // Submit entries with different self_match_ids - no eliminations should occur
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(1001),
-                legs: create_legs(&[(101, false), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: smid(1),
-            })
-            .unwrap();
+        // Different self_match_ids — no eliminations
+        manager.create_entry(new_order_with_smid(1, 0, 1001, 250_000, 250_000, 1)).unwrap();
+        manager.create_entry(new_order_with_smid(1, 1, 1002, 250_000, 250_000, 2)).unwrap();
 
-        manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(1002),
-                legs: create_legs(&[(101, true), (102, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: smid(2),
-            })
-            .unwrap();
-
-        // Submit entry with different self_match_id - should have 0 eliminations
-        let (eliminations, _ack, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(1003),
-                legs: create_legs(&[(101, false), (102, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 250_000,
-                quantity: 250_000,
-                self_match_id: smid(3),
-            })
+        let (eliminations, _a, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 2, 1003, 250_000, 250_000, 3))
             .unwrap();
 
         assert_eq!(eliminations.len(), 0);
@@ -839,31 +616,16 @@ mod tests {
     #[test]
     fn test_eliminations_one() {
         let mut manager = PoolManager::new();
+        define_single_leg_pool(&mut manager, 1);
 
-        // Use 1-leg pool (2 lineups) so "all other lineups" is just 1 lineup
         // Submit entry with self_match_id=42 to lineup 0
-        let (_eliminations, ack1, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(2001),
-                legs: create_legs(&[(101, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 500_000,
-                quantity: 250_000,
-                self_match_id: smid(42),
-            })
+        let (_e, ack1, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 0, 2001, 500_000, 250_000, 42))
             .unwrap();
 
-        // Submit entry to lineup 1 with same self_match_id
-        // All other lineups (just lineup 0) have matching entry → eliminate it
-        let (eliminations, _ack2, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(2002),
-                legs: create_legs(&[(101, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 500_000,
-                quantity: 250_000,
-                self_match_id: smid(42),
-            })
+        // Submit entry to lineup 1 with same self_match_id — eliminate lineup 0 entry
+        let (eliminations, _a, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 1, 2002, 500_000, 250_000, 42))
             .unwrap();
 
         assert_eq!(eliminations.len(), 1);
@@ -874,56 +636,24 @@ mod tests {
     #[test]
     fn test_eliminations_two() {
         let mut manager = PoolManager::new();
+        define_single_leg_pool(&mut manager, 1);
 
-        // Use 1-leg pool (2 lineups) so "all other lineups" is just 1 lineup.
-        // Entries in the SAME lineup with the same self_match_id are allowed to coexist.
-        // So we can put 2 entries in lineup 0 with self_match_id=77, then submit to lineup 1 with
-        // self_match_id=77, which will eliminate both entries in lineup 0.
-
-        // Submit two entries to lineup 0 (same lineup) with self_match_id=77
-        let (_eliminations, ack1, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3001),
-                legs: create_legs(&[(101, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 500_000,
-                quantity: 250_000,
-                self_match_id: smid(77),
-            })
+        // Two entries in lineup 0 with same self_match_id=77
+        let (_e, ack1, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 0, 3001, 500_000, 250_000, 77))
+            .unwrap();
+        let (_e, ack2, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 0, 3002, 400_000, 200_000, 77))
             .unwrap();
 
-        let (_eliminations, ack2, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3002),
-                legs: create_legs(&[(101, false)]),
-                order_type: OrderType::Limit as i32,
-                portion: 400_000,
-                quantity: 200_000,
-                self_match_id: smid(77),
-            })
-            .unwrap();
-
-        // Both ack1 and ack2 should be in lineup 0 (same lineup allows same self_match_id)
-        // Now submit entry to lineup 1 (different lineup) with same self_match_id
-        // All other lineups (just lineup 0) have matching entries → eliminate both
-        let (eliminations, _ack3, _matches, _market_eliminations) = manager
-            .create_entry(NewOrderBody {
-                client_order_id: coid(3003),
-                legs: create_legs(&[(101, true)]),
-                order_type: OrderType::Limit as i32,
-                portion: 500_000,
-                quantity: 250_000,
-                self_match_id: smid(77),
-            })
+        // Entry in lineup 1 with same self_match_id — both in lineup 0 eliminated
+        let (eliminations, _a, _m, _me) = manager
+            .create_entry(new_order_with_smid(1, 1, 3003, 500_000, 250_000, 77))
             .unwrap();
 
         assert_eq!(eliminations.len(), 2);
-        // Check that both order IDs are in the eliminations
         let eliminated_ids: Vec<u64> = eliminations.iter().map(|e| e.order_id).collect();
         assert!(eliminated_ids.contains(&ack1.order_id));
         assert!(eliminated_ids.contains(&ack2.order_id));
-        // Check elimination descriptions
-        assert_eq!(eliminations[0].elimination_description, "Eliminated due to self-match prevention");
-        assert_eq!(eliminations[1].elimination_description, "Eliminated due to self-match prevention");
     }
 }

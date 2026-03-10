@@ -154,8 +154,9 @@ func (gw *Gateway) EnsureSlateAndLineups(ctx context.Context, marketIDs []utils.
 	return result, nil
 }
 
-// FindLineupID finds the lineup that matches the given legs (market_id + side).
-func FindLineupID(slateAndLineups *SlateAndLineups, legs []LegRequest) (utils.UUID, error) {
+// FindLineup finds the lineup that matches the given legs (market_id + side).
+// Returns the lineup UUID and the lineup index within the slate.
+func FindLineup(slateAndLineups *SlateAndLineups, legs []LegRequest) (utils.UUID, int, error) {
 	for _, lineup := range slateAndLineups.Lineups {
 		if len(lineup.Legs) != len(legs) {
 			continue
@@ -177,10 +178,10 @@ func FindLineupID(slateAndLineups *SlateAndLineups, legs []LegRequest) (utils.UU
 			}
 		}
 		if match {
-			return lineup.ID, nil
+			return lineup.ID, lineup.LineupIndex, nil
 		}
 	}
-	return utils.UUID{}, fmt.Errorf("no matching lineup found for legs")
+	return utils.UUID{}, 0, fmt.Errorf("no matching lineup found for legs")
 }
 
 // CreateExchangeOrder creates a new exchange order and its initial state via the DB function.
