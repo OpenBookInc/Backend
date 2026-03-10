@@ -47,8 +47,7 @@ func UpsertNFLPlay(s *store.Store, ctx context.Context, tx pgx.Tx, play *NFLPlay
 			nullified = EXCLUDED.nullified,
 			vendor_deleted = FALSE,
 			vendor_created_at = EXCLUDED.vendor_created_at,
-			vendor_updated_at = EXCLUDED.vendor_updated_at,
-			updated_at = NOW()
+			vendor_updated_at = EXCLUDED.vendor_updated_at
 		RETURNING id
 	`
 
@@ -112,7 +111,7 @@ func GetNFLPlayBySportradarID(s *store.Store, ctx context.Context, driveID int, 
 func MarkNFLPlayDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, playID int) error {
 	query := `
 		UPDATE nfl_plays
-		SET vendor_deleted = TRUE, updated_at = NOW()
+		SET vendor_deleted = TRUE
 		WHERE id = $1
 	`
 	_, err := tx.Exec(ctx, query, playID)

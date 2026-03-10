@@ -34,8 +34,7 @@ func UpsertNFLDrive(s *store.Store, ctx context.Context, tx pgx.Tx, gameID strin
 		DO UPDATE SET
 			vendor_sequence = EXCLUDED.vendor_sequence,
 			possession_team_id = EXCLUDED.possession_team_id,
-			vendor_deleted = FALSE,
-			updated_at = NOW()
+			vendor_deleted = FALSE
 		RETURNING id
 	`
 
@@ -87,7 +86,7 @@ func MarkNFLDriveDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, driveID
 	// First, mark all plays associated with this drive as deleted
 	playQuery := `
 		UPDATE nfl_plays
-		SET vendor_deleted = TRUE, updated_at = NOW()
+		SET vendor_deleted = TRUE
 		WHERE drive_id = $1
 	`
 	_, err := tx.Exec(ctx, playQuery, driveID)
@@ -98,7 +97,7 @@ func MarkNFLDriveDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, driveID
 	// Then mark the drive itself as deleted
 	driveQuery := `
 		UPDATE nfl_drives
-		SET vendor_deleted = TRUE, updated_at = NOW()
+		SET vendor_deleted = TRUE
 		WHERE id = $1
 	`
 	_, err = tx.Exec(ctx, driveQuery, driveID)

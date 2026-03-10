@@ -23,8 +23,7 @@ func (s *Store) UpsertGameStatus(ctx context.Context, tx pgx.Tx, status *GameSta
 		VALUES ($1, $2::game_status_type, NOW())
 		ON CONFLICT (game_id)
 		DO UPDATE SET
-			status = EXCLUDED.status,
-			updated_at = NOW()
+			status = EXCLUDED.status
 	`
 
 	_, err := tx.Exec(ctx, query,

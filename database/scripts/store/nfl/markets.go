@@ -28,7 +28,8 @@ func UpsertNFLMarket(s *store.Store, ctx context.Context, m *NFLMarketForUpsert)
 		)
 		VALUES ($1, $2, $3::nfl_player_prop_type, $4, NOW(), NOW())
 		ON CONFLICT (game_id, individual_id, market_type, market_line)
-		DO UPDATE SET updated_at = NOW()
+		-- no-op so RETURNING works on conflict (market_line value is unchanged since it's part of the conflict key)
+		DO UPDATE SET market_line = EXCLUDED.market_line
 		RETURNING id
 	`
 

@@ -94,8 +94,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 			receiving_touchdowns = EXCLUDED.receiving_touchdowns,
 			interceptions_thrown = EXCLUDED.interceptions_thrown,
 			sacks_taken = EXCLUDED.sacks_taken,
-			vendor_deleted = FALSE,
-			updated_at = NOW()
+			vendor_deleted = FALSE
 	`
 
 	_, err := tx.Exec(ctx, query,
@@ -137,7 +136,7 @@ func UpsertNFLBoxScore(s *store.Store, ctx context.Context, tx pgx.Tx, boxScore 
 func MarkNFLBoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, gameID string, individualID string) error {
 	query := `
 		UPDATE nfl_box_scores
-		SET vendor_deleted = TRUE, updated_at = NOW()
+		SET vendor_deleted = TRUE
 		WHERE game_id = $1 AND individual_id = $2
 	`
 	_, err := tx.Exec(ctx, query, gameID, individualID)
