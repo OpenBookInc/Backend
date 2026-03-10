@@ -38,9 +38,11 @@ pub struct EntryParameters {
     pub portion: u64,
     /// Number of times this entry can match (how many portions to provide)
     pub quantity: u64,
-    /// Optional self-match prevention ID. If Some(id), entries in other lineups with the same
-    /// self_match_id will be cancelled when this entry is submitted. Entries in the same lineup
-    /// with the same self_match_id are allowed to coexist.
+    /// Optional self-match prevention ID. If Some(id), and ALL other lineups contain at least
+    /// one entry with the same self_match_id, then all those entries will be cancelled when this
+    /// entry is submitted. If any other lineup lacks an entry with this self_match_id, no
+    /// cancellations occur. Entries in the same lineup with the same self_match_id are allowed
+    /// to coexist.
     pub self_match_id: Option<u128>,
 }
 
@@ -383,21 +385,30 @@ impl EntryPool {
         };
         self.next_sequence += 1;
 
-        // Handle self-match prevention: cancel entries in OTHER lineups with same self_match_id
+        // Handle self-match prevention: cancel entries in OTHER lineups with same self_match_id,
+        // but ONLY if ALL other lineups have at least one matching entry. If any other lineup
+        // is missing a matching entry, no cancellations occur (all-or-nothing).
         // It is important that all error cases are checked prior to cancelling orders so that the order book is unchanged in the event of an error.
         let mut cancelled_entry_ids = Vec::new();
         if let Some(self_match_id) = params.self_match_id {
-            for (other_lineup_idx, book) in self.state.books.iter_mut().enumerate() {
-                // Only cancel entries in different lineups
-                if other_lineup_idx != lineup_index {
-                    let entries_to_cancel: Vec<u64> = book.entries.iter()
-                        .filter(|e| e.self_match_id == Some(self_match_id))
-                        .map(|e| e.id)
-                        .collect();
+            let all_other_lineups_have_same_self_match_id = (0..self.state.books.len())
+                .filter(|&idx| idx != lineup_index)
+                .all(|idx| {
+                    self.state.books[idx].entries.iter().any(|e| e.self_match_id == Some(self_match_id))
+                });
 
-                    for entry_id in entries_to_cancel {
-                        book.entries.retain(|e| e.id != entry_id);
-                        cancelled_entry_ids.push(entry_id);
+            if all_other_lineups_have_same_self_match_id {
+                for (other_lineup_idx, book) in self.state.books.iter_mut().enumerate() {
+                    if other_lineup_idx != lineup_index {
+                        let entries_to_cancel: Vec<u64> = book.entries.iter()
+                            .filter(|e| e.self_match_id == Some(self_match_id))
+                            .map(|e| e.id)
+                            .collect();
+
+                        for entry_id in entries_to_cancel {
+                            book.entries.retain(|e| e.id != entry_id);
+                            cancelled_entry_ids.push(entry_id);
+                        }
                     }
                 }
             }
@@ -1571,10 +1582,10 @@ mod tests {
     }
 
     #[test]
-    fn test_self_match_id_cancels_other_lineups() {
+    fn test_self_match_id_cancels_when_all_lineups_covered() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
 
-        // Submit entries to lineups 1, 2, and 3 with different self_match_ids initially
+        // Submit entries to lineups 1, 2, and 3 with same self_match_id
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
@@ -1589,9 +1600,9 @@ mod tests {
             quantity: 1,
             self_match_id: Some(42),
         }).unwrap();
-        // Entry 102 should have cancelled entry 101
+        // Not all other lineups covered (lineup 0 and 3 missing), so no cancellation
         let state = pool.get_state();
-        assert_eq!(state.books[1].entries.len(), 0); // 101 was cancelled by 102
+        assert_eq!(state.books[1].entries.len(), 1); // 101 remains
         assert_eq!(state.books[2].entries.len(), 1); // 102 remains
 
         pool.submit_entry(3, EntryParameters {
@@ -1601,12 +1612,14 @@ mod tests {
             quantity: 1,
             self_match_id: Some(42),
         }).unwrap();
-        // Entry 103 should have cancelled entry 102
+        // Still no cancellation (lineup 0 has no matching entry)
         let state = pool.get_state();
-        assert_eq!(state.books[2].entries.len(), 0); // 102 was cancelled by 103
+        assert_eq!(state.books[1].entries.len(), 1); // 101 remains
+        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
         assert_eq!(state.books[3].entries.len(), 1); // 103 remains
 
         // Submit entry to lineup 0 with same self_match_id
+        // NOW all other lineups (1, 2, 3) have matching entries → cancel all of them
         let submit = pool.submit_entry(0, EntryParameters {
             entry_id: 100,
             entry_type: EntryType::Limit,
@@ -1615,16 +1628,67 @@ mod tests {
             self_match_id: Some(42),
         }).unwrap();
 
-        // Should have cancelled only entry 103 (the only one remaining)
-        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        // Should have cancelled entries 101, 102, 103
+        assert_eq!(submit.cancelled_entry_ids.len(), 3);
+        assert!(submit.cancelled_entry_ids.contains(&101));
+        assert!(submit.cancelled_entry_ids.contains(&102));
         assert!(submit.cancelled_entry_ids.contains(&103));
 
-        // Verify entries are removed from books
+        // Only entry 100 should remain
         let state = pool.get_state();
         assert_eq!(state.books[0].entries.len(), 1); // Only new entry 100
-        assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled earlier
-        assert_eq!(state.books[2].entries.len(), 0); // 102 cancelled earlier
+        assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled
+        assert_eq!(state.books[2].entries.len(), 0); // 102 cancelled
         assert_eq!(state.books[3].entries.len(), 0); // 103 cancelled
+    }
+
+    #[test]
+    fn test_self_match_id_no_cancel_when_not_all_lineups_covered() {
+        let mut pool = EntryPool::new(1000, 3); // 8 lineups (avoids matching with only 4 filled)
+
+        // Submit entries with mixed self_match_ids to different lineups
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 125,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 125,
+            quantity: 1,
+            self_match_id: Some(99), // Different ID
+        }).unwrap();
+        pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 125,
+            quantity: 1,
+            self_match_id: None, // No ID
+        }).unwrap();
+
+        // Submit entry to lineup 0 with self_match_id=42
+        // Other lineups: 1 has 42, but 2 (has 99), 3 (has None), 4-7 (empty) don't
+        // Not all other lineups have matching entries → no cancellation
+        let submit = pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 125,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // No cancellations (not all other lineups have matching entries)
+        assert_eq!(submit.cancelled_entry_ids.len(), 0);
+
+        // All entries should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1); // 100
+        assert_eq!(state.books[1].entries.len(), 1); // 101
+        assert_eq!(state.books[2].entries.len(), 1); // 102
+        assert_eq!(state.books[3].entries.len(), 1); // 103
     }
 
     #[test]
@@ -1743,27 +1807,109 @@ mod tests {
     fn test_self_match_id_cancellation_then_match() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
 
-        // Submit entries to lineups 0, 1, 2 with different self_match_ids to avoid cancelling each other
+        // Submit entries to all 4 lineups with same self_match_id=42
         pool.submit_entry(0, EntryParameters {
             entry_id: 100,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
-            self_match_id: Some(1),
+            self_match_id: Some(42),
         }).unwrap();
         pool.submit_entry(1, EntryParameters {
             entry_id: 101,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
-            self_match_id: Some(2),
+            self_match_id: Some(42),
         }).unwrap();
         pool.submit_entry(2, EntryParameters {
             entry_id: 102,
             entry_type: EntryType::Limit,
             portion: 250,
             quantity: 1,
-            self_match_id: Some(3),
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // No cancellation yet (lineup 3 doesn't have a matching entry)
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+
+        // Submit to lineup 3 with same self_match_id=42
+        // All other lineups (0, 1, 2) have matching entries → cancel all of them
+        let submit3 = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        assert_eq!(submit3.cancelled_entry_ids.len(), 3);
+        assert!(submit3.cancelled_entry_ids.contains(&100));
+        assert!(submit3.cancelled_entry_ids.contains(&101));
+        assert!(submit3.cancelled_entry_ids.contains(&102));
+
+        // Only entry 103 remains in lineup 3
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[2].entries.len(), 0);
+        assert_eq!(state.books[3].entries.len(), 1);
+
+        // Now submit fresh entries to other lineups with different self_match_ids
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 200,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(99),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 201,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(98),
+        }).unwrap();
+        let submit = pool.submit_entry(2, EntryParameters {
+            entry_id: 202,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(97),
+        }).unwrap();
+
+        // Should trigger a match with entries 200, 201, 202, 103
+        assert_eq!(submit.match_infos.len(), 1);
+    }
+
+    #[test]
+    fn test_self_match_id_market_entry_cancellation() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit limit entries to lineups 0, 1, 2 all with same self_match_id
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
         }).unwrap();
 
         // Verify all entries are resting
@@ -1772,91 +1918,40 @@ mod tests {
         assert_eq!(state.books[1].entries.len(), 1);
         assert_eq!(state.books[2].entries.len(), 1);
 
-        // Now submit to lineup 3 with self_match_id=1, should cancel entry 100
-        let submit3 = pool.submit_entry(3, EntryParameters {
+        // Submit market entry to lineup 3 with same self_match_id=42
+        // All other lineups (0, 1, 2) have matching entries → cancel all of them
+        // Market entry portion is calculated before cancellation, but after cancellation
+        // there are no entries to match with, so no matches occur
+        let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
-            entry_type: EntryType::Limit,
-            portion: 250,
+            entry_type: EntryType::Market,
+            portion: 0,
             quantity: 1,
-            self_match_id: Some(1),
+            self_match_id: Some(42),
         }).unwrap();
 
-        // Should have cancelled entry 100
-        assert_eq!(submit3.cancelled_entry_ids.len(), 1);
-        assert!(submit3.cancelled_entry_ids.contains(&100));
+        // All matching entries cancelled
+        assert_eq!(submit.cancelled_entry_ids.len(), 3);
+        assert!(submit.cancelled_entry_ids.contains(&100));
+        assert!(submit.cancelled_entry_ids.contains(&101));
+        assert!(submit.cancelled_entry_ids.contains(&102));
 
-        // Entry 100 should be cancelled, 101, 102, 103 are resting
+        // No matches (all counterparties cancelled)
+        assert_eq!(submit.match_infos.len(), 0);
+
+        // All entries cancelled, market entry also not resting
         let state = pool.get_state();
         assert_eq!(state.books[0].entries.len(), 0);
-        assert_eq!(state.books[1].entries.len(), 1);
-        assert_eq!(state.books[2].entries.len(), 1);
-        assert_eq!(state.books[3].entries.len(), 1);
-
-        // Now submit fresh entry to lineup 0 with different self_match_id to enable matching
-        let submit = pool.submit_entry(0, EntryParameters {
-            entry_id: 200,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: Some(99),
-        }).unwrap();
-
-        // Should trigger a match with entries 200, 101, 102, 103
-        assert_eq!(submit.match_infos.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[2].entries.len(), 0);
+        assert_eq!(state.books[3].entries.len(), 0); // Market entry not rested
     }
 
     #[test]
-    fn test_self_match_id_partial_cancellation() {
+    fn test_self_match_id_market_entry_no_cancel_when_not_all_covered() {
         let mut pool = EntryPool::new(1000, 2); // 4 lineups
 
-        // Submit entries with mixed self_match_ids
-        pool.submit_entry(1, EntryParameters {
-            entry_id: 101,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: Some(42),
-        }).unwrap();
-        pool.submit_entry(2, EntryParameters {
-            entry_id: 102,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: Some(99), // Different ID
-        }).unwrap();
-        pool.submit_entry(3, EntryParameters {
-            entry_id: 103,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: None, // No ID
-        }).unwrap();
-
-        // Submit entry to lineup 0 with self_match_id=Some(42)
-        let submit = pool.submit_entry(0, EntryParameters {
-            entry_id: 100,
-            entry_type: EntryType::Limit,
-            portion: 250,
-            quantity: 1,
-            self_match_id: Some(42),
-        }).unwrap();
-
-        // Should only cancel entry 101
-        assert_eq!(submit.cancelled_entry_ids.len(), 1);
-        assert!(submit.cancelled_entry_ids.contains(&101));
-
-        // Entries 102 and 103 should remain
-        let state = pool.get_state();
-        assert_eq!(state.books[1].entries.len(), 0); // 101 cancelled
-        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
-        assert_eq!(state.books[3].entries.len(), 1); // 103 remains
-    }
-
-    #[test]
-    fn test_self_match_id_market_entry_cancellation() {
-        let mut pool = EntryPool::new(1000, 2); // 4 lineups
-
-        // Submit limit entries to lineups 0, 1, 2 with different self_match_ids to avoid cancelling each other
+        // Submit limit entries to lineups 0, 1, 2 with different self_match_ids
         pool.submit_entry(0, EntryParameters {
             entry_id: 100,
             entry_type: EntryType::Limit,
@@ -1879,15 +1974,9 @@ mod tests {
             self_match_id: Some(3),
         }).unwrap();
 
-        // Verify all entries are resting
-        let state = pool.get_state();
-        assert_eq!(state.books[0].entries.len(), 1);
-        assert_eq!(state.books[1].entries.len(), 1);
-        assert_eq!(state.books[2].entries.len(), 1);
-
         // Submit market entry to lineup 3 with self_match_id=1
-        // Market entry will calculate portion based on existing entries (including 100),
-        // then cancel entry 100, then try to match but fail silently (no matches)
+        // Not all other lineups have id=1 (only lineup 0 does) → no cancellation
+        // Market entry should calculate portion and match
         let submit = pool.submit_entry(3, EntryParameters {
             entry_id: 103,
             entry_type: EntryType::Market,
@@ -1896,18 +1985,10 @@ mod tests {
             self_match_id: Some(1),
         }).unwrap();
 
-        // Submission succeeds but with no matches (market entry doesn't match)
-        assert_eq!(submit.match_infos.len(), 0);
-        // Entry 100 should be in cancelled_entry_ids
-        assert_eq!(submit.cancelled_entry_ids.len(), 1);
-        assert!(submit.cancelled_entry_ids.contains(&100));
-
-        // Entry 100 should be cancelled, market entry not resting (doesn't match)
-        let state = pool.get_state();
-        assert_eq!(state.books[0].entries.len(), 0);
-        assert_eq!(state.books[1].entries.len(), 1); // 101 remains
-        assert_eq!(state.books[2].entries.len(), 1); // 102 remains
-        assert_eq!(state.books[3].entries.len(), 0); // Market entry not rested
+        // No cancellation
+        assert_eq!(submit.cancelled_entry_ids.len(), 0);
+        // Should match with all 4 entries
+        assert_eq!(submit.match_infos.len(), 1);
     }
 
     #[test]
@@ -1935,27 +2016,30 @@ mod tests {
         let state = pool.get_state();
         assert_eq!(state.books[1].entries.len(), 2);
 
-        // Submit entry to lineup 2 with same self_match_id
-        // Should cancel both 101 and 102 (different lineup)
-        let submit2 = pool.submit_entry(2, EntryParameters {
+        // Submit entries to lineups 2 and 3 with same self_match_id
+        pool.submit_entry(2, EntryParameters {
             entry_id: 201,
             entry_type: EntryType::Limit,
             portion: 200,
             quantity: 1,
             self_match_id: Some(42),
         }).unwrap();
+        pool.submit_entry(3, EntryParameters {
+            entry_id: 301,
+            entry_type: EntryType::Limit,
+            portion: 200,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
 
-        // Should have cancelled both entries in lineup 1
-        assert_eq!(submit2.cancelled_entry_ids.len(), 2);
-        assert!(submit2.cancelled_entry_ids.contains(&101));
-        assert!(submit2.cancelled_entry_ids.contains(&102));
-
-        // Only entry 201 should remain
+        // No cancellation yet (lineup 0 has no matching entry)
         let state = pool.get_state();
-        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 2);
         assert_eq!(state.books[2].entries.len(), 1);
+        assert_eq!(state.books[3].entries.len(), 1);
 
         // Submit entry to lineup 0 with same self_match_id
+        // Now all other lineups (1, 2, 3) have matching entries → cancel all of them
         let submit = pool.submit_entry(0, EntryParameters {
             entry_id: 100,
             entry_type: EntryType::Limit,
@@ -1964,14 +2048,112 @@ mod tests {
             self_match_id: Some(42),
         }).unwrap();
 
-        // Should cancel only entry 201
-        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        // Should have cancelled all entries in other lineups (101, 102, 201, 301)
+        assert_eq!(submit.cancelled_entry_ids.len(), 4);
+        assert!(submit.cancelled_entry_ids.contains(&101));
+        assert!(submit.cancelled_entry_ids.contains(&102));
         assert!(submit.cancelled_entry_ids.contains(&201));
+        assert!(submit.cancelled_entry_ids.contains(&301));
 
-        // Verify only 100 remains
+        // Only entry 100 should remain
         let state = pool.get_state();
-        assert_eq!(state.books[0].entries.len(), 1); // Only 100
+        assert_eq!(state.books[0].entries.len(), 1); // 100
         assert_eq!(state.books[1].entries.len(), 0);
         assert_eq!(state.books[2].entries.len(), 0);
+        assert_eq!(state.books[3].entries.len(), 0);
+    }
+
+    #[test]
+    fn test_self_match_id_two_lineups() {
+        let mut pool = EntryPool::new(1000, 1); // 2 lineups
+
+        // Submit entry to lineup 0 with self_match_id=42
+        pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 500,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Submit entry to lineup 1 with same self_match_id=42
+        // All other lineups (just lineup 0) have matching entry → cancel
+        let submit = pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 500,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+
+        // Entry 100 should be cancelled
+        assert_eq!(submit.cancelled_entry_ids.len(), 1);
+        assert!(submit.cancelled_entry_ids.contains(&100));
+
+        // Only entry 101 remains
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 1);
+    }
+
+    #[test]
+    fn test_self_match_id_no_cancel_until_all_covered() {
+        let mut pool = EntryPool::new(1000, 2); // 4 lineups
+
+        // Submit entries one by one, verifying no cancellation until all lineups covered
+        let submit0 = pool.submit_entry(0, EntryParameters {
+            entry_id: 100,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        assert_eq!(submit0.cancelled_entry_ids.len(), 0);
+
+        // Other lineups: 0 has match, 2 and 3 don't → no cancellation
+        let submit1 = pool.submit_entry(1, EntryParameters {
+            entry_id: 101,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        assert_eq!(submit1.cancelled_entry_ids.len(), 0);
+
+        // Other lineups: 0 and 1 have matches, 3 doesn't → no cancellation
+        let submit2 = pool.submit_entry(2, EntryParameters {
+            entry_id: 102,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        assert_eq!(submit2.cancelled_entry_ids.len(), 0);
+
+        // All entries should still be resting
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 1);
+        assert_eq!(state.books[1].entries.len(), 1);
+        assert_eq!(state.books[2].entries.len(), 1);
+
+        // Now all other lineups (0, 1, 2) have matches → cancel all of them
+        let submit3 = pool.submit_entry(3, EntryParameters {
+            entry_id: 103,
+            entry_type: EntryType::Limit,
+            portion: 250,
+            quantity: 1,
+            self_match_id: Some(42),
+        }).unwrap();
+        assert_eq!(submit3.cancelled_entry_ids.len(), 3);
+        assert!(submit3.cancelled_entry_ids.contains(&100));
+        assert!(submit3.cancelled_entry_ids.contains(&101));
+        assert!(submit3.cancelled_entry_ids.contains(&102));
+
+        // Only entry 103 should remain
+        let state = pool.get_state();
+        assert_eq!(state.books[0].entries.len(), 0);
+        assert_eq!(state.books[1].entries.len(), 0);
+        assert_eq!(state.books[2].entries.len(), 0);
+        assert_eq!(state.books[3].entries.len(), 1);
     }
 }

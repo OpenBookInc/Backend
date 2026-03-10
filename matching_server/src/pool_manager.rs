@@ -840,25 +840,27 @@ mod tests {
     fn test_eliminations_one() {
         let mut manager = PoolManager::new();
 
-        // Submit entry with self_match_id=42
+        // Use 1-leg pool (2 lineups) so "all other lineups" is just 1 lineup
+        // Submit entry with self_match_id=42 to lineup 0
         let (_eliminations, ack1, _matches, _market_eliminations) = manager
             .create_entry(NewOrderBody {
                 client_order_id: coid(2001),
-                legs: create_legs(&[(101, false), (102, false)]),
+                legs: create_legs(&[(101, false)]),
                 order_type: OrderType::Limit as i32,
-                portion: 250_000,
+                portion: 500_000,
                 quantity: 250_000,
                 self_match_id: smid(42),
             })
             .unwrap();
 
-        // Submit entry to different lineup with same self_match_id - should eliminate the first
+        // Submit entry to lineup 1 with same self_match_id
+        // All other lineups (just lineup 0) have matching entry → eliminate it
         let (eliminations, _ack2, _matches, _market_eliminations) = manager
             .create_entry(NewOrderBody {
                 client_order_id: coid(2002),
-                legs: create_legs(&[(101, true), (102, false)]),
+                legs: create_legs(&[(101, true)]),
                 order_type: OrderType::Limit as i32,
-                portion: 250_000,
+                portion: 500_000,
                 quantity: 250_000,
                 self_match_id: smid(42),
             })
@@ -873,7 +875,8 @@ mod tests {
     fn test_eliminations_two() {
         let mut manager = PoolManager::new();
 
-        // Key insight: entries in the SAME lineup with the same self_match_id are allowed to coexist.
+        // Use 1-leg pool (2 lineups) so "all other lineups" is just 1 lineup.
+        // Entries in the SAME lineup with the same self_match_id are allowed to coexist.
         // So we can put 2 entries in lineup 0 with self_match_id=77, then submit to lineup 1 with
         // self_match_id=77, which will eliminate both entries in lineup 0.
 
@@ -881,9 +884,9 @@ mod tests {
         let (_eliminations, ack1, _matches, _market_eliminations) = manager
             .create_entry(NewOrderBody {
                 client_order_id: coid(3001),
-                legs: create_legs(&[(101, false), (102, false)]),
+                legs: create_legs(&[(101, false)]),
                 order_type: OrderType::Limit as i32,
-                portion: 250_000,
+                portion: 500_000,
                 quantity: 250_000,
                 self_match_id: smid(77),
             })
@@ -892,9 +895,9 @@ mod tests {
         let (_eliminations, ack2, _matches, _market_eliminations) = manager
             .create_entry(NewOrderBody {
                 client_order_id: coid(3002),
-                legs: create_legs(&[(101, false), (102, false)]),
+                legs: create_legs(&[(101, false)]),
                 order_type: OrderType::Limit as i32,
-                portion: 200_000,
+                portion: 400_000,
                 quantity: 200_000,
                 self_match_id: smid(77),
             })
@@ -902,13 +905,13 @@ mod tests {
 
         // Both ack1 and ack2 should be in lineup 0 (same lineup allows same self_match_id)
         // Now submit entry to lineup 1 (different lineup) with same self_match_id
-        // This should eliminate both ack1 and ack2
+        // All other lineups (just lineup 0) have matching entries → eliminate both
         let (eliminations, _ack3, _matches, _market_eliminations) = manager
             .create_entry(NewOrderBody {
                 client_order_id: coid(3003),
-                legs: create_legs(&[(101, true), (102, false)]),
+                legs: create_legs(&[(101, true)]),
                 order_type: OrderType::Limit as i32,
-                portion: 250_000,
+                portion: 500_000,
                 quantity: 250_000,
                 self_match_id: smid(77),
             })
