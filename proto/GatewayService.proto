@@ -34,6 +34,7 @@ message GatewayMessage {
     CancelOrderAcknowledgement cancel_order_acknowledgement = 3;
     Match match = 4;
     OrderBookSnapshot order_book_snapshot = 5;
+    OrderElimination elimination = 6;
   }
 }
 
@@ -100,6 +101,12 @@ message Match {
     uint64 matched_quantity = 3;
     repeated FillEvent fill_events = 4;
   }
+
+  Body body = 1;
+}
+
+message OrderElimination {
+  message Body { OpenBook.CommonPackage.UUID order_id = 1; }
 
   Body body = 1;
 }

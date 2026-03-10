@@ -115,6 +115,7 @@ type GatewayMessage struct {
 	//	*GatewayMessage_CancelOrderAcknowledgement
 	//	*GatewayMessage_Match
 	//	*GatewayMessage_OrderBookSnapshot
+	//	*GatewayMessage_Elimination
 	Event         isGatewayMessage_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -200,6 +201,15 @@ func (x *GatewayMessage) GetOrderBookSnapshot() *OrderBookSnapshot {
 	return nil
 }
 
+func (x *GatewayMessage) GetElimination() *OrderElimination {
+	if x != nil {
+		if x, ok := x.Event.(*GatewayMessage_Elimination); ok {
+			return x.Elimination
+		}
+	}
+	return nil
+}
+
 type isGatewayMessage_Event interface {
 	isGatewayMessage_Event()
 }
@@ -220,6 +230,10 @@ type GatewayMessage_OrderBookSnapshot struct {
 	OrderBookSnapshot *OrderBookSnapshot `protobuf:"bytes,5,opt,name=order_book_snapshot,json=orderBookSnapshot,proto3,oneof"`
 }
 
+type GatewayMessage_Elimination struct {
+	Elimination *OrderElimination `protobuf:"bytes,6,opt,name=elimination,proto3,oneof"`
+}
+
 func (*GatewayMessage_NewOrderAcknowledgement) isGatewayMessage_Event() {}
 
 func (*GatewayMessage_CancelOrderAcknowledgement) isGatewayMessage_Event() {}
@@ -227,6 +241,8 @@ func (*GatewayMessage_CancelOrderAcknowledgement) isGatewayMessage_Event() {}
 func (*GatewayMessage_Match) isGatewayMessage_Event() {}
 
 func (*GatewayMessage_OrderBookSnapshot) isGatewayMessage_Event() {}
+
+func (*GatewayMessage_Elimination) isGatewayMessage_Event() {}
 
 type NewOrder struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -480,6 +496,50 @@ func (x *Match) GetBody() *Match_Body {
 	return nil
 }
 
+type OrderElimination struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Body          *OrderElimination_Body `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderElimination) Reset() {
+	*x = OrderElimination{}
+	mi := &file_GatewayService_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderElimination) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderElimination) ProtoMessage() {}
+
+func (x *OrderElimination) ProtoReflect() protoreflect.Message {
+	mi := &file_GatewayService_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderElimination.ProtoReflect.Descriptor instead.
+func (*OrderElimination) Descriptor() ([]byte, []int) {
+	return file_GatewayService_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *OrderElimination) GetBody() *OrderElimination_Body {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
 type OrderBookSnapshot struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	LegSecurityIds []*gen.UUID            `protobuf:"bytes,1,rep,name=leg_security_ids,json=legSecurityIds,proto3" json:"leg_security_ids,omitempty"`
@@ -489,7 +549,7 @@ type OrderBookSnapshot struct {
 
 func (x *OrderBookSnapshot) Reset() {
 	*x = OrderBookSnapshot{}
-	mi := &file_GatewayService_proto_msgTypes[7]
+	mi := &file_GatewayService_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -501,7 +561,7 @@ func (x *OrderBookSnapshot) String() string {
 func (*OrderBookSnapshot) ProtoMessage() {}
 
 func (x *OrderBookSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[7]
+	mi := &file_GatewayService_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -514,7 +574,7 @@ func (x *OrderBookSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderBookSnapshot.ProtoReflect.Descriptor instead.
 func (*OrderBookSnapshot) Descriptor() ([]byte, []int) {
-	return file_GatewayService_proto_rawDescGZIP(), []int{7}
+	return file_GatewayService_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OrderBookSnapshot) GetLegSecurityIds() []*gen.UUID {
@@ -538,7 +598,7 @@ type NewOrder_Body struct {
 
 func (x *NewOrder_Body) Reset() {
 	*x = NewOrder_Body{}
-	mi := &file_GatewayService_proto_msgTypes[8]
+	mi := &file_GatewayService_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +610,7 @@ func (x *NewOrder_Body) String() string {
 func (*NewOrder_Body) ProtoMessage() {}
 
 func (x *NewOrder_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[8]
+	mi := &file_GatewayService_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -618,7 +678,7 @@ type NewOrder_Body_Leg struct {
 
 func (x *NewOrder_Body_Leg) Reset() {
 	*x = NewOrder_Body_Leg{}
-	mi := &file_GatewayService_proto_msgTypes[9]
+	mi := &file_GatewayService_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -630,7 +690,7 @@ func (x *NewOrder_Body_Leg) String() string {
 func (*NewOrder_Body_Leg) ProtoMessage() {}
 
 func (x *NewOrder_Body_Leg) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[9]
+	mi := &file_GatewayService_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -669,7 +729,7 @@ type CancelOrder_Body struct {
 
 func (x *CancelOrder_Body) Reset() {
 	*x = CancelOrder_Body{}
-	mi := &file_GatewayService_proto_msgTypes[10]
+	mi := &file_GatewayService_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -681,7 +741,7 @@ func (x *CancelOrder_Body) String() string {
 func (*CancelOrder_Body) ProtoMessage() {}
 
 func (x *CancelOrder_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[10]
+	mi := &file_GatewayService_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -713,7 +773,7 @@ type CancelOrderAcknowledgement_Body struct {
 
 func (x *CancelOrderAcknowledgement_Body) Reset() {
 	*x = CancelOrderAcknowledgement_Body{}
-	mi := &file_GatewayService_proto_msgTypes[11]
+	mi := &file_GatewayService_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -725,7 +785,7 @@ func (x *CancelOrderAcknowledgement_Body) String() string {
 func (*CancelOrderAcknowledgement_Body) ProtoMessage() {}
 
 func (x *CancelOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[11]
+	mi := &file_GatewayService_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +818,7 @@ type NewOrderAcknowledgement_Body struct {
 
 func (x *NewOrderAcknowledgement_Body) Reset() {
 	*x = NewOrderAcknowledgement_Body{}
-	mi := &file_GatewayService_proto_msgTypes[12]
+	mi := &file_GatewayService_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -770,7 +830,7 @@ func (x *NewOrderAcknowledgement_Body) String() string {
 func (*NewOrderAcknowledgement_Body) ProtoMessage() {}
 
 func (x *NewOrderAcknowledgement_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[12]
+	mi := &file_GatewayService_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -814,7 +874,7 @@ type Match_Body struct {
 
 func (x *Match_Body) Reset() {
 	*x = Match_Body{}
-	mi := &file_GatewayService_proto_msgTypes[13]
+	mi := &file_GatewayService_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -826,7 +886,7 @@ func (x *Match_Body) String() string {
 func (*Match_Body) ProtoMessage() {}
 
 func (x *Match_Body) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[13]
+	mi := &file_GatewayService_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -883,7 +943,7 @@ type Match_Body_FillEvent struct {
 
 func (x *Match_Body_FillEvent) Reset() {
 	*x = Match_Body_FillEvent{}
-	mi := &file_GatewayService_proto_msgTypes[14]
+	mi := &file_GatewayService_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -895,7 +955,7 @@ func (x *Match_Body_FillEvent) String() string {
 func (*Match_Body_FillEvent) ProtoMessage() {}
 
 func (x *Match_Body_FillEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[14]
+	mi := &file_GatewayService_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,6 +1006,50 @@ func (x *Match_Body_FillEvent) GetIsComplete() bool {
 	return false
 }
 
+type OrderElimination_Body struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderId       *gen.UUID              `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderElimination_Body) Reset() {
+	*x = OrderElimination_Body{}
+	mi := &file_GatewayService_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderElimination_Body) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderElimination_Body) ProtoMessage() {}
+
+func (x *OrderElimination_Body) ProtoReflect() protoreflect.Message {
+	mi := &file_GatewayService_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderElimination_Body.ProtoReflect.Descriptor instead.
+func (*OrderElimination_Body) Descriptor() ([]byte, []int) {
+	return file_GatewayService_proto_rawDescGZIP(), []int{7, 0}
+}
+
+func (x *OrderElimination_Body) GetOrderId() *gen.UUID {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 type OrderBookSnapshot_LineupBook struct {
 	state         protoimpl.MessageState                `protogen:"open.v1"`
 	IsOver        []bool                                `protobuf:"varint,1,rep,packed,name=is_over,json=isOver,proto3" json:"is_over,omitempty"`
@@ -956,7 +1060,7 @@ type OrderBookSnapshot_LineupBook struct {
 
 func (x *OrderBookSnapshot_LineupBook) Reset() {
 	*x = OrderBookSnapshot_LineupBook{}
-	mi := &file_GatewayService_proto_msgTypes[15]
+	mi := &file_GatewayService_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -968,7 +1072,7 @@ func (x *OrderBookSnapshot_LineupBook) String() string {
 func (*OrderBookSnapshot_LineupBook) ProtoMessage() {}
 
 func (x *OrderBookSnapshot_LineupBook) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[15]
+	mi := &file_GatewayService_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -981,7 +1085,7 @@ func (x *OrderBookSnapshot_LineupBook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderBookSnapshot_LineupBook.ProtoReflect.Descriptor instead.
 func (*OrderBookSnapshot_LineupBook) Descriptor() ([]byte, []int) {
-	return file_GatewayService_proto_rawDescGZIP(), []int{7, 0}
+	return file_GatewayService_proto_rawDescGZIP(), []int{8, 0}
 }
 
 func (x *OrderBookSnapshot_LineupBook) GetIsOver() []bool {
@@ -1008,7 +1112,7 @@ type OrderBookSnapshot_LineupBook_Level struct {
 
 func (x *OrderBookSnapshot_LineupBook_Level) Reset() {
 	*x = OrderBookSnapshot_LineupBook_Level{}
-	mi := &file_GatewayService_proto_msgTypes[16]
+	mi := &file_GatewayService_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1020,7 +1124,7 @@ func (x *OrderBookSnapshot_LineupBook_Level) String() string {
 func (*OrderBookSnapshot_LineupBook_Level) ProtoMessage() {}
 
 func (x *OrderBookSnapshot_LineupBook_Level) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[16]
+	mi := &file_GatewayService_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1033,7 +1137,7 @@ func (x *OrderBookSnapshot_LineupBook_Level) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use OrderBookSnapshot_LineupBook_Level.ProtoReflect.Descriptor instead.
 func (*OrderBookSnapshot_LineupBook_Level) Descriptor() ([]byte, []int) {
-	return file_GatewayService_proto_rawDescGZIP(), []int{7, 0, 0}
+	return file_GatewayService_proto_rawDescGZIP(), []int{8, 0, 0}
 }
 
 func (x *OrderBookSnapshot_LineupBook_Level) GetPortion() uint64 {
@@ -1059,7 +1163,7 @@ type OrderBookSnapshot_LineupBook_Level_Order struct {
 
 func (x *OrderBookSnapshot_LineupBook_Level_Order) Reset() {
 	*x = OrderBookSnapshot_LineupBook_Level_Order{}
-	mi := &file_GatewayService_proto_msgTypes[17]
+	mi := &file_GatewayService_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1071,7 +1175,7 @@ func (x *OrderBookSnapshot_LineupBook_Level_Order) String() string {
 func (*OrderBookSnapshot_LineupBook_Level_Order) ProtoMessage() {}
 
 func (x *OrderBookSnapshot_LineupBook_Level_Order) ProtoReflect() protoreflect.Message {
-	mi := &file_GatewayService_proto_msgTypes[17]
+	mi := &file_GatewayService_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1084,7 +1188,7 @@ func (x *OrderBookSnapshot_LineupBook_Level_Order) ProtoReflect() protoreflect.M
 
 // Deprecated: Use OrderBookSnapshot_LineupBook_Level_Order.ProtoReflect.Descriptor instead.
 func (*OrderBookSnapshot_LineupBook_Level_Order) Descriptor() ([]byte, []int) {
-	return file_GatewayService_proto_rawDescGZIP(), []int{7, 0, 0, 0}
+	return file_GatewayService_proto_rawDescGZIP(), []int{8, 0, 0, 0}
 }
 
 func (x *OrderBookSnapshot_LineupBook_Level_Order) GetQuantityRemaining() uint64 {
@@ -1102,13 +1206,14 @@ const file_GatewayService_proto_rawDesc = "" +
 	"\x0eBackendMessage\x12G\n" +
 	"\tnew_order\x18\x01 \x01(\v2(.OpenBook.GatewayServicePackage.NewOrderH\x00R\bnewOrder\x12P\n" +
 	"\fcancel_order\x18\x04 \x01(\v2+.OpenBook.GatewayServicePackage.CancelOrderH\x00R\vcancelOrderB\x05\n" +
-	"\x03msg\"\x98\x04\n" +
+	"\x03msg\"\xee\x04\n" +
 	"\x0eGatewayMessage\x12b\n" +
 	"\x16sequenced_message_base\x18\x01 \x01(\v2,.OpenBook.CommonPackage.SequencedMessageBaseR\x14sequencedMessageBase\x12u\n" +
 	"\x19new_order_acknowledgement\x18\x02 \x01(\v27.OpenBook.GatewayServicePackage.NewOrderAcknowledgementH\x00R\x17newOrderAcknowledgement\x12~\n" +
 	"\x1ccancel_order_acknowledgement\x18\x03 \x01(\v2:.OpenBook.GatewayServicePackage.CancelOrderAcknowledgementH\x00R\x1acancelOrderAcknowledgement\x12=\n" +
 	"\x05match\x18\x04 \x01(\v2%.OpenBook.GatewayServicePackage.MatchH\x00R\x05match\x12c\n" +
-	"\x13order_book_snapshot\x18\x05 \x01(\v21.OpenBook.GatewayServicePackage.OrderBookSnapshotH\x00R\x11orderBookSnapshotB\a\n" +
+	"\x13order_book_snapshot\x18\x05 \x01(\v21.OpenBook.GatewayServicePackage.OrderBookSnapshotH\x00R\x11orderBookSnapshot\x12T\n" +
+	"\velimination\x18\x06 \x01(\v20.OpenBook.GatewayServicePackage.OrderEliminationH\x00R\veliminationB\a\n" +
 	"\x05event\"\xda\x03\n" +
 	"\bNewOrder\x12A\n" +
 	"\x04body\x18\x01 \x01(\v2-.OpenBook.GatewayServicePackage.NewOrder.BodyR\x04body\x1a\x8a\x03\n" +
@@ -1154,7 +1259,11 @@ const file_GatewayService_proto_rawDesc = "" +
 	"\fis_aggressor\x18\x03 \x01(\bR\visAggressor\x12'\n" +
 	"\x0fmatched_portion\x18\x04 \x01(\x04R\x0ematchedPortion\x12\x1f\n" +
 	"\vis_complete\x18\x05 \x01(\bR\n" +
-	"isComplete\"\x9d\x03\n" +
+	"isComplete\"\x9e\x01\n" +
+	"\x10OrderElimination\x12I\n" +
+	"\x04body\x18\x01 \x01(\v25.OpenBook.GatewayServicePackage.OrderElimination.BodyR\x04body\x1a?\n" +
+	"\x04Body\x127\n" +
+	"\border_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aorderId\"\x9d\x03\n" +
 	"\x11OrderBookSnapshot\x12F\n" +
 	"\x10leg_security_ids\x18\x01 \x03(\v2\x1c.OpenBook.CommonPackage.UUIDR\x0elegSecurityIds\x1a\xbf\x02\n" +
 	"\n" +
@@ -1181,7 +1290,7 @@ func file_GatewayService_proto_rawDescGZIP() []byte {
 	return file_GatewayService_proto_rawDescData
 }
 
-var file_GatewayService_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_GatewayService_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_GatewayService_proto_goTypes = []any{
 	(*BackendMessage)(nil),                           // 0: OpenBook.GatewayServicePackage.BackendMessage
 	(*GatewayMessage)(nil),                           // 1: OpenBook.GatewayServicePackage.GatewayMessage
@@ -1190,61 +1299,66 @@ var file_GatewayService_proto_goTypes = []any{
 	(*CancelOrderAcknowledgement)(nil),               // 4: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement
 	(*NewOrderAcknowledgement)(nil),                  // 5: OpenBook.GatewayServicePackage.NewOrderAcknowledgement
 	(*Match)(nil),                                    // 6: OpenBook.GatewayServicePackage.Match
-	(*OrderBookSnapshot)(nil),                        // 7: OpenBook.GatewayServicePackage.OrderBookSnapshot
-	(*NewOrder_Body)(nil),                            // 8: OpenBook.GatewayServicePackage.NewOrder.Body
-	(*NewOrder_Body_Leg)(nil),                        // 9: OpenBook.GatewayServicePackage.NewOrder.Body.Leg
-	(*CancelOrder_Body)(nil),                         // 10: OpenBook.GatewayServicePackage.CancelOrder.Body
-	(*CancelOrderAcknowledgement_Body)(nil),          // 11: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body
-	(*NewOrderAcknowledgement_Body)(nil),             // 12: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body
-	(*Match_Body)(nil),                               // 13: OpenBook.GatewayServicePackage.Match.Body
-	(*Match_Body_FillEvent)(nil),                     // 14: OpenBook.GatewayServicePackage.Match.Body.FillEvent
-	(*OrderBookSnapshot_LineupBook)(nil),             // 15: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook
-	(*OrderBookSnapshot_LineupBook_Level)(nil),       // 16: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
-	(*OrderBookSnapshot_LineupBook_Level_Order)(nil), // 17: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
-	(*gen.SequencedMessageBase)(nil),                 // 18: OpenBook.CommonPackage.SequencedMessageBase
-	(*gen.ResponseBase)(nil),                         // 19: OpenBook.CommonPackage.ResponseBase
-	(*gen.FallibleBase)(nil),                         // 20: OpenBook.CommonPackage.FallibleBase
-	(*gen.UUID)(nil),                                 // 21: OpenBook.CommonPackage.UUID
-	(gen.OrderType)(0),                               // 22: OpenBook.CommonPackage.OrderType
+	(*OrderElimination)(nil),                         // 7: OpenBook.GatewayServicePackage.OrderElimination
+	(*OrderBookSnapshot)(nil),                        // 8: OpenBook.GatewayServicePackage.OrderBookSnapshot
+	(*NewOrder_Body)(nil),                            // 9: OpenBook.GatewayServicePackage.NewOrder.Body
+	(*NewOrder_Body_Leg)(nil),                        // 10: OpenBook.GatewayServicePackage.NewOrder.Body.Leg
+	(*CancelOrder_Body)(nil),                         // 11: OpenBook.GatewayServicePackage.CancelOrder.Body
+	(*CancelOrderAcknowledgement_Body)(nil),          // 12: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body
+	(*NewOrderAcknowledgement_Body)(nil),             // 13: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body
+	(*Match_Body)(nil),                               // 14: OpenBook.GatewayServicePackage.Match.Body
+	(*Match_Body_FillEvent)(nil),                     // 15: OpenBook.GatewayServicePackage.Match.Body.FillEvent
+	(*OrderElimination_Body)(nil),                    // 16: OpenBook.GatewayServicePackage.OrderElimination.Body
+	(*OrderBookSnapshot_LineupBook)(nil),             // 17: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook
+	(*OrderBookSnapshot_LineupBook_Level)(nil),       // 18: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
+	(*OrderBookSnapshot_LineupBook_Level_Order)(nil), // 19: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
+	(*gen.SequencedMessageBase)(nil),                 // 20: OpenBook.CommonPackage.SequencedMessageBase
+	(*gen.ResponseBase)(nil),                         // 21: OpenBook.CommonPackage.ResponseBase
+	(*gen.FallibleBase)(nil),                         // 22: OpenBook.CommonPackage.FallibleBase
+	(*gen.UUID)(nil),                                 // 23: OpenBook.CommonPackage.UUID
+	(gen.OrderType)(0),                               // 24: OpenBook.CommonPackage.OrderType
 }
 var file_GatewayService_proto_depIdxs = []int32{
 	2,  // 0: OpenBook.GatewayServicePackage.BackendMessage.new_order:type_name -> OpenBook.GatewayServicePackage.NewOrder
 	3,  // 1: OpenBook.GatewayServicePackage.BackendMessage.cancel_order:type_name -> OpenBook.GatewayServicePackage.CancelOrder
-	18, // 2: OpenBook.GatewayServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
+	20, // 2: OpenBook.GatewayServicePackage.GatewayMessage.sequenced_message_base:type_name -> OpenBook.CommonPackage.SequencedMessageBase
 	5,  // 3: OpenBook.GatewayServicePackage.GatewayMessage.new_order_acknowledgement:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement
 	4,  // 4: OpenBook.GatewayServicePackage.GatewayMessage.cancel_order_acknowledgement:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement
 	6,  // 5: OpenBook.GatewayServicePackage.GatewayMessage.match:type_name -> OpenBook.GatewayServicePackage.Match
-	7,  // 6: OpenBook.GatewayServicePackage.GatewayMessage.order_book_snapshot:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot
-	8,  // 7: OpenBook.GatewayServicePackage.NewOrder.body:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body
-	10, // 8: OpenBook.GatewayServicePackage.CancelOrder.body:type_name -> OpenBook.GatewayServicePackage.CancelOrder.Body
-	19, // 9: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
-	20, // 10: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
-	11, // 11: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body
-	19, // 12: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
-	20, // 13: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
-	12, // 14: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body
-	13, // 15: OpenBook.GatewayServicePackage.Match.body:type_name -> OpenBook.GatewayServicePackage.Match.Body
-	21, // 16: OpenBook.GatewayServicePackage.OrderBookSnapshot.leg_security_ids:type_name -> OpenBook.CommonPackage.UUID
-	21, // 17: OpenBook.GatewayServicePackage.NewOrder.Body.user_id:type_name -> OpenBook.CommonPackage.UUID
-	9,  // 18: OpenBook.GatewayServicePackage.NewOrder.Body.legs:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body.Leg
-	22, // 19: OpenBook.GatewayServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
-	21, // 20: OpenBook.GatewayServicePackage.NewOrder.Body.Leg.leg_security_id:type_name -> OpenBook.CommonPackage.UUID
-	21, // 21: OpenBook.GatewayServicePackage.CancelOrder.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
-	21, // 22: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
-	21, // 23: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
-	21, // 24: OpenBook.GatewayServicePackage.Match.Body.match_id:type_name -> OpenBook.CommonPackage.UUID
-	14, // 25: OpenBook.GatewayServicePackage.Match.Body.fill_events:type_name -> OpenBook.GatewayServicePackage.Match.Body.FillEvent
-	21, // 26: OpenBook.GatewayServicePackage.Match.Body.FillEvent.fill_event_id:type_name -> OpenBook.CommonPackage.UUID
-	21, // 27: OpenBook.GatewayServicePackage.Match.Body.FillEvent.order_id:type_name -> OpenBook.CommonPackage.UUID
-	16, // 28: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.levels:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
-	17, // 29: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.orders:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
-	0,  // 30: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:input_type -> OpenBook.GatewayServicePackage.BackendMessage
-	1,  // 31: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:output_type -> OpenBook.GatewayServicePackage.GatewayMessage
-	31, // [31:32] is the sub-list for method output_type
-	30, // [30:31] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	8,  // 6: OpenBook.GatewayServicePackage.GatewayMessage.order_book_snapshot:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot
+	7,  // 7: OpenBook.GatewayServicePackage.GatewayMessage.elimination:type_name -> OpenBook.GatewayServicePackage.OrderElimination
+	9,  // 8: OpenBook.GatewayServicePackage.NewOrder.body:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body
+	11, // 9: OpenBook.GatewayServicePackage.CancelOrder.body:type_name -> OpenBook.GatewayServicePackage.CancelOrder.Body
+	21, // 10: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	22, // 11: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
+	12, // 12: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body
+	21, // 13: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.response_base:type_name -> OpenBook.CommonPackage.ResponseBase
+	22, // 14: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.fallible_base:type_name -> OpenBook.CommonPackage.FallibleBase
+	13, // 15: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.body:type_name -> OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body
+	14, // 16: OpenBook.GatewayServicePackage.Match.body:type_name -> OpenBook.GatewayServicePackage.Match.Body
+	16, // 17: OpenBook.GatewayServicePackage.OrderElimination.body:type_name -> OpenBook.GatewayServicePackage.OrderElimination.Body
+	23, // 18: OpenBook.GatewayServicePackage.OrderBookSnapshot.leg_security_ids:type_name -> OpenBook.CommonPackage.UUID
+	23, // 19: OpenBook.GatewayServicePackage.NewOrder.Body.user_id:type_name -> OpenBook.CommonPackage.UUID
+	10, // 20: OpenBook.GatewayServicePackage.NewOrder.Body.legs:type_name -> OpenBook.GatewayServicePackage.NewOrder.Body.Leg
+	24, // 21: OpenBook.GatewayServicePackage.NewOrder.Body.order_type:type_name -> OpenBook.CommonPackage.OrderType
+	23, // 22: OpenBook.GatewayServicePackage.NewOrder.Body.Leg.leg_security_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 23: OpenBook.GatewayServicePackage.CancelOrder.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 24: OpenBook.GatewayServicePackage.CancelOrderAcknowledgement.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 25: OpenBook.GatewayServicePackage.NewOrderAcknowledgement.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 26: OpenBook.GatewayServicePackage.Match.Body.match_id:type_name -> OpenBook.CommonPackage.UUID
+	15, // 27: OpenBook.GatewayServicePackage.Match.Body.fill_events:type_name -> OpenBook.GatewayServicePackage.Match.Body.FillEvent
+	23, // 28: OpenBook.GatewayServicePackage.Match.Body.FillEvent.fill_event_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 29: OpenBook.GatewayServicePackage.Match.Body.FillEvent.order_id:type_name -> OpenBook.CommonPackage.UUID
+	23, // 30: OpenBook.GatewayServicePackage.OrderElimination.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
+	18, // 31: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.levels:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level
+	19, // 32: OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.orders:type_name -> OpenBook.GatewayServicePackage.OrderBookSnapshot.LineupBook.Level.Order
+	0,  // 33: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:input_type -> OpenBook.GatewayServicePackage.BackendMessage
+	1,  // 34: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:output_type -> OpenBook.GatewayServicePackage.GatewayMessage
+	34, // [34:35] is the sub-list for method output_type
+	33, // [33:34] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_GatewayService_proto_init() }
@@ -1261,6 +1375,7 @@ func file_GatewayService_proto_init() {
 		(*GatewayMessage_CancelOrderAcknowledgement)(nil),
 		(*GatewayMessage_Match)(nil),
 		(*GatewayMessage_OrderBookSnapshot)(nil),
+		(*GatewayMessage_Elimination)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1268,7 +1383,7 @@ func file_GatewayService_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_GatewayService_proto_rawDesc), len(file_GatewayService_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -14,7 +14,7 @@ type Leg struct {
 
 // OrderState tracks the current state of an order
 type OrderState struct {
-	OrderID          uint64
+	OrderID          string
 	ClientOrderID    uint64
 	Portion          uint64
 	OriginalQuantity uint64
@@ -24,7 +24,7 @@ type OrderState struct {
 
 // LineupState contains all orders for a specific lineup
 type LineupState struct {
-	Orders map[uint64]*OrderState // map[order_id]OrderState
+	Orders map[string]*OrderState // map[order_id]OrderState
 }
 
 // PoolState represents a single entry pool
@@ -111,7 +111,7 @@ func calculateLineupIndex(legs []Leg) uint64 {
 
 // AddOrder adds a new order to the tracker
 func (pt *PoolTracker) AddOrder(
-	orderID uint64,
+	orderID string,
 	clientOrderID uint64,
 	legs []Leg,
 	portion uint64,
@@ -143,7 +143,7 @@ func (pt *PoolTracker) AddOrder(
 	lineup, exists := pool.Lineups[lineupIndex]
 	if !exists {
 		lineup = &LineupState{
-			Orders: make(map[uint64]*OrderState),
+			Orders: make(map[string]*OrderState),
 		}
 		pool.Lineups[lineupIndex] = lineup
 	}
@@ -160,7 +160,7 @@ func (pt *PoolTracker) AddOrder(
 }
 
 // UpdateFromFill updates order quantities based on a fill event
-func (pt *PoolTracker) UpdateFromFill(orderID uint64, matchedQuantity uint64, isComplete bool) {
+func (pt *PoolTracker) UpdateFromFill(orderID string, matchedQuantity uint64, isComplete bool) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
@@ -186,7 +186,7 @@ func (pt *PoolTracker) UpdateFromFill(orderID uint64, matchedQuantity uint64, is
 }
 
 // RemoveOrder removes an order (e.g., due to cancellation)
-func (pt *PoolTracker) RemoveOrder(orderID uint64) {
+func (pt *PoolTracker) RemoveOrder(orderID string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
@@ -225,7 +225,7 @@ type OverUnderDisplay struct {
 
 // OrderDisplayData represents data for displaying an order
 type OrderDisplayData struct {
-	OrderID           uint64
+	OrderID           string
 	ClientOrderID     uint64
 	Portion           uint64
 	OriginalQuantity  uint64

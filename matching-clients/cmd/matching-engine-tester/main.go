@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	common "matching-clients/src/gen"
+	gwpb "matching-clients/src/gen/gateway"
 	pb "matching-clients/src/gen/matching"
 	"matching-clients/src/utils"
 
@@ -24,18 +26,31 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// PendingOrderInfo stores pending order data in a mode-agnostic way for pool tracking
+type PendingOrderInfo struct {
+	Legs     []Leg
+	Portion  uint64
+	Quantity uint64
+}
+
 type WebClient struct {
-	conn   *grpc.ClientConn
-	client pb.MatchingServerServiceClient
-	mu     sync.RWMutex
+	conn *grpc.ClientConn
+	mu   sync.RWMutex
+
+	// Matching server mode
+	matchingClient   pb.MatchingServerServiceClient
+	matchingStream   pb.MatchingServerService_CreateTradeStreamClient
+	matchingSendChan chan *pb.GatewayMessage
+
+	// Gateway mode
+	gwClient   gwpb.GatewayServerServiceClient
+	gwStream   gwpb.GatewayServerService_CreateTradeStreamClient
+	gwSendChan chan *gwpb.BackendMessage
 
 	// Unified request/response storage
 	requests  []string
 	responses []string
 
-	// Unified trade stream
-	tradeStream       pb.MatchingServerService_CreateTradeStreamClient
-	tradeSendChan     chan *pb.GatewayMessage
 	tradeStreamActive bool
 	streamGeneration  uint64 // Incremented on each reconnect to invalidate old goroutines
 
@@ -47,13 +62,15 @@ type WebClient struct {
 
 	// Pool state tracking
 	poolTracker   *PoolTracker
-	pendingOrders map[uint64]*pb.NewOrder // map[clientOrderId]NewOrder
+	pendingOrders map[uint64]*PendingOrderInfo // map[clientOrderId]PendingOrderInfo
 
 	// Target mode and connection info
-	targetMode  string // "matching_server" or "gateway"
-	serverHost  string
-	serverPort  string
-	gatewayPort string
+	targetMode    string // "matching_server" or "gateway"
+	serverHost    string
+	serverPort    string
+	gatewayPort    string
+	gatewayUserIDs []string
+	gatewayLegIDs  []string
 }
 
 func NewWebClient(cfg *Config) *WebClient {
@@ -63,11 +80,13 @@ func NewWebClient(cfg *Config) *WebClient {
 		tradeStreamActive:   false,
 		globalClientOrderId: 1000, // Start at 1001 (will increment on first use)
 		poolTracker:         NewPoolTracker(),
-		pendingOrders:       make(map[uint64]*pb.NewOrder),
+		pendingOrders:       make(map[uint64]*PendingOrderInfo),
 		targetMode:          "gateway",
 		serverHost:          cfg.ServerHost,
 		serverPort:          cfg.ServerPort,
 		gatewayPort:         cfg.GatewayPort,
+		gatewayUserIDs:      cfg.GatewayUserIDs,
+		gatewayLegIDs:       cfg.GatewayLegIDs,
 	}
 
 	// Try to connect to default target (gateway), but don't fail if unreachable
@@ -79,69 +98,107 @@ func NewWebClient(cfg *Config) *WebClient {
 	return wc
 }
 
-// processEngineMessage processes engine responses and updates pool state
+// processEngineMessage processes matching server responses and updates pool state
 // NOTE: This method assumes wc.mu is already locked by the caller
 func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 	switch event := resp.Event.(type) {
 	case *pb.EngineMessage_NewOrderAcknowledgement:
-		// Handle new order acknowledgement
 		ack := event.NewOrderAcknowledgement
 		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
 			clientOrderID := ack.Body.ClientOrderId.GetLower()
-			orderID := ack.Body.OrderId
+			orderIDStr := strconv.FormatUint(ack.Body.OrderId, 10)
 			var sequenceNumber uint64
 			if resp.SequencedMessageBase != nil {
 				sequenceNumber = resp.SequencedMessageBase.SequenceNumber
 			}
 
-			// Find the pending order
 			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
-				// Convert legs to our internal format
-				legs := make([]Leg, len(pendingOrder.Body.Legs))
-				for i, leg := range pendingOrder.Body.Legs {
-					legs[i] = Leg{
-						LegSecurityID: utils.UUIDFromUint64(leg.LegSecurityId.GetUpper(), leg.LegSecurityId.GetLower()),
-						IsOver:        leg.IsOver,
-					}
-				}
-
-				// Add to pool tracker
 				wc.poolTracker.AddOrder(
-					orderID,
+					orderIDStr,
 					clientOrderID,
-					legs,
-					pendingOrder.Body.Portion,
-					pendingOrder.Body.Quantity,
+					pendingOrder.Legs,
+					pendingOrder.Portion,
+					pendingOrder.Quantity,
 					sequenceNumber,
 				)
-
-				// Remove from pending orders
 				delete(wc.pendingOrders, clientOrderID)
 			}
 		}
 
 	case *pb.EngineMessage_CancelOrderAcknowledgement:
-		// Handle cancel acknowledgement
 		ack := event.CancelOrderAcknowledgement
 		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			orderID := ack.Body.OrderId
-			wc.poolTracker.RemoveOrder(orderID)
+			wc.poolTracker.RemoveOrder(strconv.FormatUint(ack.Body.OrderId, 10))
 		}
 
 	case *pb.EngineMessage_Elimination:
-		// Handle elimination (order removed by server)
 		elim := event.Elimination
 		if elim != nil && elim.Body != nil {
-			wc.poolTracker.RemoveOrder(elim.Body.OrderId)
+			wc.poolTracker.RemoveOrder(strconv.FormatUint(elim.Body.OrderId, 10))
 		}
 
 	case *pb.EngineMessage_Match:
-		// Handle match/fill event
 		match := event.Match
 		if match.Body != nil {
 			for _, fillEvent := range match.Body.FillEvents {
 				wc.poolTracker.UpdateFromFill(
-					fillEvent.OrderId,
+					strconv.FormatUint(fillEvent.OrderId, 10),
+					match.Body.MatchedQuantity,
+					fillEvent.IsComplete,
+				)
+			}
+		}
+	}
+}
+
+// processGatewayMessage processes gateway responses and updates pool state
+// NOTE: This method assumes wc.mu is already locked by the caller
+func (wc *WebClient) processGatewayMessage(resp *gwpb.GatewayMessage) {
+	switch event := resp.Event.(type) {
+	case *gwpb.GatewayMessage_NewOrderAcknowledgement:
+		ack := event.NewOrderAcknowledgement
+		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
+			clientOrderID := ack.Body.ClientOrderId
+			orderID := utils.UUIDFromUint64(ack.Body.OrderId.GetUpper(), ack.Body.OrderId.GetLower())
+			var sequenceNumber uint64
+			if resp.SequencedMessageBase != nil {
+				sequenceNumber = resp.SequencedMessageBase.SequenceNumber
+			}
+
+			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
+				wc.poolTracker.AddOrder(
+					orderID.String(),
+					clientOrderID,
+					pendingOrder.Legs,
+					pendingOrder.Portion,
+					pendingOrder.Quantity,
+					sequenceNumber,
+				)
+				delete(wc.pendingOrders, clientOrderID)
+			}
+		}
+
+	case *gwpb.GatewayMessage_CancelOrderAcknowledgement:
+		ack := event.CancelOrderAcknowledgement
+		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
+			orderID := utils.UUIDFromUint64(ack.Body.OrderId.GetUpper(), ack.Body.OrderId.GetLower())
+			wc.poolTracker.RemoveOrder(orderID.String())
+		}
+
+	case *gwpb.GatewayMessage_Elimination:
+		elim := event.Elimination
+		if elim != nil && elim.Body != nil {
+			orderID := utils.UUIDFromUint64(elim.Body.OrderId.GetUpper(), elim.Body.OrderId.GetLower())
+			wc.poolTracker.RemoveOrder(orderID.String())
+		}
+
+	case *gwpb.GatewayMessage_Match:
+		match := event.Match
+		if match.Body != nil {
+			for _, fillEvent := range match.Body.FillEvents {
+				orderID := utils.UUIDFromUint64(fillEvent.OrderId.GetUpper(), fillEvent.OrderId.GetLower())
+				wc.poolTracker.UpdateFromFill(
+					orderID.String(),
 					match.Body.MatchedQuantity,
 					fillEvent.IsComplete,
 				)
@@ -151,16 +208,18 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 }
 
 func (wc *WebClient) Close() {
-	// Close the send channel to stop the sender goroutine
-	if wc.tradeSendChan != nil {
-		close(wc.tradeSendChan)
+	if wc.matchingSendChan != nil {
+		close(wc.matchingSendChan)
 	}
-
-	// Close the stream
-	if wc.tradeStream != nil {
-		wc.tradeStream.CloseSend()
+	if wc.gwSendChan != nil {
+		close(wc.gwSendChan)
 	}
-
+	if wc.matchingStream != nil {
+		wc.matchingStream.CloseSend()
+	}
+	if wc.gwStream != nil {
+		wc.gwStream.CloseSend()
+	}
 	if wc.conn != nil {
 		wc.conn.Close()
 	}
@@ -206,34 +265,35 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 
 	wc.mu.Lock()
 
-	// Increment generation to invalidate old goroutines
 	wc.streamGeneration++
 	currentGen := wc.streamGeneration
-
-	// Mark stream as inactive before closing
 	wc.tradeStreamActive = false
 
-	// Capture old resources to close
-	oldSendChan := wc.tradeSendChan
-	oldStream := wc.tradeStream
+	// Capture old resources
+	oldMatchingSendChan := wc.matchingSendChan
+	oldGwSendChan := wc.gwSendChan
+	oldMatchingStream := wc.matchingStream
+	oldGwStream := wc.gwStream
 	oldConn := wc.conn
 
-	// Clear references and update target mode immediately
-	wc.tradeSendChan = nil
-	wc.tradeStream = nil
+	// Clear references
+	wc.matchingSendChan = nil
+	wc.gwSendChan = nil
+	wc.matchingStream = nil
+	wc.gwStream = nil
+	wc.matchingClient = nil
+	wc.gwClient = nil
 	wc.conn = nil
-	wc.client = nil
 	wc.targetMode = newMode
 
 	// Clear state
 	wc.requests = make([]string, 0)
 	wc.responses = make([]string, 0)
 	wc.poolTracker = NewPoolTracker()
-	wc.pendingOrders = make(map[uint64]*pb.NewOrder)
+	wc.pendingOrders = make(map[uint64]*PendingOrderInfo)
 	wc.globalSequenceNumber = 0
 	wc.globalClientOrderId = 1000
 
-	// Determine new port
 	var targetPort string
 	switch newMode {
 	case "gateway":
@@ -246,23 +306,25 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 	wc.mu.Unlock()
 
 	// Close old resources outside the lock
-	if oldSendChan != nil {
-		close(oldSendChan)
+	if oldMatchingSendChan != nil {
+		close(oldMatchingSendChan)
 	}
-	if oldStream != nil {
-		oldStream.CloseSend()
+	if oldGwSendChan != nil {
+		close(oldGwSendChan)
+	}
+	if oldMatchingStream != nil {
+		oldMatchingStream.CloseSend()
+	}
+	if oldGwStream != nil {
+		oldGwStream.CloseSend()
 	}
 	if oldConn != nil {
 		oldConn.Close()
 	}
 
-	// Give old goroutines a moment to see the closed connection
 	time.Sleep(100 * time.Millisecond)
 
-	// Create new connection (outside lock)
 	serverAddr := fmt.Sprintf("%s:%s", serverHost, targetPort)
-
-	// Check TCP reachability before attempting gRPC connection
 	if !checkServiceReachable(serverHost, targetPort) {
 		log.Printf("Service at %s is not reachable", serverAddr)
 		return fmt.Errorf("service at %s is not reachable", serverAddr)
@@ -276,79 +338,145 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 		return fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
 	}
 
-	client := pb.NewMatchingServerServiceClient(conn)
+	switch newMode {
+	case "matching_server":
+		client := pb.NewMatchingServerServiceClient(conn)
+		stream, err := client.CreateTradeStream(context.Background())
+		if err != nil {
+			conn.Close()
+			log.Printf("Failed to create trade stream on %s: %v", serverAddr, err)
+			return fmt.Errorf("failed to create trade stream: %v", err)
+		}
 
-	// Create trade stream
-	stream, err := client.CreateTradeStream(context.Background())
-	if err != nil {
-		conn.Close()
-		log.Printf("Failed to create trade stream on %s: %v", serverAddr, err)
-		return fmt.Errorf("failed to create trade stream: %v", err)
+		wc.mu.Lock()
+		wc.conn = conn
+		wc.matchingClient = client
+		wc.matchingStream = stream
+		wc.matchingSendChan = make(chan *pb.GatewayMessage, 10)
+		wc.tradeStreamActive = true
+		sendChan := wc.matchingSendChan
+		wc.mu.Unlock()
+
+		go func() {
+			for msg := range sendChan {
+				if err := stream.Send(msg); err != nil {
+					log.Printf("Failed to send message: %v", err)
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+			}
+		}()
+
+		go func() {
+			marshaler := protojson.MarshalOptions{
+				Multiline:       true,
+				Indent:          "  ",
+				EmitUnpopulated: true,
+			}
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					log.Println("Trade stream closed by server")
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+				if err != nil {
+					log.Printf("Error receiving response: %v", err)
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+
+				wc.mu.Lock()
+				if wc.streamGeneration == currentGen {
+					respJSON, _ := marshaler.Marshal(resp)
+					wc.responses = append(wc.responses, string(respJSON))
+					wc.processEngineMessage(resp)
+				}
+				wc.mu.Unlock()
+			}
+		}()
+
+	case "gateway":
+		client := gwpb.NewGatewayServerServiceClient(conn)
+		stream, err := client.CreateTradeStream(context.Background())
+		if err != nil {
+			conn.Close()
+			log.Printf("Failed to create trade stream on %s: %v", serverAddr, err)
+			return fmt.Errorf("failed to create trade stream: %v", err)
+		}
+
+		wc.mu.Lock()
+		wc.conn = conn
+		wc.gwClient = client
+		wc.gwStream = stream
+		wc.gwSendChan = make(chan *gwpb.BackendMessage, 10)
+		wc.tradeStreamActive = true
+		sendChan := wc.gwSendChan
+		wc.mu.Unlock()
+
+		go func() {
+			for msg := range sendChan {
+				if err := stream.Send(msg); err != nil {
+					log.Printf("Failed to send message: %v", err)
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+			}
+		}()
+
+		go func() {
+			marshaler := protojson.MarshalOptions{
+				Multiline:       true,
+				Indent:          "  ",
+				EmitUnpopulated: true,
+			}
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					log.Println("Gateway stream closed by server")
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+				if err != nil {
+					log.Printf("Error receiving response: %v", err)
+					wc.mu.Lock()
+					if wc.streamGeneration == currentGen {
+						wc.tradeStreamActive = false
+					}
+					wc.mu.Unlock()
+					return
+				}
+
+				wc.mu.Lock()
+				if wc.streamGeneration == currentGen {
+					respJSON, _ := marshaler.Marshal(resp)
+					wc.responses = append(wc.responses, string(respJSON))
+					wc.processGatewayMessage(resp)
+				}
+				wc.mu.Unlock()
+			}
+		}()
 	}
-
-	// Now acquire lock to update connection state
-	wc.mu.Lock()
-	wc.conn = conn
-	wc.client = client
-	wc.tradeSendChan = make(chan *pb.GatewayMessage, 10)
-	wc.tradeStream = stream
-	wc.tradeStreamActive = true
-
-	sendChan := wc.tradeSendChan // Capture for goroutine
-	wc.mu.Unlock()
-
-	// Start sender goroutine
-	go func() {
-		for msg := range sendChan {
-			if err := stream.Send(msg); err != nil {
-				log.Printf("Failed to send message: %v", err)
-				wc.mu.Lock()
-				if wc.streamGeneration == currentGen {
-					wc.tradeStreamActive = false
-				}
-				wc.mu.Unlock()
-				return
-			}
-		}
-	}()
-
-	// Start receiver goroutine
-	go func() {
-		marshaler := protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "  ",
-			EmitUnpopulated: true,
-		}
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				log.Println("Trade stream closed by server")
-				wc.mu.Lock()
-				if wc.streamGeneration == currentGen {
-					wc.tradeStreamActive = false
-				}
-				wc.mu.Unlock()
-				return
-			}
-			if err != nil {
-				log.Printf("Error receiving response: %v", err)
-				wc.mu.Lock()
-				if wc.streamGeneration == currentGen {
-					wc.tradeStreamActive = false
-				}
-				wc.mu.Unlock()
-				return
-			}
-
-			wc.mu.Lock()
-			if wc.streamGeneration == currentGen {
-				respJSON, _ := marshaler.Marshal(resp)
-				wc.responses = append(wc.responses, string(respJSON))
-				wc.processEngineMessage(resp)
-			}
-			wc.mu.Unlock()
-		}
-	}()
 
 	log.Printf("Switched to target: %s at %s", newMode, serverAddr)
 	return nil
@@ -399,7 +527,7 @@ func (wc *WebClient) handleTargetMode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Send order handler
+// Send order handler - dispatches to mode-specific methods
 func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.Header().Set("Content-Type", "application/json")
@@ -408,9 +536,9 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if stream is active
 	wc.mu.RLock()
 	active := wc.tradeStreamActive
+	mode := wc.targetMode
 	wc.mu.RUnlock()
 
 	if !active {
@@ -428,8 +556,43 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	messageType := r.FormValue("messageType")
-	seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+	if mode == "gateway" {
+		wc.sendGatewayOrder(w, r, messageType)
+	} else {
+		wc.sendMatchingOrder(w, r, messageType)
+	}
+}
 
+// parseLegsFromForm parses leg security IDs and over/under from form values
+func parseLegsFromForm(legIdsStr, isOversStr string) ([]Leg, []*common.UUID) {
+	var trackerLegs []Leg
+	var legUUIDs []*common.UUID
+	if legIdsStr == "" || isOversStr == "" {
+		return trackerLegs, legUUIDs
+	}
+	legIdStrs := splitAndTrim(legIdsStr, ",")
+	isOverStrs := splitAndTrim(isOversStr, ",")
+	for i := 0; i < len(legIdStrs) && i < len(isOverStrs); i++ {
+		var legUUID *common.UUID
+		if parsed, err := utils.ParseUUID(legIdStrs[i]); err == nil {
+			legUUID = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+		} else {
+			legId, _ := strconv.ParseUint(legIdStrs[i], 10, 64)
+			legUUID = &common.UUID{Upper: 0, Lower: legId}
+		}
+		isOver := isOverStrs[i] == "true" || isOverStrs[i] == "1"
+		trackerLegs = append(trackerLegs, Leg{
+			LegSecurityID: utils.UUIDFromUint64(legUUID.Upper, legUUID.Lower),
+			IsOver:        isOver,
+		})
+		legUUIDs = append(legUUIDs, legUUID)
+	}
+	return trackerLegs, legUUIDs
+}
+
+// sendMatchingOrder builds and sends a matching server proto message
+func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, messageType string) {
+	seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
 	marshaler := protojson.MarshalOptions{
 		Multiline:       true,
 		Indent:          "  ",
@@ -441,31 +604,14 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 	switch messageType {
 	case "NewOrder":
 		clientOrderId, _ := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
+		trackerLegs, legUUIDs := parseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
 
-		// Parse legs from form (legSecurityIds and isOvers as comma-separated)
-		legIdsStr := r.FormValue("legSecurityIds")
-		isOversStr := r.FormValue("isOvers")
-
-		var legs []*pb.NewOrder_Body_Leg
-		if legIdsStr != "" && isOversStr != "" {
-			legIdStrs := splitAndTrim(legIdsStr, ",")
-			isOverStrs := splitAndTrim(isOversStr, ",")
-
-			for i := 0; i < len(legIdStrs) && i < len(isOverStrs); i++ {
-				var legUUID *common.UUID
-				if parsed, err := utils.ParseUUID(legIdStrs[i]); err == nil {
-					legUUID = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
-				} else {
-					// Fallback: treat as a simple uint64 for backwards compat with tester UI
-					legId, _ := strconv.ParseUint(legIdStrs[i], 10, 64)
-					legUUID = &common.UUID{Upper: 0, Lower: legId}
-				}
-				isOver := isOverStrs[i] == "true" || isOverStrs[i] == "1"
-				legs = append(legs, &pb.NewOrder_Body_Leg{
-					LegSecurityId: legUUID,
-					IsOver:        isOver,
-				})
-			}
+		var protoLegs []*pb.NewOrder_Body_Leg
+		for i, uuid := range legUUIDs {
+			protoLegs = append(protoLegs, &pb.NewOrder_Body_Leg{
+				LegSecurityId: uuid,
+				IsOver:        trackerLegs[i].IsOver,
+			})
 		}
 
 		orderType := common.OrderType_LIMIT
@@ -475,17 +621,15 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
 
-		// handle optional selfMatchId - parse as UUID string
 		newOrderBody := &pb.NewOrder_Body{
 			ClientOrderId: &common.UUID{Upper: 0, Lower: clientOrderId},
-			Legs:          legs,
+			Legs:          protoLegs,
 			OrderType:     orderType,
 			Portion:       portion,
 			Quantity:      quantity,
 		}
 		if v := r.FormValue("selfMatchId"); v != "" {
-			selfMatchID, err := utils.ParseUUID(v)
-			if err == nil {
+			if selfMatchID, err := utils.ParseUUID(v); err == nil {
 				newOrderBody.SelfMatchId = &common.UUID{
 					Upper: selfMatchID.Upper(),
 					Lower: selfMatchID.Lower(),
@@ -493,39 +637,33 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		newOrder := &pb.NewOrder{
-			Body: newOrderBody,
-		}
-
 		gatewayMsg = &pb.GatewayMessage{
 			SequencedMessageBase: &common.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
 			Msg: &pb.GatewayMessage_NewOrder{
-				NewOrder: newOrder,
+				NewOrder: &pb.NewOrder{Body: newOrderBody},
 			},
 		}
 
-		// Track pending order for later matching with acknowledgement
 		wc.mu.Lock()
-		wc.pendingOrders[clientOrderId] = newOrder
+		wc.pendingOrders[clientOrderId] = &PendingOrderInfo{
+			Legs:     trackerLegs,
+			Portion:  portion,
+			Quantity: quantity,
+		}
 		wc.mu.Unlock()
 
 	case "CancelOrder":
 		orderId, _ := strconv.ParseUint(r.FormValue("orderId"), 10, 64)
-
-		cancelOrder := &pb.CancelOrder{
-			Body: &pb.CancelOrder_Body{
-				OrderId: orderId,
-			},
-		}
-
 		gatewayMsg = &pb.GatewayMessage{
 			SequencedMessageBase: &common.SequencedMessageBase{
 				SequenceNumber: seqNum,
 			},
 			Msg: &pb.GatewayMessage_CancelOrder{
-				CancelOrder: cancelOrder,
+				CancelOrder: &pb.CancelOrder{
+					Body: &pb.CancelOrder_Body{OrderId: orderId},
+				},
 			},
 		}
 
@@ -536,15 +674,117 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the request
 	reqJSON, _ := marshaler.Marshal(gatewayMsg)
 	wc.mu.Lock()
 	wc.requests = append(wc.requests, string(reqJSON))
 	wc.mu.Unlock()
 
-	// Send to the channel (non-blocking with timeout)
 	select {
-	case wc.tradeSendChan <- gatewayMsg:
+	case wc.matchingSendChan <- gatewayMsg:
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "success", "message": "message sent"}`))
+	case <-time.After(1 * time.Second):
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusRequestTimeout)
+		w.Write([]byte(`{"status": "error", "message": "Timeout sending message"}`))
+	}
+}
+
+// sendGatewayOrder builds and sends a gateway proto BackendMessage
+func (wc *WebClient) sendGatewayOrder(w http.ResponseWriter, r *http.Request, messageType string) {
+	marshaler := protojson.MarshalOptions{
+		Multiline:       true,
+		Indent:          "  ",
+		EmitUnpopulated: true,
+	}
+
+	var backendMsg *gwpb.BackendMessage
+
+	switch messageType {
+	case "NewOrder":
+		clientOrderId, _ := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
+
+		var userIDProto *common.UUID
+		if v := r.FormValue("userId"); v != "" {
+			if parsed, err := utils.ParseUUID(v); err == nil {
+				userIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+			}
+		}
+
+		trackerLegs, legUUIDs := parseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
+
+		var gwLegs []*gwpb.NewOrder_Body_Leg
+		for i, uuid := range legUUIDs {
+			gwLegs = append(gwLegs, &gwpb.NewOrder_Body_Leg{
+				LegSecurityId: uuid,
+				IsOver:        trackerLegs[i].IsOver,
+			})
+		}
+
+		orderType := common.OrderType_LIMIT
+		if r.FormValue("orderType") == "MARKET" {
+			orderType = common.OrderType_MARKET
+		}
+		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
+		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
+
+		backendMsg = &gwpb.BackendMessage{
+			Msg: &gwpb.BackendMessage_NewOrder{
+				NewOrder: &gwpb.NewOrder{
+					Body: &gwpb.NewOrder_Body{
+						UserId:        userIDProto,
+						ClientOrderId: clientOrderId,
+						Legs:          gwLegs,
+						OrderType:     orderType,
+						Portion:       portion,
+						Quantity:      quantity,
+					},
+				},
+			},
+		}
+
+		wc.mu.Lock()
+		wc.pendingOrders[clientOrderId] = &PendingOrderInfo{
+			Legs:     trackerLegs,
+			Portion:  portion,
+			Quantity: quantity,
+		}
+		wc.mu.Unlock()
+
+	case "CancelOrder":
+		orderIdStr := r.FormValue("orderId")
+		orderUUID, err := utils.ParseUUID(orderIdStr)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"status": "error", "message": "Invalid UUID for order ID"}`))
+			return
+		}
+
+		backendMsg = &gwpb.BackendMessage{
+			Msg: &gwpb.BackendMessage_CancelOrder{
+				CancelOrder: &gwpb.CancelOrder{
+					Body: &gwpb.CancelOrder_Body{
+						OrderId: &common.UUID{Upper: orderUUID.Upper(), Lower: orderUUID.Lower()},
+					},
+				},
+			},
+		}
+
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status": "error", "message": "Invalid message type"}`))
+		return
+	}
+
+	reqJSON, _ := marshaler.Marshal(backendMsg)
+	wc.mu.Lock()
+	wc.requests = append(wc.requests, string(reqJSON))
+	wc.mu.Unlock()
+
+	select {
+	case wc.gwSendChan <- backendMsg:
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status": "success", "message": "message sent"}`))
 	case <-time.After(1 * time.Second):
@@ -685,9 +925,23 @@ func (wc *WebClient) handleEntryPoolsData(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(pools)
 }
 
+// TemplateData holds data passed to the HTML template
+type TemplateData struct {
+	GatewayUserIDs []string
+	TargetMode     string
+	GatewayLegIDs  []string
+}
+
 // Trade page handler - displays unified send/receive interface
 func (wc *WebClient) handleTrade(w http.ResponseWriter, r *http.Request) {
-	renderMainPage(w)
+	wc.mu.RLock()
+	data := TemplateData{
+		GatewayUserIDs: wc.gatewayUserIDs,
+		TargetMode:     wc.targetMode,
+		GatewayLegIDs:  wc.gatewayLegIDs,
+	}
+	wc.mu.RUnlock()
+	renderMainPage(w, data)
 }
 
 func splitAndTrim(s, sep string) []string {
@@ -729,7 +983,7 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
-func renderMainPage(w http.ResponseWriter) {
+func renderMainPage(w http.ResponseWriter, data TemplateData) {
 	tmpl := `
 <!DOCTYPE html>
 <html>
@@ -782,7 +1036,8 @@ func renderMainPage(w http.ResponseWriter) {
         /* Leg styles */
         .leg-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
         .leg-item label { margin: 0; font-weight: normal; }
-        .leg-id-input { width: 80px; }
+        .leg-id-input { width: 240px; }
+        .leg-id-select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
         .over-under-toggle { display: flex; gap: 0; }
         .over-under-toggle button { padding: 6px 12px; border: 1px solid #aaa; background: #d0d0d0; color: #333; cursor: pointer; transition: all 0.2s; }
         .over-under-toggle button:first-child { border-radius: 4px 0 0 4px; border-right: none; }
@@ -809,6 +1064,12 @@ func renderMainPage(w http.ResponseWriter) {
         .tooltip { position: fixed; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 1000; display: none; }
         .empty-lineup { height: 150px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 11px; }
         .empty-pools { color: #999; font-style: italic; }
+
+        /* Mode-specific visibility */
+        .matching-server-only { }
+        .gateway-only { display: none; }
+        body.gateway-mode .matching-server-only { display: none !important; }
+        body.gateway-mode .gateway-only { display: block !important; }
     </style>
 </head>
 <body>
@@ -834,9 +1095,9 @@ func renderMainPage(w http.ResponseWriter) {
                         <label><input type="radio" name="messageType" value="CancelOrder"> Cancel Order</label>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group matching-server-only">
                         <label>Sequence Number:</label>
-                        <input type="number" name="sequenceNumber" value="0" required>
+                        <input type="number" name="sequenceNumber" value="0">
                     </div>
 
                     <!-- New Order Fields -->
@@ -861,9 +1122,17 @@ func renderMainPage(w http.ResponseWriter) {
                                 <label>Quantity:</label>
                                 <input type="number" name="quantity" value="5">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group matching-server-only">
                                 <label>Self Match ID (optional UUID):</label>
                                 <input type="text" name="selfMatchId" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
+                            </div>
+                            <div class="form-group gateway-only">
+                                <label>User ID (UUID):</label>
+                                {{if .GatewayUserIDs}}<select id="userIdSelect">
+                                    <option value="">-- select --</option>
+                                    {{range .GatewayUserIDs}}<option value="{{.}}">{{.}}</option>
+                                    {{end}}</select>{{end}}
+                                <input type="text" name="userId" id="userIdInput" placeholder="e.g. 01234567-89ab-cdef-0123-456789abcdef">
                             </div>
                         </div>
                         
@@ -882,8 +1151,8 @@ func renderMainPage(w http.ResponseWriter) {
                     <!-- Cancel Order Fields -->
                     <div id="cancelOrderFields" class="form-fields">
                         <div class="form-group">
-                            <label>Order ID:</label>
-                            <input type="number" name="orderId" style="width: 150px;">
+                            <label id="cancelOrderLabel">Order ID:</label>
+                            <input type="text" name="orderId" id="cancelOrderInput" style="width: 300px;">
                         </div>
                     </div>
 
@@ -937,24 +1206,52 @@ func renderMainPage(w http.ResponseWriter) {
         const legSecurityIdsHidden = document.getElementById('legSecurityIdsHidden');
         const isOversHidden = document.getElementById('isOversHidden');
         
-        let legs = [
-            { id: 101, isOver: false },
-            { id: 102, isOver: true }
-        ];
-        
-        function getNextLegId() {
-            if (legs.length === 0) return 101;
-            return Math.max(...legs.map(l => l.id)) + 1;
+        const gatewayLegIDs = [{{range $i, $id := .GatewayLegIDs}}{{if $i}}, {{end}}'{{$id}}'{{end}}];
+        let currentMode = '{{.TargetMode}}';
+
+        function getDefaultLegs() {
+            if (currentMode === 'gateway') {
+                return [
+                    { id: '', isOver: false },
+                    { id: '', isOver: true }
+                ];
+            }
+            return [
+                { id: '101', isOver: false },
+                { id: '102', isOver: true }
+            ];
         }
-        
+
+        let legs = getDefaultLegs();
+
+        function getNextLegId() {
+            if (currentMode === 'gateway') return '';
+            if (legs.length === 0) return '101';
+            const maxId = Math.max(...legs.map(l => parseInt(l.id) || 0));
+            return String(maxId + 1);
+        }
+
         function renderLegs() {
             legsContainer.innerHTML = '';
+            const placeholder = currentMode === 'gateway' ? 'e.g. 01234567-89ab-cdef-0123-456789abcdef' : '';
+            const showDropdown = currentMode === 'gateway' && gatewayLegIDs.length > 0;
             legs.forEach((leg, index) => {
                 const legItem = document.createElement('div');
                 legItem.className = 'leg-item';
-                legItem.innerHTML = 
+                let dropdownHtml = '';
+                if (showDropdown) {
+                    dropdownHtml = '<select class="leg-id-select" data-index="' + index + '">' +
+                        '<option value="">-- select --</option>';
+                    gatewayLegIDs.forEach(id => {
+                        const selected = leg.id === id ? ' selected' : '';
+                        dropdownHtml += '<option value="' + id + '"' + selected + '>' + id + '</option>';
+                    });
+                    dropdownHtml += '</select>';
+                }
+                legItem.innerHTML =
                     '<label>Leg ID:</label>' +
-                    '<input type="number" class="leg-id-input" value="' + leg.id + '" data-index="' + index + '">' +
+                    dropdownHtml +
+                    '<input type="text" class="leg-id-input" value="' + leg.id + '" placeholder="' + placeholder + '" data-index="' + index + '">' +
                     '<div class="over-under-toggle">' +
                         '<button type="button" class="over-btn ' + (!leg.isOver ? 'active' : '') + '" data-index="' + index + '">Under</button>' +
                         '<button type="button" class="under-btn ' + (leg.isOver ? 'active' : '') + '" data-index="' + index + '">Over</button>' +
@@ -965,17 +1262,24 @@ func renderMainPage(w http.ResponseWriter) {
             updateHiddenInputs();
             attachLegEventListeners();
         }
-        
+
         function updateHiddenInputs() {
             legSecurityIdsHidden.value = legs.map(l => l.id).join(',');
             isOversHidden.value = legs.map(l => l.isOver.toString()).join(',');
         }
-        
+
         function attachLegEventListeners() {
+            document.querySelectorAll('.leg-id-select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const index = parseInt(this.dataset.index);
+                    legs[index].id = this.value;
+                    renderLegs();
+                });
+            });
             document.querySelectorAll('.leg-id-input').forEach(input => {
                 input.addEventListener('change', function() {
                     const index = parseInt(this.dataset.index);
-                    legs[index].id = parseInt(this.value) || 0;
+                    legs[index].id = this.value.trim();
                     updateHiddenInputs();
                 });
             });
@@ -1011,6 +1315,15 @@ func renderMainPage(w http.ResponseWriter) {
         });
         
         renderLegs();
+
+        // ============ User ID Dropdown ============
+        const userIdSelect = document.getElementById('userIdSelect');
+        const userIdInput = document.getElementById('userIdInput');
+        if (userIdSelect) {
+            userIdSelect.addEventListener('change', function() {
+                userIdInput.value = this.value;
+            });
+        }
 
         // ============ Form Type Toggle ============
         messageTypeRadios.forEach(radio => {
@@ -1313,6 +1626,22 @@ func renderMainPage(w http.ResponseWriter) {
         function setActiveTarget(mode) {
             Object.values(targetButtons).forEach(b => b.classList.remove('active'));
             if (targetButtons[mode]) targetButtons[mode].classList.add('active');
+            updateFormForMode(mode);
+        }
+
+        function updateFormForMode(mode) {
+            currentMode = mode;
+            if (mode === 'gateway') {
+                document.body.classList.add('gateway-mode');
+                document.getElementById('cancelOrderLabel').textContent = 'Order ID (UUID):';
+                document.getElementById('cancelOrderInput').placeholder = 'e.g. 01234567-89ab-cdef-0123-456789abcdef';
+            } else {
+                document.body.classList.remove('gateway-mode');
+                document.getElementById('cancelOrderLabel').textContent = 'Order ID (uint64):';
+                document.getElementById('cancelOrderInput').placeholder = '';
+            }
+            legs = getDefaultLegs();
+            renderLegs();
         }
 
         async function loadTargetMode() {
@@ -1353,6 +1682,7 @@ func renderMainPage(w http.ResponseWriter) {
         btnGateway.addEventListener('click', () => switchTarget('gateway'));
 
         loadTargetMode();
+        updateFormForMode('{{.TargetMode}}');
 
         // ============ Polling ============
         setInterval(async () => {
@@ -1413,7 +1743,7 @@ func renderMainPage(w http.ResponseWriter) {
 		return
 	}
 
-	t.Execute(w, nil)
+	t.Execute(w, data)
 }
 
 // fatal prints an error message to stderr and exits with code 1
@@ -1424,10 +1754,12 @@ func fatal(format string, args ...interface{}) {
 
 // Config holds the configuration for the matching engine tester
 type Config struct {
-	ServerHost  string
-	ServerPort  string
-	GatewayPort string
-	WebPort     string
+	ServerHost    string
+	ServerPort    string
+	GatewayPort   string
+	WebPort       string
+	GatewayUserIDs []string
+	GatewayLegIDs  []string
 }
 
 // loadConfig loads and validates the configuration from .env file
@@ -1451,12 +1783,32 @@ func loadConfig() (*Config, error) {
 	// Load optional configuration with defaults
 	webPort := envloader.GetEnvAsStringWithDefault("WEB_PORT", "8080")
 	gatewayPort := envloader.GetEnvAsStringWithDefault("GATEWAY_PORT", "50052")
+	gatewayUserIDsStr := envloader.GetEnvAsStringWithDefault("GATEWAY_USER_IDS", "")
+	var gatewayUserIDs []string
+	if gatewayUserIDsStr != "" {
+		for _, s := range strings.Split(gatewayUserIDsStr, ",") {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				gatewayUserIDs = append(gatewayUserIDs, trimmed)
+			}
+		}
+	}
+	gatewayLegIDsStr := envloader.GetEnvAsStringWithDefault("GATEWAY_LEG_IDS", "")
+	var gatewayLegIDs []string
+	if gatewayLegIDsStr != "" {
+		for _, s := range strings.Split(gatewayLegIDsStr, ",") {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				gatewayLegIDs = append(gatewayLegIDs, trimmed)
+			}
+		}
+	}
 
 	return &Config{
-		ServerHost:  serverHost,
-		ServerPort:  serverPort,
-		GatewayPort: gatewayPort,
-		WebPort:     webPort,
+		ServerHost:    serverHost,
+		ServerPort:    serverPort,
+		GatewayPort:   gatewayPort,
+		WebPort:       webPort,
+		GatewayUserIDs: gatewayUserIDs,
+		GatewayLegIDs: gatewayLegIDs,
 	}, nil
 }
 
