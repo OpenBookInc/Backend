@@ -17,29 +17,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	gen "github.com/openbook/shared/models/gen"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-)
-
-// OrderStatus represents the status of an order in the database
-type OrderStatus string
-
-const (
-	OrderStatusSubmitted   OrderStatus = "submitted_to_matching_engine"
-	OrderStatusResting     OrderStatus = "resting_on_matching_engine"
-	OrderStatusCancelledEx OrderStatus = "cancelled_by_exchange"
-	OrderStatusCancelled   OrderStatus = "cancelled_by_user"
-	OrderStatusFilled      OrderStatus = "fully_filled"
-)
-
-// BetStatus represents the status of a bet in the database
-type BetStatus string
-
-const (
-	BetStatusPending   BetStatus = "pending"
-	BetStatusLost      BetStatus = "lost"
-	BetStatusPaid      BetStatus = "paid"
-	BetStatusCancelled BetStatus = "cancelled"
 )
 
 // Config holds configuration for the gateway
@@ -78,8 +58,7 @@ type Gateway struct {
 	pendingOrdersMu sync.RWMutex
 
 	// Track confirmed orders by matching engine orderId for fills/eliminations
-	// Maps orderId (from matching engine) -> DBRecordID
-	confirmedOrders   map[uint64]int64
+	confirmedOrders   map[uint64]*ConfirmedOrder
 	confirmedOrdersMu sync.RWMutex
 
 	// Client stream tracking - maps clientOrderId to the client's response stream
@@ -105,32 +84,48 @@ type Gateway struct {
 // PendingOrder tracks an order that has been submitted but not yet acknowledged
 type PendingOrder struct {
 	ClientOrderID utils.UUID
-	UserID        string
-	WagerAmount   int64
-	DBRecordID    int64 // The confirmed_bets.id
+	UserID        utils.UUID
+	Quantity      int64
+	DBRecordID    utils.UUID // exchange_orders.id
+}
+
+// ConfirmedOrder tracks a confirmed order on the matching engine for fills/cancels/eliminations
+type ConfirmedOrder struct {
+	DBRecordID utils.UUID // exchange_orders.id
+	UserID     utils.UUID
 }
 
 // OrderRequest represents an incoming order request from the app backend
-// For now, we use dummy values for most fields
 type OrderRequest struct {
-	UserID      string
-	WagerAmount int64
-	// Dummy fields for now - will be populated by app backend later
-	ButtonID    int64
-	Line        int64
-	TotalPayout int64
-	Commission  int64
-	// Proto fields - dummy values for now
-	Legs      []LegRequest
-	OrderType common.OrderType
-	Portion   uint64
-	Quantity  uint64
+	UserID     utils.UUID
+	MarketType gen.MarketEntity
+	TotalUnits int64  // total_units for the exchange slate
+	Legs       []LegRequest
+	OrderType  common.OrderType
+	Portion    uint64
+	Quantity   uint64
 }
 
-// LegRequest represents a leg in an order
+// LegRequest represents a leg in an order.
+// LegSecurityID serves as both the matching engine leg security ID and the database market ID.
 type LegRequest struct {
 	LegSecurityID *common.UUID
 	IsOver        bool
+}
+
+// LegSecurityIDAsUUID converts the proto LegSecurityID to a utils.UUID.
+func (l *LegRequest) LegSecurityIDAsUUID() utils.UUID {
+	return utils.UUIDFromUint64(l.LegSecurityID.GetUpper(), l.LegSecurityID.GetLower())
+}
+
+// protoOrderTypeToEnum converts a proto OrderType to the database exchange_order_type enum.
+func protoOrderTypeToEnum(ot common.OrderType) gen.ExchangeOrder {
+	switch ot {
+	case common.OrderType_MARKET:
+		return gen.ExchangeOrderMarket
+	default:
+		return gen.ExchangeOrderLimit
+	}
 }
 
 // LoadConfig loads configuration from environment variables
@@ -187,7 +182,7 @@ func NewGateway(ctx context.Context, config *Config) (*Gateway, error) {
 	gw := &Gateway{
 		config:          config,
 		pendingOrders:   make(map[utils.UUID]*PendingOrder),
-		confirmedOrders: make(map[uint64]int64),
+		confirmedOrders: make(map[uint64]*ConfirmedOrder),
 		clientStreams:   make(map[utils.UUID]pb.MatchingServerService_CreateTradeStreamServer),
 		sendChan:        make(chan *pb.GatewayMessage, 100),
 		ctx:             ctx,
@@ -320,53 +315,50 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 		return errors.New("matching server is not available")
 	}
 
-	// Step 1: Check balance
-	hasBalance, err := gw.CheckBalance(ctx, req.UserID, req.WagerAmount)
+	// Step 1: Ensure slate and lineups exist, then find the matching lineup
+	marketIDs := make([]utils.UUID, len(req.Legs))
+	for i := range req.Legs {
+		marketIDs[i] = req.Legs[i].LegSecurityIDAsUUID()
+	}
+	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, req.MarketType, marketIDs, req.TotalUnits)
 	if err != nil {
-		return fmt.Errorf("balance check failed: %w", err)
-	}
-	if !hasBalance {
-		return errors.New("insufficient balance")
+		return fmt.Errorf("failed to ensure slate and lineups: %w", err)
 	}
 
-	// Step 2: Validate leg security IDs
-	if err := gw.ValidateLegSecurityIDs(ctx, req.Legs); err != nil {
-		return fmt.Errorf("leg validation failed: %w", err)
+	lineupID, err := FindLineupID(slateAndLineups, req.Legs)
+	if err != nil {
+		return fmt.Errorf("failed to find lineup: %w", err)
 	}
 
-	// Step 3: Get next client order ID (using sequence number)
+	// Step 2: Get next client order ID (using sequence number)
 	seq := gw.getNextSequenceNumber()
 	clientOrderID := utils.UUIDFromUint64(0, seq)
 	clientOrderProto := &common.UUID{Upper: 0, Lower: seq}
 
-	// Step 4: Insert into confirmed_bets with status 'submitted_to_matching_engine'
-	dbRecordID, err := gw.InsertConfirmedBet(ctx, req, seq)
+	// Step 3: Create exchange order in DB (atomically deducts balance)
+	dbRecordID, err := gw.CreateExchangeOrder(ctx, lineupID, req.UserID, protoOrderTypeToEnum(req.OrderType), req.Portion, req.Quantity, seq, gen.ExchangeOrderStatusReceivedByBackend)
 	if err != nil {
-		return fmt.Errorf("failed to insert bet record: %w", err)
+		return fmt.Errorf("failed to create exchange order: %w", err)
 	}
 
-	// Step 5: Track the pending order
+	// Step 4: Track the pending order
 	gw.pendingOrdersMu.Lock()
 	gw.pendingOrders[clientOrderID] = &PendingOrder{
 		ClientOrderID: clientOrderID,
 		UserID:        req.UserID,
-		WagerAmount:   req.WagerAmount,
+		Quantity:      int64(req.Quantity),
 		DBRecordID:    dbRecordID,
 	}
 	gw.pendingOrdersMu.Unlock()
 
-	// Step 6: Get self match ID for user
-	selfMatchID, err := gw.GetSelfMatchID(ctx, req.UserID)
-	if err != nil {
-		log.Printf("WARNING: Failed to get self match ID for user %s: %v\n", req.UserID, err)
-		// Continue without self-match protection
-	}
+	// Step 5: Get self match ID for user
+	selfMatchID := gw.GetSelfMatchID(ctx, req.UserID)
 
-	// Step 7: Build and send NewOrder via unified trade stream
+	// Step 6: Build and send NewOrder via unified trade stream
 	legs := make([]*pb.NewOrder_Body_Leg, len(req.Legs))
 	for i, leg := range req.Legs {
 		legs[i] = &pb.NewOrder_Body_Leg{
-			LegSecurityId: &common.UUID{Upper: leg.LegSecurityID.GetUpper(), Lower: leg.LegSecurityID.GetLower()},
+			LegSecurityId: leg.LegSecurityID,
 			IsOver:        leg.IsOver,
 		}
 	}
@@ -401,12 +393,19 @@ func (gw *Gateway) SubmitOrder(ctx context.Context, req *OrderRequest) error {
 	// Send via channel (non-blocking with timeout)
 	select {
 	case gw.sendChan <- gatewayMsg:
-		log.Printf("Submitted order clientOrderId=%s for user %s to matching server\n", clientOrderID.String(), req.UserID)
+		log.Printf("Submitted order clientOrderId=%s for user %s to matching server\n", clientOrderID.String(), req.UserID.String())
+		if err := gw.UpdateOrderStatus(ctx, dbRecordID, gen.ExchangeOrderStatusSubmittedToExchange); err != nil {
+			log.Printf("ERROR: Failed to update order status to submitted_to_exchange: %v\n", err)
+		}
 	case <-time.After(5 * time.Second):
 		// Clean up on failure
 		gw.pendingOrdersMu.Lock()
 		delete(gw.pendingOrders, clientOrderID)
 		gw.pendingOrdersMu.Unlock()
+		// Atomically cancel and refund
+		if err := gw.CancelExchangeOrderDueToExchange(ctx, dbRecordID); err != nil {
+			log.Printf("ERROR: Failed to cancel order %s on timeout: %v\n", dbRecordID.String(), err)
+		}
 		return errors.New("timeout sending order to matching server")
 	}
 
@@ -453,21 +452,6 @@ func (gw *Gateway) forwardToClient(clientOrderID utils.UUID, msg *pb.EngineMessa
 	}
 }
 
-// forwardToClientByOrderID sends an engine message to the client using the matching engine's orderId
-func (gw *Gateway) forwardToClientByOrderID(orderID uint64, msg *pb.EngineMessage) {
-	// We need to find which client this order belongs to
-	// For now, we broadcast to all connected clients since we don't track orderId->clientStream mapping
-	// TODO: Add orderId->clientOrderId mapping for proper routing
-	gw.clientStreamsMu.RLock()
-	defer gw.clientStreamsMu.RUnlock()
-
-	for _, clientStream := range gw.clientStreams {
-		if err := clientStream.Send(msg); err != nil {
-			log.Printf("Failed to forward response to client: %v\n", err)
-		}
-	}
-}
-
 // processEngineMessage processes a single EngineMessage from the matching server
 func (gw *Gateway) processEngineMessage(resp *pb.EngineMessage) {
 	ctx := context.Background()
@@ -507,22 +491,19 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 	}
 
 	if ack.FallibleBase != nil && ack.FallibleBase.Success {
-		// Order accepted - deduct balance and update status
+		// Order accepted - balance was already deducted at submission time
 		log.Printf("Order acknowledged: clientOrderId=%s, orderId=%d\n", clientOrderID.String(), orderID)
 
 		// Track the confirmed order for later fills/eliminations
 		gw.confirmedOrdersMu.Lock()
-		gw.confirmedOrders[orderID] = pendingOrder.DBRecordID
+		gw.confirmedOrders[orderID] = &ConfirmedOrder{
+			DBRecordID: pendingOrder.DBRecordID,
+			UserID:     pendingOrder.UserID,
+		}
 		gw.confirmedOrdersMu.Unlock()
 
-		// Deduct balance from user
-		if err := gw.DeductBalance(ctx, pendingOrder.UserID, pendingOrder.WagerAmount); err != nil {
-			log.Printf("ERROR: Failed to deduct balance for user %s: %v\n", pendingOrder.UserID, err)
-			// TODO: Handle this error case - maybe cancel the order?
-		}
-
 		// Update order status to resting
-		if err := gw.UpdateOrderStatus(ctx, pendingOrder.DBRecordID, OrderStatusResting); err != nil {
+		if err := gw.UpdateOrderStatus(ctx, pendingOrder.DBRecordID, gen.ExchangeOrderStatusRestingOnExchange); err != nil {
 			log.Printf("ERROR: Failed to update order status: %v\n", err)
 		}
 	} else {
@@ -532,8 +513,10 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 			errorDesc = ack.FallibleBase.ErrorDescription
 		}
 		log.Printf("Order rejected: clientOrderId=%s, error=%s\n", clientOrderID.String(), errorDesc)
-		// Don't deduct balance, order was not accepted
-		// TODO: Consider updating order status to indicate rejection
+		// Atomically cancel and refund (balance was deducted at order creation time)
+		if err := gw.CancelExchangeOrderDueToExchange(ctx, pendingOrder.DBRecordID); err != nil {
+			log.Printf("ERROR: Failed to cancel rejected order %s: %v\n", pendingOrder.DBRecordID.String(), err)
+		}
 	}
 
 	// Forward response to client if connected
@@ -572,24 +555,21 @@ func (gw *Gateway) handleCancelOrderAcknowledgement(ctx context.Context, ack *pb
 	if ack.FallibleBase != nil && ack.FallibleBase.Success {
 		log.Printf("Order cancel acknowledged: orderId=%d\n", orderID)
 
-		// Find the DB record ID for this order
+		// Find the confirmed order info
 		gw.confirmedOrdersMu.RLock()
-		dbRecordID, exists := gw.confirmedOrders[orderID]
+		confirmed, exists := gw.confirmedOrders[orderID]
 		gw.confirmedOrdersMu.RUnlock()
 
 		if exists {
-			// Update order status to cancelled_by_user
-			if err := gw.UpdateOrderStatus(ctx, dbRecordID, OrderStatusCancelled); err != nil {
-				log.Printf("ERROR: Failed to update order status: %v\n", err)
+			// Atomically update status to cancelled_by_user and refund remaining balance
+			if err := gw.CancelExchangeOrderDueToUser(ctx, confirmed.DBRecordID); err != nil {
+				log.Printf("ERROR: Failed to cancel order: %v\n", err)
 			}
 
 			// Remove from confirmed orders
 			gw.confirmedOrdersMu.Lock()
 			delete(gw.confirmedOrders, orderID)
 			gw.confirmedOrdersMu.Unlock()
-
-			// TODO: STUB - Call stored procedure to refund balance atomically
-			log.Printf("TODO: Call stored procedure to refund balance for cancelled order %d\n", orderID)
 		} else {
 			log.Printf("WARNING: Received cancel ack for unknown orderId=%d\n", orderID)
 		}
@@ -614,24 +594,21 @@ func (gw *Gateway) handleOrderElimination(ctx context.Context, elim *pb.OrderEli
 
 	log.Printf("Order eliminated: orderId=%d, reason=%s\n", orderID, reason)
 
-	// Find the DB record ID for this order
+	// Find the confirmed order info
 	gw.confirmedOrdersMu.RLock()
-	dbRecordID, exists := gw.confirmedOrders[orderID]
+	confirmed, exists := gw.confirmedOrders[orderID]
 	gw.confirmedOrdersMu.RUnlock()
 
 	if exists {
-		// Update order status to cancelled_by_exchange
-		if err := gw.UpdateOrderStatus(ctx, dbRecordID, OrderStatusCancelledEx); err != nil {
-			log.Printf("ERROR: Failed to update order status: %v\n", err)
+		// Atomically update status to cancelled_by_exchange and refund remaining balance
+		if err := gw.CancelExchangeOrderDueToExchange(ctx, confirmed.DBRecordID); err != nil {
+			log.Printf("ERROR: Failed to cancel order: %v\n", err)
 		}
 
 		// Remove from confirmed orders
 		gw.confirmedOrdersMu.Lock()
 		delete(gw.confirmedOrders, orderID)
 		gw.confirmedOrdersMu.Unlock()
-
-		// TODO: STUB - Call stored procedure to refund balance atomically
-		log.Printf("TODO: Call stored procedure to refund balance for eliminated order %d\n", orderID)
 	} else {
 		log.Printf("WARNING: Received elimination for unknown orderId=%d\n", orderID)
 	}
@@ -656,15 +633,15 @@ func (gw *Gateway) handleMatch(ctx context.Context, match *pb.Match) {
 		log.Printf("  FillEvent: fillEventId=%d, orderId=%d, isAggressor=%v, matchedPortion=%d, isComplete=%v\n",
 			fillEvent.FillEventId, orderID, fillEvent.IsAggressor, fillEvent.MatchedPortion, isComplete)
 
-		// Find the DB record ID for this order
+		// Find the confirmed order info
 		gw.confirmedOrdersMu.RLock()
-		dbRecordID, exists := gw.confirmedOrders[orderID]
+		confirmed, exists := gw.confirmedOrders[orderID]
 		gw.confirmedOrdersMu.RUnlock()
 
 		if exists {
 			if isComplete {
 				// Order is fully filled
-				if err := gw.UpdateOrderStatus(ctx, dbRecordID, OrderStatusFilled); err != nil {
+				if err := gw.UpdateOrderStatus(ctx, confirmed.DBRecordID, gen.ExchangeOrderStatusFullyFilled); err != nil {
 					log.Printf("ERROR: Failed to update order status: %v\n", err)
 				}
 
@@ -903,24 +880,10 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 
 	log.Printf("Processing new order from client: clientOrderId=%s\n", clientOrderID.String())
 
-	// For now, use dummy values for user/wager - in production these would come from auth/session
 	// TODO: Extract user info from gRPC metadata or session
-	dummyUserID := "test-user"
-	dummyWagerAmount := int64(order.Body.Quantity)
+	dummyUserID := utils.UUIDFromUint64(0, 1) // Placeholder UUID
 
-	// Step 1: Check balance (using stub)
-	hasBalance, err := gw.CheckBalance(ctx, dummyUserID, dummyWagerAmount)
-	if err != nil {
-		log.Printf("Balance check failed: %v\n", err)
-		// Send rejection back to client
-		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("balance check failed: %v", err))
-	}
-	if !hasBalance {
-		log.Printf("Insufficient balance for clientOrderId=%s\n", clientOrderID.String())
-		return gw.sendOrderRejection(clientStream, clientOrderProto, "insufficient balance")
-	}
-
-	// Step 2: Validate leg security IDs (using stub)
+	// Step 1: Build legs and resolve slate/lineup
 	legs := make([]LegRequest, len(order.Body.Legs))
 	for i, leg := range order.Body.Legs {
 		legs[i] = LegRequest{
@@ -929,48 +892,49 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 		}
 	}
 
-	if err := gw.ValidateLegSecurityIDs(ctx, legs); err != nil {
-		log.Printf("Leg validation failed: %v\n", err)
-		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("leg validation failed: %v", err))
-	}
+	// TODO: MarketType and TotalUnits should come from the order or be derived
+	marketType := gen.MarketEntityNbaMarket // Placeholder
+	totalUnits := int64(len(legs))                  // Placeholder
 
-	// Step 3: Create OrderRequest for database insertion
-	orderReq := &OrderRequest{
-		UserID:      dummyUserID,
-		WagerAmount: dummyWagerAmount,
-		ButtonID:    0, // Dummy
-		Line:        0, // Dummy
-		TotalPayout: dummyWagerAmount * 2,
-		Commission:  0,
-		Legs:        legs,
-		OrderType:   order.Body.OrderType,
-		Portion:     order.Body.Portion,
-		Quantity:    order.Body.Quantity,
+	marketIDs := make([]utils.UUID, len(legs))
+	for i := range legs {
+		marketIDs[i] = legs[i].LegSecurityIDAsUUID()
 	}
-
-	// Step 4: Insert into confirmed_bets (using stub)
-	dbRecordID, err := gw.InsertConfirmedBet(ctx, orderReq, clientOrderID.Lower())
+	slateAndLineups, err := gw.EnsureSlateAndLineups(ctx, marketType, marketIDs, totalUnits)
 	if err != nil {
-		log.Printf("Failed to insert bet record: %v\n", err)
-		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to insert bet: %v", err))
+		log.Printf("Failed to ensure slate and lineups: %v\n", err)
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to ensure slate: %v", err))
 	}
 
-	// Step 5: Track the pending order and client stream
+	lineupID, err := FindLineupID(slateAndLineups, legs)
+	if err != nil {
+		log.Printf("Failed to find lineup: %v\n", err)
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to find lineup: %v", err))
+	}
+
+	// Step 2: Create exchange order in DB (atomically deducts balance)
+	dbRecordID, err := gw.CreateExchangeOrder(ctx, lineupID, dummyUserID, protoOrderTypeToEnum(order.Body.OrderType), order.Body.Portion, order.Body.Quantity, clientOrderID.Lower(), gen.ExchangeOrderStatusReceivedByBackend)
+
+	if err != nil {
+		log.Printf("Failed to create exchange order: %v\n", err)
+		return gw.sendOrderRejection(clientStream, clientOrderProto, fmt.Sprintf("failed to create order: %v", err))
+	}
+
+	// Step 3: Track the pending order and client stream
 	gw.pendingOrdersMu.Lock()
 	gw.pendingOrders[clientOrderID] = &PendingOrder{
 		ClientOrderID: clientOrderID,
 		UserID:        dummyUserID,
-		WagerAmount:   dummyWagerAmount,
+		Quantity:      int64(order.Body.Quantity),
 		DBRecordID:    dbRecordID,
 	}
 	gw.pendingOrdersMu.Unlock()
 
-	// Track client stream for sending responses back
 	gw.clientStreamsMu.Lock()
 	gw.clientStreams[clientOrderID] = clientStream
 	gw.clientStreamsMu.Unlock()
 
-	// Step 6: Forward order to upstream matching server with gateway's sequence number
+	// Step 4: Forward order to upstream matching server with gateway's sequence number
 	gatewayMsg := &pb.GatewayMessage{
 		SequencedMessageBase: &common.SequencedMessageBase{
 			SequenceNumber: gw.getNextSequenceNumber(),
@@ -983,6 +947,9 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 	select {
 	case gw.sendChan <- gatewayMsg:
 		log.Printf("Forwarded order clientOrderId=%s to matching server\n", clientOrderID.String())
+		if err := gw.UpdateOrderStatus(ctx, dbRecordID, gen.ExchangeOrderStatusSubmittedToExchange); err != nil {
+			log.Printf("ERROR: Failed to update order status to submitted_to_exchange: %v\n", err)
+		}
 	case <-time.After(5 * time.Second):
 		// Clean up on failure
 		gw.pendingOrdersMu.Lock()
@@ -991,6 +958,10 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream pb.Mat
 		gw.clientStreamsMu.Lock()
 		delete(gw.clientStreams, clientOrderID)
 		gw.clientStreamsMu.Unlock()
+		// Atomically cancel and refund
+		if err := gw.CancelExchangeOrderDueToExchange(ctx, dbRecordID); err != nil {
+			log.Printf("ERROR: Failed to cancel order %s on timeout: %v\n", dbRecordID.String(), err)
+		}
 		return gw.sendOrderRejection(clientStream, clientOrderProto, "timeout forwarding to matching server")
 	}
 
@@ -1010,6 +981,19 @@ func (gw *Gateway) handleClientCancelOrder(ctx context.Context, clientStream pb.
 	}
 
 	log.Printf("Processing cancel order from client: orderId=%d\n", orderID)
+
+	// Record the cancel request in the database
+	gw.confirmedOrdersMu.RLock()
+	confirmed, exists := gw.confirmedOrders[orderID]
+	gw.confirmedOrdersMu.RUnlock()
+
+	if exists {
+		if err := gw.CreateExchangeCancelRequest(ctx, confirmed.DBRecordID); err != nil {
+			log.Printf("ERROR: Failed to create cancel request for order %s: %v\n", confirmed.DBRecordID.String(), err)
+		}
+	} else {
+		log.Printf("WARNING: Cancel request for unknown orderId=%d\n", orderID)
+	}
 
 	// Forward cancel to upstream matching server
 	gatewayMsg := &pb.GatewayMessage{
@@ -1055,21 +1039,17 @@ func (gw *Gateway) sendOrderRejection(clientStream pb.MatchingServerService_Crea
 }
 
 // CreateDummyOrderRequest creates a dummy order request for testing
-func CreateDummyOrderRequest(userID string, wagerAmount int64) *OrderRequest {
+func CreateDummyOrderRequest(userID utils.UUID, quantity uint64) *OrderRequest {
 	return &OrderRequest{
-		UserID:      userID,
-		WagerAmount: wagerAmount,
-		// Dummy values - will be provided by app backend later
-		ButtonID:    12345,
-		Line:        -110,
-		TotalPayout: wagerAmount * 2,   // Placeholder calculation
-		Commission:  wagerAmount / 100, // 1% commission placeholder
+		UserID:     userID,
+		MarketType: gen.MarketEntityNbaMarket,
+		TotalUnits: 1,
 		Legs: []LegRequest{
 			{LegSecurityID: &common.UUID{Upper: 0, Lower: 1001}, IsOver: true},
 		},
 		OrderType: common.OrderType_LIMIT,
 		Portion:   5000, // 50.00% as basis points
-		Quantity:  uint64(wagerAmount),
+		Quantity:  quantity,
 	}
 }
 

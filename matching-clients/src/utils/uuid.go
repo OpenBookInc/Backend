@@ -6,6 +6,34 @@ import (
 	"fmt"
 )
 
+// MarshalText implements encoding.TextMarshaler for UUID.
+func (u UUID) MarshalText() ([]byte, error) {
+	return []byte(u.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler for UUID.
+func (u *UUID) UnmarshalText(data []byte) error {
+	parsed, err := ParseUUID(string(data))
+	if err != nil {
+		return err
+	}
+	*u = parsed
+	return nil
+}
+
+// MarshalJSON implements json.Marshaler for UUID.
+func (u UUID) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + u.String() + `"`), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler for UUID.
+func (u *UUID) UnmarshalJSON(data []byte) error {
+	if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+		return fmt.Errorf("invalid UUID JSON: %s", data)
+	}
+	return u.UnmarshalText(data[1 : len(data)-1])
+}
+
 // UUID represents a 128-bit universally unique identifier.
 type UUID [16]byte
 
