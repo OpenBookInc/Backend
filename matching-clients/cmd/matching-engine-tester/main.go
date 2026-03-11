@@ -17,7 +17,7 @@ import (
 	common "matching-clients/src/gen"
 	pb "matching-clients/src/gen/matching"
 	tc "matching-clients/src/tester_common"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

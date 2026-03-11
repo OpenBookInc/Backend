@@ -61,6 +61,11 @@ func (u UUID) String() string {
 		u[:4], u[4:6], u[6:8], u[8:10], u[10:])
 }
 
+// IsZero returns true if the UUID is the zero value.
+func (u UUID) IsZero() bool {
+	return u == UUID{}
+}
+
 // ParseUUID parses a UUID from its standard string representation.
 // Accepts both "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" and "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" formats.
 func ParseUUID(s string) (UUID, error) {
@@ -82,4 +87,38 @@ func ParseUUID(s string) (UUID, error) {
 		return UUID{}, fmt.Errorf("invalid UUID hex: %w", err)
 	}
 	return u, nil
+}
+
+// Scan implements the database/sql Scanner interface for UUID.
+func (u *UUID) Scan(src interface{}) error {
+	switch v := src.(type) {
+	case string:
+		parsed, err := ParseUUID(v)
+		if err != nil {
+			return err
+		}
+		*u = parsed
+		return nil
+	case []byte:
+		if len(v) == 16 {
+			copy(u[:], v)
+			return nil
+		}
+		parsed, err := ParseUUID(string(v))
+		if err != nil {
+			return err
+		}
+		*u = parsed
+		return nil
+	case nil:
+		*u = UUID{}
+		return nil
+	default:
+		return fmt.Errorf("cannot scan %T into UUID", src)
+	}
+}
+
+// Value implements the database/sql/driver Valuer interface for UUID.
+func (u UUID) Value() (interface{}, error) {
+	return u.String(), nil
 }

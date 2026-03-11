@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 	"os"
 	"sort"
 	"strings"

@@ -14,7 +14,7 @@ import (
 	common "matching-clients/src/gen"
 	gwpb "matching-clients/src/gen/gateway"
 	pb "matching-clients/src/gen/matching"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"

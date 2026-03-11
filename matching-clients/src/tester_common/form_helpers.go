@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	common "matching-clients/src/gen"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 )
 
 // ParseLegsFromForm parses leg security IDs and over/under from form values

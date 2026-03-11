@@ -9,7 +9,7 @@ import (
 
 	common "matching-clients/src/gen"
 	pb "matching-clients/src/gen/matching"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 
 	gen "github.com/openbook/shared/models/gen"
 )

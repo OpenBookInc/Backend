@@ -2,7 +2,7 @@ package tester_common
 
 import (
 	"fmt"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 	"sort"
 	"sync"
 )

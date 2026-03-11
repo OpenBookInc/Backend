@@ -6,7 +6,7 @@ import (
 
 	common "matching-clients/src/gen"
 	gwpb "matching-clients/src/gen/gateway"
-	"matching-clients/src/utils"
+	"github.com/openbook/shared/utils"
 )
 
 // TrackedLeg represents a single leg with its security ID and side.
