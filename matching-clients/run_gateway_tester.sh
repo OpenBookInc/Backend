@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # =============================================================================
-# Matching Engine Tester Script
+# Gateway Tester Script
 # =============================================================================
-# Runs the matching engine tester web UI for testing the matching server.
+# Runs the gateway tester web UI for testing the gateway server.
 # Uses the .env file in the matching-clients/ directory.
 #
-# Usage: ./run_tester.sh
+# Usage: ./run_gateway_tester.sh
 #
 # The tester provides a web UI at http://localhost:8080 (configurable via WEB_PORT)
-# for sending orders and viewing matching engine responses.
+# for sending orders and viewing gateway responses.
 # =============================================================================
 
 set -e
@@ -31,9 +31,9 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-echo -e "${BLUE}Starting Matching Engine Tester...${NC}"
+echo -e "${BLUE}Starting Gateway Tester...${NC}"
 echo -e "${BLUE}Web UI will be available at http://localhost:${WEB_PORT:-8080}${NC}"
 echo ""
 
 # Run the tester
-go run cmd/matching-engine-tester/main.go cmd/matching-engine-tester/pool_state.go
+go run cmd/matching-engine-gateway-tester/main.go

@@ -1,4 +1,4 @@
-package main
+package tester_common
 
 import (
 	"fmt"
@@ -15,12 +15,12 @@ type Leg struct {
 
 // OrderState tracks the current state of an order
 type OrderState struct {
-	OrderID          string
-	ClientOrderID    uint64
-	Portion          uint64
-	OriginalQuantity uint64
+	OrderID           string
+	ClientOrderID     uint64
+	Portion           uint64
+	OriginalQuantity  uint64
 	RemainingQuantity uint64
-	SequenceNumber   uint64
+	SequenceNumber    uint64
 }
 
 // LineupState contains all orders for a specific lineup
@@ -68,8 +68,8 @@ func (pt *PoolTracker) DefinePool(slateID string, totalUnits uint64, numLineups 
 	}
 }
 
-// poolKeyToString converts sorted leg IDs to a string key
-func poolKeyToString(legIDs []utils.UUID) string {
+// PoolKeyToString converts sorted leg IDs to a string key
+func PoolKeyToString(legIDs []utils.UUID) string {
 	result := ""
 	for i, id := range legIDs {
 		if i > 0 {
@@ -80,8 +80,8 @@ func poolKeyToString(legIDs []utils.UUID) string {
 	return result
 }
 
-// compareUUIDs returns -1, 0, or 1 comparing two UUIDs lexicographically
-func compareUUIDs(a, b utils.UUID) int {
+// CompareUUIDs returns -1, 0, or 1 comparing two UUIDs lexicographically
+func CompareUUIDs(a, b utils.UUID) int {
 	if a.Upper() < b.Upper() {
 		return -1
 	}
@@ -97,27 +97,27 @@ func compareUUIDs(a, b utils.UUID) int {
 	return 0
 }
 
-// createSortedLegIDs creates a sorted list of leg security IDs from legs
-func createSortedLegIDs(legs []Leg) []utils.UUID {
+// CreateSortedLegIDs creates a sorted list of leg security IDs from legs
+func CreateSortedLegIDs(legs []Leg) []utils.UUID {
 	ids := make([]utils.UUID, len(legs))
 	for i, leg := range legs {
 		ids[i] = leg.LegSecurityID
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		return compareUUIDs(ids[i], ids[j]) < 0
+		return CompareUUIDs(ids[i], ids[j]) < 0
 	})
 	return ids
 }
 
-// calculateLineupIndex calculates the lineup index from legs
+// CalculateLineupIndex calculates the lineup index from legs
 // Based on the formula: lineup_index = sum(is_over[i] * 2^i for i in 0..n)
 // where legs are sorted by leg_security_id
-func calculateLineupIndex(legs []Leg) uint64 {
+func CalculateLineupIndex(legs []Leg) uint64 {
 	// Sort legs by security ID
 	sortedLegs := make([]Leg, len(legs))
 	copy(sortedLegs, legs)
 	sort.Slice(sortedLegs, func(i, j int) bool {
-		return compareUUIDs(sortedLegs[i].LegSecurityID, sortedLegs[j].LegSecurityID) < 0
+		return CompareUUIDs(sortedLegs[i].LegSecurityID, sortedLegs[j].LegSecurityID) < 0
 	})
 
 	// Calculate lineup index
@@ -143,8 +143,8 @@ func (pt *PoolTracker) AddOrder(
 	defer pt.mu.Unlock()
 
 	// Create pool key
-	sortedLegIDs := createSortedLegIDs(legs)
-	poolKey := poolKeyToString(sortedLegIDs)
+	sortedLegIDs := CreateSortedLegIDs(legs)
+	poolKey := PoolKeyToString(sortedLegIDs)
 
 	// Get or create pool
 	pool, exists := pt.pools[poolKey]
@@ -158,7 +158,7 @@ func (pt *PoolTracker) AddOrder(
 	}
 
 	// Calculate lineup index
-	lineupIndex := calculateLineupIndex(legs)
+	lineupIndex := CalculateLineupIndex(legs)
 
 	// Get or create lineup
 	lineup, exists := pool.Lineups[lineupIndex]
@@ -297,8 +297,8 @@ type OrderDisplayData struct {
 	SequenceNumber    uint64
 }
 
-// getOrdersDisplay extracts and sorts orders from a lineup for display
-func getOrdersDisplay(lineup *LineupState) []OrderDisplayData {
+// GetOrdersDisplay extracts and sorts orders from a lineup for display
+func GetOrdersDisplay(lineup *LineupState) []OrderDisplayData {
 	orders := make([]OrderDisplayData, 0)
 	if lineup == nil {
 		return orders
@@ -341,9 +341,9 @@ func (pt *PoolTracker) ReplacePoolFromSnapshot(
 	sortedIDs := make([]utils.UUID, len(legSecurityIDs))
 	copy(sortedIDs, legSecurityIDs)
 	sort.Slice(sortedIDs, func(i, j int) bool {
-		return compareUUIDs(sortedIDs[i], sortedIDs[j]) < 0
+		return CompareUUIDs(sortedIDs[i], sortedIDs[j]) < 0
 	})
-	poolKey := poolKeyToString(sortedIDs)
+	poolKey := PoolKeyToString(sortedIDs)
 
 	pool := &PoolState{
 		LegSecurityIDs: sortedIDs,
@@ -408,7 +408,7 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 			for lineupIdx := uint64(0); lineupIdx < pool.NumLineups; lineupIdx++ {
 				lineups = append(lineups, LineupDisplayData{
 					LineupIndex: lineupIdx,
-					Orders:      getOrdersDisplay(pool.Lineups[lineupIdx]),
+					Orders:      GetOrdersDisplay(pool.Lineups[lineupIdx]),
 				})
 			}
 
@@ -437,7 +437,7 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 				lineups = append(lineups, LineupDisplayData{
 					LineupIndex: lineupIdx,
 					OverUnders:  overUnders,
-					Orders:      getOrdersDisplay(pool.Lineups[lineupIdx]),
+					Orders:      GetOrdersDisplay(pool.Lineups[lineupIdx]),
 				})
 			}
 
@@ -462,4 +462,13 @@ func (pt *PoolTracker) GetAllPoolsDisplay() []PoolDisplayData {
 	})
 
 	return result
+}
+
+// PendingOrderInfo stores pending order data in a mode-agnostic way for pool tracking
+type PendingOrderInfo struct {
+	Legs        []Leg
+	SlateID     string // matching server mode: slate ID for pool tracker
+	LineupIndex uint64 // matching server mode: lineup index for pool tracker
+	Portion     uint64
+	Quantity    uint64
 }

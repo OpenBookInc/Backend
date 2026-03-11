@@ -15,7 +15,7 @@ import (
 	"time"
 
 	common "matching-clients/src/gen"
-	pb "matching-clients/src/gen/matching"
+	gwpb "matching-clients/src/gen/gateway"
 	tc "matching-clients/src/tester_common"
 	"matching-clients/src/utils"
 
@@ -28,11 +28,12 @@ import (
 var indexHTML string
 
 type WebClient struct {
-	conn             *grpc.ClientConn
-	mu               sync.RWMutex
-	matchingClient   pb.MatchingServerServiceClient
-	matchingStream   pb.MatchingServerService_CreateTradeStreamClient
-	matchingSendChan chan *pb.GatewayMessage
+	conn *grpc.ClientConn
+	mu   sync.RWMutex
+
+	gwClient   gwpb.GatewayServerServiceClient
+	gwStream   gwpb.GatewayServerService_CreateTradeStreamClient
+	gwSendChan chan *gwpb.BackendMessage
 
 	// Unified request/response storage
 	requests  []string
@@ -40,9 +41,6 @@ type WebClient struct {
 
 	tradeStreamActive bool
 	streamGeneration  uint64 // Incremented on each reconnect to invalidate old goroutines
-
-	// Global sequence number shared across all message types
-	globalSequenceNumber uint64
 
 	// Global client order ID counter
 	globalClientOrderId uint64
@@ -52,8 +50,10 @@ type WebClient struct {
 	pendingOrders map[uint64]*tc.PendingOrderInfo // map[clientOrderId]PendingOrderInfo
 
 	// Connection info
-	serverHost string
-	serverPort string
+	serverHost     string
+	gatewayPort    string
+	gatewayUserIDs []string
+	gatewayLegIDs  []string
 }
 
 func NewWebClient(cfg *tc.Config) *WebClient {
@@ -65,92 +65,63 @@ func NewWebClient(cfg *tc.Config) *WebClient {
 		poolTracker:         tc.NewPoolTracker(),
 		pendingOrders:       make(map[uint64]*tc.PendingOrderInfo),
 		serverHost:          cfg.ServerHost,
-		serverPort:          cfg.ServerPort,
+		gatewayPort:         cfg.GatewayPort,
+		gatewayUserIDs:      cfg.GatewayUserIDs,
+		gatewayLegIDs:       cfg.GatewayLegIDs,
 	}
 
-	// Try to connect to the matching server, but don't fail if unreachable
+	// Try to connect to the gateway, but don't fail if unreachable
 	if err := wc.Connect(); err != nil {
-		log.Printf("Warning: Could not connect to matching server: %v", err)
+		log.Printf("Warning: Could not connect to gateway: %v", err)
 		log.Printf("Web server will start in disconnected state")
 	}
 
 	return wc
 }
 
-// processEngineMessage processes matching server responses and updates pool state
+// processGatewayMessage processes gateway responses and updates pool state.
+// Pool state is driven entirely by OrderPoolSnapshot messages from the gateway;
+// ack/match/elimination events are not used for pool tracking since the gateway
+// sends an updated snapshot after every state change.
 // NOTE: This method assumes wc.mu is already locked by the caller
-func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
+func (wc *WebClient) processGatewayMessage(resp *gwpb.GatewayMessage) {
 	switch event := resp.Event.(type) {
-	case *pb.EngineMessage_NewOrderAcknowledgement:
-		ack := event.NewOrderAcknowledgement
-		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			clientOrderID := ack.Body.ClientOrderId.GetLower()
-			orderIDStr := strconv.FormatUint(ack.Body.OrderId, 10)
-			var sequenceNumber uint64
-			if resp.SequencedMessageBase != nil {
-				sequenceNumber = resp.SequencedMessageBase.SequenceNumber
+	case *gwpb.GatewayMessage_OrderPoolSnapshot:
+		snapshot := event.OrderPoolSnapshot
+		if snapshot != nil {
+			var legSecurityIDs []utils.UUID
+			for _, legID := range snapshot.GetLegSecurityIds() {
+				legSecurityIDs = append(legSecurityIDs, utils.UUIDFromUint64(legID.GetUpper(), legID.GetLower()))
 			}
 
-			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
-				if pendingOrder.SlateID != "" {
-					wc.poolTracker.AddOrderBySlateID(
-						orderIDStr,
-						clientOrderID,
-						pendingOrder.SlateID,
-						pendingOrder.LineupIndex,
-						pendingOrder.Portion,
-						pendingOrder.Quantity,
-						sequenceNumber,
-					)
-				} else {
-					wc.poolTracker.AddOrder(
-						orderIDStr,
-						clientOrderID,
-						pendingOrder.Legs,
-						pendingOrder.Portion,
-						pendingOrder.Quantity,
-						sequenceNumber,
-					)
+			var lineupBooks []tc.LineupBookSnapshot
+			for _, book := range snapshot.GetLineupBooks() {
+				lb := tc.LineupBookSnapshot{
+					IsOver: book.GetIsOver(),
 				}
-				delete(wc.pendingOrders, clientOrderID)
+				for _, level := range book.GetLevels() {
+					ls := tc.LevelSnapshot{Portion: level.GetPortion()}
+					for _, order := range level.GetOrders() {
+						ls.Orders = append(ls.Orders, tc.OrderSnapshot{
+							QuantityRemaining: order.GetQuantityRemaining(),
+						})
+					}
+					lb.Levels = append(lb.Levels, ls)
+				}
+				lineupBooks = append(lineupBooks, lb)
 			}
-		}
 
-	case *pb.EngineMessage_CancelOrderAcknowledgement:
-		ack := event.CancelOrderAcknowledgement
-		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			wc.poolTracker.RemoveOrder(strconv.FormatUint(ack.Body.OrderId, 10))
+			wc.poolTracker.ReplacePoolFromSnapshot(legSecurityIDs, lineupBooks)
 		}
-
-	case *pb.EngineMessage_Elimination:
-		elim := event.Elimination
-		if elim != nil && elim.Body != nil {
-			wc.poolTracker.RemoveOrder(strconv.FormatUint(elim.Body.OrderId, 10))
-		}
-
-	case *pb.EngineMessage_Match:
-		match := event.Match
-		if match.Body != nil {
-			for _, fillEvent := range match.Body.FillEvents {
-				wc.poolTracker.UpdateFromFill(
-					strconv.FormatUint(fillEvent.OrderId, 10),
-					match.Body.MatchedQuantity,
-					fillEvent.IsComplete,
-				)
-			}
-		}
-
-	case *pb.EngineMessage_DefinePoolAcknowledgement:
-		// DefinePool acknowledgements are logged in the response list but don't affect pool tracker state
 	}
 }
 
 func (wc *WebClient) Close() {
-	if wc.matchingSendChan != nil {
-		close(wc.matchingSendChan)
+	if wc.gwSendChan != nil {
+		close(wc.gwSendChan)
 	}
-	if wc.matchingStream != nil {
-		wc.matchingStream.CloseSend()
+	if wc.gwStream != nil {
+		wc.gwStream.CloseSend()
 	}
 	if wc.conn != nil {
 		wc.conn.Close()
@@ -167,23 +138,23 @@ func checkServiceReachable(host, port string) bool {
 	return true
 }
 
-// handleHealthCheck returns TCP reachability of the matching server
+// handleHealthCheck returns TCP reachability of the gateway service
 func (wc *WebClient) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	wc.mu.RLock()
 	host := wc.serverHost
-	serverPort := wc.serverPort
+	gatewayPort := wc.gatewayPort
 	wc.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"matching_server": map[string]interface{}{
-			"reachable": checkServiceReachable(host, serverPort),
-			"port":      serverPort,
+		"gateway": map[string]interface{}{
+			"reachable": checkServiceReachable(host, gatewayPort),
+			"port":      gatewayPort,
 		},
 	})
 }
 
-// Connect establishes a connection to the matching server.
+// Connect establishes a connection to the gateway.
 func (wc *WebClient) Connect() error {
 	wc.mu.Lock()
 
@@ -192,14 +163,14 @@ func (wc *WebClient) Connect() error {
 	wc.tradeStreamActive = false
 
 	// Capture old resources
-	oldMatchingSendChan := wc.matchingSendChan
-	oldMatchingStream := wc.matchingStream
+	oldGwSendChan := wc.gwSendChan
+	oldGwStream := wc.gwStream
 	oldConn := wc.conn
 
 	// Clear references
-	wc.matchingSendChan = nil
-	wc.matchingStream = nil
-	wc.matchingClient = nil
+	wc.gwSendChan = nil
+	wc.gwStream = nil
+	wc.gwClient = nil
 	wc.conn = nil
 
 	// Clear state
@@ -207,20 +178,19 @@ func (wc *WebClient) Connect() error {
 	wc.responses = make([]string, 0)
 	wc.poolTracker = tc.NewPoolTracker()
 	wc.pendingOrders = make(map[uint64]*tc.PendingOrderInfo)
-	wc.globalSequenceNumber = 0
 	wc.globalClientOrderId = 1000
 
 	serverHost := wc.serverHost
-	serverPort := wc.serverPort
+	gatewayPort := wc.gatewayPort
 
 	wc.mu.Unlock()
 
 	// Close old resources outside the lock
-	if oldMatchingSendChan != nil {
-		close(oldMatchingSendChan)
+	if oldGwSendChan != nil {
+		close(oldGwSendChan)
 	}
-	if oldMatchingStream != nil {
-		oldMatchingStream.CloseSend()
+	if oldGwStream != nil {
+		oldGwStream.CloseSend()
 	}
 	if oldConn != nil {
 		oldConn.Close()
@@ -228,10 +198,10 @@ func (wc *WebClient) Connect() error {
 
 	time.Sleep(100 * time.Millisecond)
 
-	serverAddr := fmt.Sprintf("%s:%s", serverHost, serverPort)
-	if !checkServiceReachable(serverHost, serverPort) {
-		log.Printf("Matching server at %s is not reachable", serverAddr)
-		return fmt.Errorf("matching server at %s is not reachable", serverAddr)
+	serverAddr := fmt.Sprintf("%s:%s", serverHost, gatewayPort)
+	if !checkServiceReachable(serverHost, gatewayPort) {
+		log.Printf("Gateway at %s is not reachable", serverAddr)
+		return fmt.Errorf("gateway at %s is not reachable", serverAddr)
 	}
 
 	conn, err := grpc.NewClient(serverAddr,
@@ -242,7 +212,7 @@ func (wc *WebClient) Connect() error {
 		return fmt.Errorf("failed to connect to %s: %v", serverAddr, err)
 	}
 
-	client := pb.NewMatchingServerServiceClient(conn)
+	client := gwpb.NewGatewayServerServiceClient(conn)
 	stream, err := client.CreateTradeStream(context.Background())
 	if err != nil {
 		conn.Close()
@@ -252,12 +222,24 @@ func (wc *WebClient) Connect() error {
 
 	wc.mu.Lock()
 	wc.conn = conn
-	wc.matchingClient = client
-	wc.matchingStream = stream
-	wc.matchingSendChan = make(chan *pb.GatewayMessage, 10)
+	wc.gwClient = client
+	wc.gwStream = stream
+	wc.gwSendChan = make(chan *gwpb.BackendMessage, 10)
 	wc.tradeStreamActive = true
-	sendChan := wc.matchingSendChan
+	sendChan := wc.gwSendChan
 	wc.mu.Unlock()
+
+	// Send OrderPoolSyncRequest to get current pool state
+	syncMsg := &gwpb.BackendMessage{
+		Msg: &gwpb.BackendMessage_OrderPoolSyncRequest{
+			OrderPoolSyncRequest: &gwpb.OrderPoolSyncRequest{},
+		},
+	}
+	if err := stream.Send(syncMsg); err != nil {
+		log.Printf("Failed to send OrderPoolSyncRequest: %v", err)
+	} else {
+		log.Println("Sent OrderPoolSyncRequest to gateway")
+	}
 
 	go func() {
 		for msg := range sendChan {
@@ -282,7 +264,7 @@ func (wc *WebClient) Connect() error {
 		for {
 			resp, err := stream.Recv()
 			if err == io.EOF {
-				log.Println("Trade stream closed by server")
+				log.Println("Gateway stream closed by server")
 				wc.mu.Lock()
 				if wc.streamGeneration == currentGen {
 					wc.tradeStreamActive = false
@@ -304,17 +286,17 @@ func (wc *WebClient) Connect() error {
 			if wc.streamGeneration == currentGen {
 				respJSON, _ := marshaler.Marshal(resp)
 				wc.responses = append(wc.responses, string(respJSON))
-				wc.processEngineMessage(resp)
+				wc.processGatewayMessage(resp)
 			}
 			wc.mu.Unlock()
 		}
 	}()
 
-	log.Printf("Connected to matching server at %s", serverAddr)
+	log.Printf("Connected to gateway at %s", serverAddr)
 	return nil
 }
 
-// handleReconnect handles POST requests to reconnect to the matching server
+// handleReconnect handles POST requests to reconnect to the gateway
 func (wc *WebClient) handleReconnect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.Header().Set("Content-Type", "application/json")
@@ -369,32 +351,39 @@ func (wc *WebClient) handleSendOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	messageType := r.FormValue("messageType")
-	wc.sendMatchingOrder(w, r, messageType)
+	wc.sendGatewayOrder(w, r, messageType)
 }
 
-// sendMatchingOrder builds and sends a matching server proto message
-func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, messageType string) {
-	seqNum, _ := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
+// sendGatewayOrder builds and sends a gateway proto BackendMessage
+func (wc *WebClient) sendGatewayOrder(w http.ResponseWriter, r *http.Request, messageType string) {
 	marshaler := protojson.MarshalOptions{
 		Multiline:       true,
 		Indent:          "  ",
 		EmitUnpopulated: true,
 	}
 
-	var gatewayMsg *pb.GatewayMessage
+	var backendMsg *gwpb.BackendMessage
 
 	switch messageType {
 	case "NewOrder":
 		clientOrderId, _ := strconv.ParseUint(r.FormValue("clientOrderId"), 10, 64)
-		trackerLegs, _ := tc.ParseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
 
-		var slateIDProto *common.UUID
-		if v := r.FormValue("slateId"); v != "" {
+		var userIDProto *common.UUID
+		if v := r.FormValue("userId"); v != "" {
 			if parsed, err := utils.ParseUUID(v); err == nil {
-				slateIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
+				userIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
 			}
 		}
-		lineupIndex, _ := strconv.ParseUint(r.FormValue("lineupIndex"), 10, 64)
+
+		trackerLegs, legUUIDs := tc.ParseLegsFromForm(r.FormValue("legSecurityIds"), r.FormValue("isOvers"))
+
+		var gwLegs []*gwpb.NewOrder_Body_Leg
+		for i, uuid := range legUUIDs {
+			gwLegs = append(gwLegs, &gwpb.NewOrder_Body_Leg{
+				LegSecurityId: uuid,
+				IsOver:        trackerLegs[i].IsOver,
+			})
+		}
 
 		orderType := common.OrderType_LIMIT
 		if r.FormValue("orderType") == "MARKET" {
@@ -403,84 +392,47 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 		portion, _ := strconv.ParseUint(r.FormValue("portion"), 10, 64)
 		quantity, _ := strconv.ParseUint(r.FormValue("quantity"), 10, 64)
 
-		newOrderBody := &pb.NewOrder_Body{
-			ClientOrderId: &common.UUID{Upper: 0, Lower: clientOrderId},
-			SlateId:       slateIDProto,
-			LineupIndex:   lineupIndex,
-			OrderType:     orderType,
-			Portion:       portion,
-			Quantity:      quantity,
-		}
-		if v := r.FormValue("selfMatchId"); v != "" {
-			if selfMatchID, err := utils.ParseUUID(v); err == nil {
-				newOrderBody.SelfMatchId = &common.UUID{
-					Upper: selfMatchID.Upper(),
-					Lower: selfMatchID.Lower(),
-				}
-			}
-		}
-
-		gatewayMsg = &pb.GatewayMessage{
-			SequencedMessageBase: &common.SequencedMessageBase{
-				SequenceNumber: seqNum,
-			},
-			Msg: &pb.GatewayMessage_NewOrder{
-				NewOrder: &pb.NewOrder{Body: newOrderBody},
-			},
-		}
-
-		wc.mu.Lock()
-		wc.pendingOrders[clientOrderId] = &tc.PendingOrderInfo{
-			Legs:        trackerLegs,
-			SlateID:     r.FormValue("slateId"),
-			LineupIndex: lineupIndex,
-			Portion:     portion,
-			Quantity:    quantity,
-		}
-		wc.mu.Unlock()
-
-	case "CancelOrder":
-		orderId, _ := strconv.ParseUint(r.FormValue("orderId"), 10, 64)
-		gatewayMsg = &pb.GatewayMessage{
-			SequencedMessageBase: &common.SequencedMessageBase{
-				SequenceNumber: seqNum,
-			},
-			Msg: &pb.GatewayMessage_CancelOrder{
-				CancelOrder: &pb.CancelOrder{
-					Body: &pb.CancelOrder_Body{OrderId: orderId},
-				},
-			},
-		}
-
-	case "DefinePool":
-		var slateIDProto *common.UUID
-		if v := r.FormValue("dpSlateId"); v != "" {
-			if parsed, err := utils.ParseUUID(v); err == nil {
-				slateIDProto = &common.UUID{Upper: parsed.Upper(), Lower: parsed.Lower()}
-			}
-		}
-		totalUnits, _ := strconv.ParseUint(r.FormValue("dpTotalUnits"), 10, 64)
-		numLineups, _ := strconv.ParseUint(r.FormValue("dpNumLineups"), 10, 64)
-
-		gatewayMsg = &pb.GatewayMessage{
-			SequencedMessageBase: &common.SequencedMessageBase{
-				SequenceNumber: seqNum,
-			},
-			Msg: &pb.GatewayMessage_DefinePool{
-				DefinePool: &pb.DefinePool{
-					Body: &pb.DefinePool_Body{
-						SlateId:    slateIDProto,
-						TotalUnits: totalUnits,
-						NumLineups: numLineups,
+		backendMsg = &gwpb.BackendMessage{
+			Msg: &gwpb.BackendMessage_NewOrder{
+				NewOrder: &gwpb.NewOrder{
+					Body: &gwpb.NewOrder_Body{
+						UserId:        userIDProto,
+						ClientOrderId: clientOrderId,
+						Legs:          gwLegs,
+						OrderType:     orderType,
+						Portion:       portion,
+						Quantity:      quantity,
 					},
 				},
 			},
 		}
 
-		// Track pool definition for visualization
-		if slateIDProto != nil {
-			slateID := utils.UUIDFromUint64(slateIDProto.Upper, slateIDProto.Lower)
-			wc.poolTracker.DefinePool(slateID.String(), totalUnits, numLineups)
+		wc.mu.Lock()
+		wc.pendingOrders[clientOrderId] = &tc.PendingOrderInfo{
+			Legs:     trackerLegs,
+			Portion:  portion,
+			Quantity: quantity,
+		}
+		wc.mu.Unlock()
+
+	case "CancelOrder":
+		orderIdStr := r.FormValue("orderId")
+		orderUUID, err := utils.ParseUUID(orderIdStr)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"status": "error", "message": "Invalid UUID for order ID"}`))
+			return
+		}
+
+		backendMsg = &gwpb.BackendMessage{
+			Msg: &gwpb.BackendMessage_CancelOrder{
+				CancelOrder: &gwpb.CancelOrder{
+					Body: &gwpb.CancelOrder_Body{
+						OrderId: &common.UUID{Upper: orderUUID.Upper(), Lower: orderUUID.Lower()},
+					},
+				},
+			},
 		}
 
 	default:
@@ -490,13 +442,13 @@ func (wc *WebClient) sendMatchingOrder(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 
-	reqJSON, _ := marshaler.Marshal(gatewayMsg)
+	reqJSON, _ := marshaler.Marshal(backendMsg)
 	wc.mu.Lock()
 	wc.requests = append(wc.requests, string(reqJSON))
 	wc.mu.Unlock()
 
 	select {
-	case wc.matchingSendChan <- gatewayMsg:
+	case wc.gwSendChan <- backendMsg:
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status": "success", "message": "message sent"}`))
 	case <-time.After(1 * time.Second):
@@ -524,53 +476,6 @@ func (wc *WebClient) handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(responses)
-}
-
-// Global sequence number handler - returns current value and optionally increments or sets
-func (wc *WebClient) handleSequenceNumber(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		wc.mu.Lock()
-		wc.globalSequenceNumber++
-		newSeq := wc.globalSequenceNumber
-		wc.mu.Unlock()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": newSeq})
-		return
-	}
-
-	if r.Method == "PUT" {
-		if err := r.ParseForm(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
-			return
-		}
-
-		seqNum, err := strconv.ParseUint(r.FormValue("sequenceNumber"), 10, 64)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid sequence number"})
-			return
-		}
-
-		wc.mu.Lock()
-		wc.globalSequenceNumber = seqNum
-		wc.mu.Unlock()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": seqNum})
-		return
-	}
-
-	// GET: just return current value
-	wc.mu.RLock()
-	currentSeq := wc.globalSequenceNumber
-	wc.mu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]uint64{"sequenceNumber": currentSeq})
 }
 
 // Global client order ID handler - returns current value and optionally increments or sets
@@ -628,19 +533,31 @@ func (wc *WebClient) handleEntryPoolsData(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(pools)
 }
 
-// Trade page handler - displays the matching engine tester interface
-func (wc *WebClient) handleTrade(w http.ResponseWriter, r *http.Request) {
-	renderMainPage(w)
+// TemplateData holds data passed to the HTML template
+type TemplateData struct {
+	GatewayUserIDs []string
+	GatewayLegIDs  []string
 }
 
-func renderMainPage(w http.ResponseWriter) {
+// Trade page handler - displays the gateway tester interface
+func (wc *WebClient) handleTrade(w http.ResponseWriter, r *http.Request) {
+	wc.mu.RLock()
+	data := TemplateData{
+		GatewayUserIDs: wc.gatewayUserIDs,
+		GatewayLegIDs:  wc.gatewayLegIDs,
+	}
+	wc.mu.RUnlock()
+	renderMainPage(w, data)
+}
+
+func renderMainPage(w http.ResponseWriter, data TemplateData) {
 	t, err := template.New("main").Parse(indexHTML)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	t.Execute(w, nil)
+	t.Execute(w, data)
 }
 
 
@@ -650,7 +567,7 @@ func main() {
 		tc.Fatal("Failed to load configuration: %v\nPlease ensure .env file exists with required fields (SERVER_HOST, SERVER_PORT)", err)
 	}
 
-	log.Printf("Starting Matching Engine Tester")
+	log.Printf("Starting Gateway Tester")
 
 	client := NewWebClient(cfg)
 	defer client.Close()
@@ -662,7 +579,6 @@ func main() {
 	http.HandleFunc("/send", client.handleSendOrder)
 	http.HandleFunc("/requests", client.handleRequests)
 	http.HandleFunc("/responses", client.handleResponses)
-	http.HandleFunc("/sequence-number", client.handleSequenceNumber)
 	http.HandleFunc("/client-order-id", client.handleClientOrderId)
 	http.HandleFunc("/entrypools-data", client.handleEntryPoolsData)
 	http.HandleFunc("/reconnect", client.handleReconnect)
