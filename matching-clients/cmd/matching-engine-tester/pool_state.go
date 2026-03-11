@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"matching-clients/src/utils"
 	"sort"
 	"sync"
@@ -319,6 +320,78 @@ func getOrdersDisplay(lineup *LineupState) []OrderDisplayData {
 		return orders[i].SequenceNumber < orders[j].SequenceNumber
 	})
 	return orders
+}
+
+// ReplacePoolFromSnapshot replaces all pool state from an OrderPoolSnapshot.
+// Each snapshot represents the complete current state, so all existing pools are
+// cleared first. Since snapshots contain anonymous aggregate data (no order IDs),
+// synthetic IDs are used.
+func (pt *PoolTracker) ReplacePoolFromSnapshot(
+	legSecurityIDs []utils.UUID,
+	lineupBooks []LineupBookSnapshot,
+) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	// Clear all existing pools since each snapshot represents the full state
+	for key := range pt.pools {
+		delete(pt.pools, key)
+	}
+
+	sortedIDs := make([]utils.UUID, len(legSecurityIDs))
+	copy(sortedIDs, legSecurityIDs)
+	sort.Slice(sortedIDs, func(i, j int) bool {
+		return compareUUIDs(sortedIDs[i], sortedIDs[j]) < 0
+	})
+	poolKey := poolKeyToString(sortedIDs)
+
+	pool := &PoolState{
+		LegSecurityIDs: sortedIDs,
+		Lineups:        make(map[uint64]*LineupState),
+		NumLegs:        len(legSecurityIDs),
+	}
+
+	for lineupIdx, book := range lineupBooks {
+		lineup := &LineupState{
+			Orders: make(map[string]*OrderState),
+		}
+
+		orderCounter := uint64(0)
+		for levelIdx, level := range book.Levels {
+			for orderIdx, order := range level.Orders {
+				orderCounter++
+				syntheticID := fmt.Sprintf("snapshot-%d-%d-%d", lineupIdx, levelIdx, orderIdx)
+				lineup.Orders[syntheticID] = &OrderState{
+					OrderID:           syntheticID,
+					Portion:           level.Portion,
+					OriginalQuantity:  order.QuantityRemaining,
+					RemainingQuantity: order.QuantityRemaining,
+					SequenceNumber:    orderCounter, // Stable ordering within lineup
+				}
+			}
+		}
+
+		pool.Lineups[uint64(lineupIdx)] = lineup
+	}
+
+	pt.pools[poolKey] = pool
+}
+
+// LineupBookSnapshot represents a lineup from an OrderPoolSnapshot
+type LineupBookSnapshot struct {
+	IsOver []bool
+	Levels []LevelSnapshot
+}
+
+// LevelSnapshot represents a price level from an OrderPoolSnapshot
+type LevelSnapshot struct {
+	Portion uint64
+	Orders  []OrderSnapshot
+}
+
+// OrderSnapshot represents an order from an OrderPoolSnapshot
+type OrderSnapshot struct {
+	QuantityRemaining uint64
 }
 
 // GetAllPoolsDisplay returns all pools formatted for display

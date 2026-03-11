@@ -168,58 +168,39 @@ func (wc *WebClient) processEngineMessage(resp *pb.EngineMessage) {
 	}
 }
 
-// processGatewayMessage processes gateway responses and updates pool state
+// processGatewayMessage processes gateway responses and updates pool state.
+// Pool state is driven entirely by OrderPoolSnapshot messages from the gateway;
+// ack/match/elimination events are not used for pool tracking since the gateway
+// sends an updated snapshot after every state change.
 // NOTE: This method assumes wc.mu is already locked by the caller
 func (wc *WebClient) processGatewayMessage(resp *gwpb.GatewayMessage) {
 	switch event := resp.Event.(type) {
-	case *gwpb.GatewayMessage_NewOrderAcknowledgement:
-		ack := event.NewOrderAcknowledgement
-		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			clientOrderID := ack.Body.ClientOrderId
-			orderID := utils.UUIDFromUint64(ack.Body.OrderId.GetUpper(), ack.Body.OrderId.GetLower())
-			var sequenceNumber uint64
-			if resp.SequencedMessageBase != nil {
-				sequenceNumber = resp.SequencedMessageBase.SequenceNumber
+	case *gwpb.GatewayMessage_OrderPoolSnapshot:
+		snapshot := event.OrderPoolSnapshot
+		if snapshot != nil {
+			var legSecurityIDs []utils.UUID
+			for _, legID := range snapshot.GetLegSecurityIds() {
+				legSecurityIDs = append(legSecurityIDs, utils.UUIDFromUint64(legID.GetUpper(), legID.GetLower()))
 			}
 
-			if pendingOrder, exists := wc.pendingOrders[clientOrderID]; exists {
-				wc.poolTracker.AddOrder(
-					orderID.String(),
-					clientOrderID,
-					pendingOrder.Legs,
-					pendingOrder.Portion,
-					pendingOrder.Quantity,
-					sequenceNumber,
-				)
-				delete(wc.pendingOrders, clientOrderID)
+			var lineupBooks []LineupBookSnapshot
+			for _, book := range snapshot.GetLineupBooks() {
+				lb := LineupBookSnapshot{
+					IsOver: book.GetIsOver(),
+				}
+				for _, level := range book.GetLevels() {
+					ls := LevelSnapshot{Portion: level.GetPortion()}
+					for _, order := range level.GetOrders() {
+						ls.Orders = append(ls.Orders, OrderSnapshot{
+							QuantityRemaining: order.GetQuantityRemaining(),
+						})
+					}
+					lb.Levels = append(lb.Levels, ls)
+				}
+				lineupBooks = append(lineupBooks, lb)
 			}
-		}
 
-	case *gwpb.GatewayMessage_CancelOrderAcknowledgement:
-		ack := event.CancelOrderAcknowledgement
-		if ack.FallibleBase != nil && ack.FallibleBase.Success && ack.Body != nil {
-			orderID := utils.UUIDFromUint64(ack.Body.OrderId.GetUpper(), ack.Body.OrderId.GetLower())
-			wc.poolTracker.RemoveOrder(orderID.String())
-		}
-
-	case *gwpb.GatewayMessage_Elimination:
-		elim := event.Elimination
-		if elim != nil && elim.Body != nil {
-			orderID := utils.UUIDFromUint64(elim.Body.OrderId.GetUpper(), elim.Body.OrderId.GetLower())
-			wc.poolTracker.RemoveOrder(orderID.String())
-		}
-
-	case *gwpb.GatewayMessage_Match:
-		match := event.Match
-		if match.Body != nil {
-			for _, fillEvent := range match.Body.FillEvents {
-				orderID := utils.UUIDFromUint64(fillEvent.OrderId.GetUpper(), fillEvent.OrderId.GetLower())
-				wc.poolTracker.UpdateFromFill(
-					orderID.String(),
-					match.Body.MatchedQuantity,
-					fillEvent.IsComplete,
-				)
-			}
+			wc.poolTracker.ReplacePoolFromSnapshot(legSecurityIDs, lineupBooks)
 		}
 	}
 }
@@ -442,6 +423,18 @@ func (wc *WebClient) SwitchTarget(newMode string) error {
 		wc.tradeStreamActive = true
 		sendChan := wc.gwSendChan
 		wc.mu.Unlock()
+
+		// Send OrderPoolSyncRequest to get current pool state
+		syncMsg := &gwpb.BackendMessage{
+			Msg: &gwpb.BackendMessage_OrderPoolSyncRequest{
+				OrderPoolSyncRequest: &gwpb.OrderPoolSyncRequest{},
+			},
+		}
+		if err := stream.Send(syncMsg); err != nil {
+			log.Printf("Failed to send OrderPoolSyncRequest: %v", err)
+		} else {
+			log.Println("Sent OrderPoolSyncRequest to gateway")
+		}
 
 		go func() {
 			for msg := range sendChan {

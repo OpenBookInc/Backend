@@ -72,9 +72,21 @@ type Gateway struct {
 	dbToEngineOrderID   map[utils.UUID]uint64
 	dbToEngineOrderIDMu sync.RWMutex
 
+	// Pending cancels: orders with cancel requests awaiting engine order ID (for recovery resubmission)
+	pendingCancels   map[utils.UUID]*PendingCancel
+	pendingCancelsMu sync.RWMutex
+
 	// Client stream tracking: keyed by dbRecordID (gateway proto stream)
 	clientStreams   map[utils.UUID]gwpb.GatewayServerService_CreateTradeStreamServer
 	clientStreamsMu sync.RWMutex
+
+	// All connected client streams for broadcasting (keyed by connection ID)
+	allClientStreams   map[uint64]gwpb.GatewayServerService_CreateTradeStreamServer
+	allClientStreamsMu sync.RWMutex
+	nextConnID         uint64
+
+	// Order pool state tracking for snapshot generation
+	poolTracker *OrderPoolTracker
 
 	// Sequence number for messages to upstream matching server
 	upstreamSeqNumber uint64
@@ -91,9 +103,16 @@ type Gateway struct {
 	definedPools   map[string]bool
 	definedPoolsMu sync.RWMutex
 
+	// Recovery cancel tracking: engine order IDs for which we sent recovery CancelOrders
+	recoveryCancels   map[uint64]bool
+	recoveryCancelsMu sync.RWMutex
+
 	// Upstream matching server connection state
 	upstreamConnected bool
 	upstreamMu        sync.RWMutex
+
+	// Monotonic counter for FIFO ordering of orders during resubmission
+	nextLocalEventSequence uint64
 
 	// Context for shutdown
 	ctx    context.Context
@@ -106,6 +125,13 @@ type PendingOrder struct {
 	UserID               utils.UUID
 	DBRecordID           utils.UUID // exchange_orders.id, also used as matching engine client_order_id
 	Quantity             int64
+	Legs                 []TrackedLeg
+	Portion              uint64
+	SlateID              utils.UUID
+	OrderType            common.OrderType // proto order type for resubmission
+	LineupIndex          uint64           // lineup index within the slate for resubmission
+	IsRecovery           bool             // true if this order was recovered/resubmitted (not from a live client)
+	LocalEventSequence   uint64           // monotonic insertion sequence for FIFO ordering during resubmission
 }
 
 // ConfirmedOrder tracks a confirmed order on the matching engine for fills/cancels/eliminations
@@ -198,8 +224,12 @@ func NewGateway(ctx context.Context, config *Config) (*Gateway, error) {
 		pendingOrders:     make(map[utils.UUID]*PendingOrder),
 		confirmedOrders:   make(map[uint64]*ConfirmedOrder),
 		dbToEngineOrderID: make(map[utils.UUID]uint64),
+		pendingCancels:    make(map[utils.UUID]*PendingCancel),
+		recoveryCancels:   make(map[uint64]bool),
 		clientStreams:     make(map[utils.UUID]gwpb.GatewayServerService_CreateTradeStreamServer),
 		definedPools:      make(map[string]bool),
+		allClientStreams:  make(map[uint64]gwpb.GatewayServerService_CreateTradeStreamServer),
+		poolTracker:       NewOrderPoolTracker(),
 		sendChan:          make(chan *pb.GatewayMessage, 100),
 		ctx:               ctx,
 		cancel:            cancel,
@@ -237,6 +267,11 @@ func (gw *Gateway) connectMatchingServer() error {
 
 // Start begins the gateway operations
 func (gw *Gateway) Start() error {
+	// Recover active orders from database before connecting to matching server
+	if err := gw.recoverActiveState(gw.ctx); err != nil {
+		log.Printf("WARNING: Failed to recover active orders: %v\n", err)
+	}
+
 	// Try to initialize trade stream if we have a connection
 	if gw.conn != nil {
 		if err := gw.initializeTradeStream(); err != nil {
@@ -246,6 +281,9 @@ func (gw *Gateway) Start() error {
 			gw.upstreamConnected = true
 			gw.upstreamMu.Unlock()
 			log.Println("Connected to matching server")
+
+			// Resubmit recovered orders to matching engine
+			gw.resubmitOrdersToMatchingEngine()
 		}
 	}
 
@@ -332,6 +370,13 @@ func (gw *Gateway) getNextGatewaySequenceNumber() uint64 {
 	defer gw.gatewaySeqMu.Unlock()
 	seq := gw.gatewaySeqNumber
 	gw.gatewaySeqNumber++
+	return seq
+}
+
+// getNextLocalEventSequence returns the next monotonic sequence number for order FIFO ordering.
+func (gw *Gateway) getNextLocalEventSequence() uint64 {
+	seq := gw.nextLocalEventSequence
+	gw.nextLocalEventSequence++
 	return seq
 }
 
@@ -476,6 +521,23 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 		return
 	}
 
+	// Delegate to recovery-specific handler if this is a recovered/resubmitted order
+	if pendingOrder.IsRecovery {
+		if ack.FallibleBase != nil && ack.FallibleBase.Success {
+			gw.handleRecoveryOrderAck(ctx, dbRecordID, engineOrderID, pendingOrder)
+		} else {
+			errorDesc := ""
+			if ack.FallibleBase != nil {
+				errorDesc = ack.FallibleBase.ErrorDescription
+			}
+			gw.handleRecoveryOrderRejection(ctx, dbRecordID, errorDesc)
+		}
+		gw.pendingOrdersMu.Lock()
+		delete(gw.pendingOrders, dbRecordID)
+		gw.pendingOrdersMu.Unlock()
+		return
+	}
+
 	if ack.FallibleBase != nil && ack.FallibleBase.Success {
 		log.Printf("Order acknowledged: dbRecordId=%s, engineOrderId=%d\n", dbRecordID.String(), engineOrderID)
 
@@ -498,6 +560,19 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 			log.Printf("ERROR: Failed to update order status: %v\n", err)
 		}
 
+		// Add to pool tracker
+		gw.poolTracker.AddOrder(&TrackedOrder{
+			DBRecordID:   dbRecordID,
+			SlateID:      pendingOrder.SlateID,
+			Legs:         pendingOrder.Legs,
+			Portion:      pendingOrder.Portion,
+			RemainingQty: uint64(pendingOrder.Quantity),
+			OrderType:    pendingOrder.OrderType,
+			UserID:       pendingOrder.UserID,
+			LineupIndex:  pendingOrder.LineupIndex,
+			LocalEventSequence: pendingOrder.LocalEventSequence,
+		})
+
 		// Forward success ack to client
 		gw.forwardToClient(dbRecordID, &gwpb.GatewayMessage{
 			SequencedMessageBase: &common.SequencedMessageBase{
@@ -513,6 +588,9 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 				},
 			},
 		})
+
+		// Broadcast updated pool snapshot to all clients
+		gw.broadcastPoolSnapshot(pendingOrder.SlateID)
 	} else {
 		errorDesc := ""
 		if ack.FallibleBase != nil {
@@ -574,12 +652,34 @@ func (gw *Gateway) handleCancelOrderAcknowledgement(ctx context.Context, ack *pb
 		return
 	}
 
+	// Check if this is a recovery cancel
+	gw.recoveryCancelsMu.Lock()
+	isRecoveryCancel := gw.recoveryCancels[engineOrderID]
+	delete(gw.recoveryCancels, engineOrderID)
+	gw.recoveryCancelsMu.Unlock()
+
+	if isRecoveryCancel {
+		if ack.FallibleBase != nil && ack.FallibleBase.Success {
+			gw.handleRecoveryCancelAck(ctx, confirmed.DBRecordID, engineOrderID)
+		} else {
+			errorDesc := ""
+			if ack.FallibleBase != nil {
+				errorDesc = ack.FallibleBase.ErrorDescription
+			}
+			gw.handleRecoveryCancelRejection(confirmed.DBRecordID, engineOrderID, errorDesc)
+		}
+		return
+	}
+
 	if ack.FallibleBase != nil && ack.FallibleBase.Success {
 		log.Printf("Order cancel acknowledged: engineOrderId=%d, dbRecordId=%s\n", engineOrderID, confirmed.DBRecordID.String())
 
 		if err := gw.CancelExchangeOrderDueToUser(ctx, confirmed.DBRecordID); err != nil {
 			log.Printf("ERROR: Failed to cancel order: %v\n", err)
 		}
+
+		// Remove from pool tracker and get slate ID for broadcast
+		slateID := gw.poolTracker.RemoveOrderAndGetSlate(confirmed.DBRecordID)
 
 		// Forward success to client
 		gw.forwardToClient(confirmed.DBRecordID, &gwpb.GatewayMessage{
@@ -597,6 +697,11 @@ func (gw *Gateway) handleCancelOrderAcknowledgement(ctx context.Context, ack *pb
 		})
 
 		gw.removeConfirmedOrder(engineOrderID, confirmed.DBRecordID)
+
+		// Broadcast updated pool snapshot to all clients
+		if slateID != (utils.UUID{}) {
+			gw.broadcastPoolSnapshot(slateID)
+		}
 	} else {
 		errorDesc := ""
 		if ack.FallibleBase != nil {
@@ -647,6 +752,9 @@ func (gw *Gateway) handleOrderElimination(ctx context.Context, elim *pb.OrderEli
 		log.Printf("ERROR: Failed to cancel order: %v\n", err)
 	}
 
+	// Remove from pool tracker and get slate ID for broadcast
+	slateID := gw.poolTracker.RemoveOrderAndGetSlate(confirmed.DBRecordID)
+
 	// Forward elimination to client
 	gw.forwardToClient(confirmed.DBRecordID, &gwpb.GatewayMessage{
 		SequencedMessageBase: &common.SequencedMessageBase{
@@ -662,6 +770,11 @@ func (gw *Gateway) handleOrderElimination(ctx context.Context, elim *pb.OrderEli
 	})
 
 	gw.removeConfirmedOrder(engineOrderID, confirmed.DBRecordID)
+
+	// Broadcast updated pool snapshot to all clients
+	if slateID != (utils.UUID{}) {
+		gw.broadcastPoolSnapshot(slateID)
+	}
 }
 
 // handleMatch processes a match/fill event from the matching engine.
@@ -767,6 +880,15 @@ func (gw *Gateway) handleMatch(ctx context.Context, match *pb.Match) {
 		},
 	}
 
+	// Update pool tracker for all fills and collect affected slates
+	affectedSlates := make(map[utils.UUID]bool)
+	for _, f := range fills {
+		slateID := gw.poolTracker.UpdateFillAndGetSlate(f.confirmed.DBRecordID, match.Body.MatchedQuantity, f.isComplete)
+		if slateID != (utils.UUID{}) {
+			affectedSlates[slateID] = true
+		}
+	}
+
 	// Forward match to each involved client
 	notified := make(map[utils.UUID]bool)
 	for _, f := range fills {
@@ -782,6 +904,11 @@ func (gw *Gateway) handleMatch(ctx context.Context, match *pb.Match) {
 		if f.isComplete {
 			gw.removeConfirmedOrder(f.engineOrderID, f.confirmed.DBRecordID)
 		}
+	}
+
+	// Broadcast updated pool snapshots to all clients
+	for slateID := range affectedSlates {
+		gw.broadcastPoolSnapshot(slateID)
 	}
 }
 
@@ -803,7 +930,10 @@ func (gw *Gateway) removeConfirmedOrder(engineOrderID uint64, dbRecordID utils.U
 // CreateTradeStream implements the GatewayServerServiceServer interface.
 // This handles incoming client connections using the gateway proto.
 func (gw *Gateway) CreateTradeStream(stream gwpb.GatewayServerService_CreateTradeStreamServer) error {
-	log.Println("New client connected to gateway")
+	connID := gw.registerClientStream(stream)
+	defer gw.unregisterClientStream(connID)
+
+	log.Printf("New client connected to gateway (connID=%d)\n", connID)
 
 	for {
 		select {
@@ -812,11 +942,11 @@ func (gw *Gateway) CreateTradeStream(stream gwpb.GatewayServerService_CreateTrad
 		default:
 			msg, err := stream.Recv()
 			if err == io.EOF {
-				log.Println("Client stream closed")
+				log.Printf("Client stream closed (connID=%d)\n", connID)
 				return nil
 			}
 			if err != nil {
-				log.Printf("Error receiving from client: %v\n", err)
+				log.Printf("Error receiving from client (connID=%d): %v\n", connID, err)
 				return err
 			}
 
@@ -836,6 +966,8 @@ func (gw *Gateway) handleClientMessage(clientStream gwpb.GatewayServerService_Cr
 		return gw.handleClientNewOrder(ctx, clientStream, m.NewOrder)
 	case *gwpb.BackendMessage_CancelOrder:
 		return gw.handleClientCancelOrder(ctx, clientStream, m.CancelOrder)
+	case *gwpb.BackendMessage_OrderPoolSyncRequest:
+		return gw.handleOrderPoolSyncRequest(clientStream)
 	default:
 		log.Printf("Unknown message type from client\n")
 		return nil
@@ -895,12 +1027,26 @@ func (gw *Gateway) handleClientNewOrder(ctx context.Context, clientStream gwpb.G
 	}
 
 	// Step 3: Track the pending order and client stream
+	trackedLegs := make([]TrackedLeg, len(legs))
+	for i, leg := range legs {
+		trackedLegs[i] = TrackedLeg{
+			LegSecurityID: leg.LegSecurityIDAsUUID(),
+			IsOver:        leg.IsOver,
+		}
+	}
+
 	gw.pendingOrdersMu.Lock()
 	gw.pendingOrders[dbRecordID] = &PendingOrder{
 		BackendClientOrderID: backendClientOrderID,
 		UserID:               userID,
 		DBRecordID:           dbRecordID,
 		Quantity:             int64(order.Body.Quantity),
+		Legs:                 trackedLegs,
+		Portion:              order.Body.Portion,
+		SlateID:              slateAndLineups.Slate.ID,
+		OrderType:            order.Body.OrderType,
+		LineupIndex:          uint64(lineupIndex),
+		LocalEventSequence:   gw.getNextLocalEventSequence(),
 	}
 	gw.pendingOrdersMu.Unlock()
 
@@ -1013,6 +1159,84 @@ func (gw *Gateway) handleClientCancelOrder(ctx context.Context, clientStream gwp
 	}
 
 	return nil
+}
+
+// registerClientStream adds a client stream to the broadcast set and returns its connection ID.
+func (gw *Gateway) registerClientStream(stream gwpb.GatewayServerService_CreateTradeStreamServer) uint64 {
+	gw.allClientStreamsMu.Lock()
+	defer gw.allClientStreamsMu.Unlock()
+	gw.nextConnID++
+	connID := gw.nextConnID
+	gw.allClientStreams[connID] = stream
+	return connID
+}
+
+// unregisterClientStream removes a client stream from the broadcast set.
+func (gw *Gateway) unregisterClientStream(connID uint64) {
+	gw.allClientStreamsMu.Lock()
+	defer gw.allClientStreamsMu.Unlock()
+	delete(gw.allClientStreams, connID)
+}
+
+// handleOrderPoolSyncRequest sends all current pool snapshots to the requesting client.
+func (gw *Gateway) handleOrderPoolSyncRequest(clientStream gwpb.GatewayServerService_CreateTradeStreamServer) error {
+	log.Println("Received OrderPoolSyncRequest from client")
+
+	snapshots := gw.poolTracker.BuildSnapshotsForAllSlates()
+	for _, snapshot := range snapshots {
+		msg := &gwpb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
+				SequenceNumber: gw.getNextGatewaySequenceNumber(),
+			},
+			Event: &gwpb.GatewayMessage_OrderPoolSnapshot{
+				OrderPoolSnapshot: snapshot,
+			},
+		}
+		if err := clientStream.Send(msg); err != nil {
+			return fmt.Errorf("failed to send pool snapshot: %w", err)
+		}
+	}
+
+	log.Printf("Sent %d pool snapshots to client\n", len(snapshots))
+	return nil
+}
+
+// broadcastPoolSnapshot builds a snapshot for the given slate and sends it to all connected clients.
+func (gw *Gateway) broadcastPoolSnapshot(slateID utils.UUID) {
+	snapshot := gw.poolTracker.BuildSnapshotsForSlate(slateID)
+
+	var msg *gwpb.GatewayMessage
+	if snapshot != nil {
+		msg = &gwpb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
+				SequenceNumber: gw.getNextGatewaySequenceNumber(),
+			},
+			Event: &gwpb.GatewayMessage_OrderPoolSnapshot{
+				OrderPoolSnapshot: snapshot,
+			},
+		}
+	} else {
+		// Slate has no more orders — send an empty snapshot so clients clear their state
+		msg = &gwpb.GatewayMessage{
+			SequencedMessageBase: &common.SequencedMessageBase{
+				SequenceNumber: gw.getNextGatewaySequenceNumber(),
+			},
+			Event: &gwpb.GatewayMessage_OrderPoolSnapshot{
+				OrderPoolSnapshot: &gwpb.OrderPoolSnapshot{
+					SlateId: uuidToProto(slateID),
+				},
+			},
+		}
+	}
+
+	gw.allClientStreamsMu.RLock()
+	defer gw.allClientStreamsMu.RUnlock()
+
+	for connID, stream := range gw.allClientStreams {
+		if err := stream.Send(msg); err != nil {
+			log.Printf("Failed to broadcast pool snapshot to connID=%d: %v\n", connID, err)
+		}
+	}
 }
 
 // sendOrderRejection sends a rejection acknowledgement back to the client using the gateway proto
@@ -1130,6 +1354,9 @@ drained:
 	gw.upstreamMu.Lock()
 	gw.upstreamConnected = true
 	gw.upstreamMu.Unlock()
+
+	// Resubmit all known orders to the fresh matching engine
+	gw.resubmitOrdersToMatchingEngine()
 
 	return nil
 }

@@ -22,6 +22,7 @@ message BackendMessage {
   oneof msg {
     NewOrder new_order = 1;
     CancelOrder cancel_order = 4;
+    OrderPoolSyncRequest order_pool_sync_request = 5;
   }
 }
 
@@ -33,7 +34,7 @@ message GatewayMessage {
     NewOrderAcknowledgement new_order_acknowledgement = 2;
     CancelOrderAcknowledgement cancel_order_acknowledgement = 3;
     Match match = 4;
-    OrderBookSnapshot order_book_snapshot = 5;
+    OrderPoolSnapshot order_pool_snapshot = 5;
     OrderElimination elimination = 6;
   }
 }
@@ -111,7 +112,13 @@ message OrderElimination {
   Body body = 1;
 }
 
-message OrderBookSnapshot {
+message OrderPoolSyncRequest {
+  message Body {}
+
+  Body body = 1;
+}
+
+message OrderPoolSnapshot {
   message LineupBook {
     message Level {
       message Order { uint64 quantity_remaining = 1; }
@@ -124,5 +131,7 @@ message OrderBookSnapshot {
     repeated Level levels = 2;
   }
 
-  repeated OpenBook.CommonPackage.UUID leg_security_ids = 1;
+  OpenBook.CommonPackage.UUID slate_id = 1;
+  repeated OpenBook.CommonPackage.UUID leg_security_ids = 2;
+  repeated LineupBook lineup_books = 3;
 }
