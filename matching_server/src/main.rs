@@ -1,5 +1,6 @@
 use tonic::{transport::Server, Request, Response, Status};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use std::pin::Pin;
@@ -31,6 +32,9 @@ struct ServiceState {
 
     /// Response channel for the trade stream.
     trade_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Result<EngineMessage, Status>>>>>,
+
+    /// Whether a client is currently connected.
+    client_connected: Arc<AtomicBool>,
 }
 
 pub struct MatcherService {
@@ -45,6 +49,7 @@ impl MatcherService {
                 pool_manager: Arc::new(Mutex::new(PoolManager::new())),
                 next_response_sequence_number: Arc::new(Mutex::new(0)),
                 trade_tx: Arc::new(Mutex::new(None)),
+                client_connected: Arc::new(AtomicBool::new(false)),
             },
         }
     }
@@ -55,6 +60,7 @@ impl MatcherService {
         *self.state.expected_next_sequence_number.lock().unwrap() = 0;
         *self.state.next_response_sequence_number.lock().unwrap() = 0;
         *self.state.pool_manager.lock().unwrap() = PoolManager::new();
+        self.state.client_connected.store(false, Ordering::SeqCst);
     }
 
     /// Helper to get the next response sequence number
@@ -343,6 +349,14 @@ impl MatchingServerService for MatcherService {
         &self,
         request: Request<tonic::Streaming<GatewayMessage>>,
     ) -> Result<Response<Self::CreateTradeStreamStream>, Status> {
+        // Reject if a client is already connected
+        if self.state.client_connected.swap(true, Ordering::SeqCst) {
+            println!("Rejected trade stream connection: a client is already connected");
+            return Err(Status::already_exists("A client is already connected"));
+        }
+
+        println!("Client connected to trade stream");
+
         let mut in_stream = request.into_inner();
 
         // Create a channel for sending responses back to the client
