@@ -562,15 +562,16 @@ func (gw *Gateway) handleNewOrderAcknowledgement(ctx context.Context, ack *pb.Ne
 
 		// Add to pool tracker
 		gw.poolTracker.AddOrder(&TrackedOrder{
-			DBRecordID:   dbRecordID,
-			SlateID:      pendingOrder.SlateID,
-			Legs:         pendingOrder.Legs,
-			Portion:      pendingOrder.Portion,
-			RemainingQty: uint64(pendingOrder.Quantity),
-			OrderType:    pendingOrder.OrderType,
-			UserID:       pendingOrder.UserID,
-			LineupIndex:  pendingOrder.LineupIndex,
-			LocalEventSequence: pendingOrder.LocalEventSequence,
+			DBRecordID:           dbRecordID,
+			SlateID:              pendingOrder.SlateID,
+			Legs:                 pendingOrder.Legs,
+			Portion:              pendingOrder.Portion,
+			RemainingQty:         uint64(pendingOrder.Quantity),
+			OrderType:            pendingOrder.OrderType,
+			UserID:               pendingOrder.UserID,
+			LineupIndex:          pendingOrder.LineupIndex,
+			LocalEventSequence:   pendingOrder.LocalEventSequence,
+			BackendClientOrderID: pendingOrder.BackendClientOrderID,
 		})
 
 		// Forward success ack to client

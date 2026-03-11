@@ -102,8 +102,19 @@ func (wc *WebClient) processGatewayMessage(resp *gwpb.GatewayMessage) {
 				for _, level := range book.GetLevels() {
 					ls := tc.LevelSnapshot{Portion: level.GetPortion()}
 					for _, order := range level.GetOrders() {
+						orderID := ""
+						if oid := order.GetOrderId(); oid != nil {
+							orderID = utils.UUIDFromUint64(oid.GetUpper(), oid.GetLower()).String()
+						}
+						userID := ""
+						if uid := order.GetUserId(); uid != nil {
+							userID = utils.UUIDFromUint64(uid.GetUpper(), uid.GetLower()).String()
+						}
 						ls.Orders = append(ls.Orders, tc.OrderSnapshot{
 							QuantityRemaining: order.GetQuantityRemaining(),
+							OrderID:           orderID,
+							ClientOrderID:     order.GetClientOrderId(),
+							UserID:            userID,
 						})
 					}
 					lb.Levels = append(lb.Levels, ls)

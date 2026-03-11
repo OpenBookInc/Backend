@@ -17,6 +17,7 @@ type Leg struct {
 type OrderState struct {
 	OrderID           string
 	ClientOrderID     uint64
+	UserID            string
 	Portion           uint64
 	OriginalQuantity  uint64
 	RemainingQuantity uint64
@@ -291,6 +292,7 @@ type OverUnderDisplay struct {
 type OrderDisplayData struct {
 	OrderID           string
 	ClientOrderID     uint64
+	UserID            string
 	Portion           uint64
 	OriginalQuantity  uint64
 	RemainingQuantity uint64
@@ -307,6 +309,7 @@ func GetOrdersDisplay(lineup *LineupState) []OrderDisplayData {
 		orders = append(orders, OrderDisplayData{
 			OrderID:           order.OrderID,
 			ClientOrderID:     order.ClientOrderID,
+			UserID:            order.UserID,
 			Portion:           order.Portion,
 			OriginalQuantity:  order.OriginalQuantity,
 			RemainingQuantity: order.RemainingQuantity,
@@ -360,9 +363,14 @@ func (pt *PoolTracker) ReplacePoolFromSnapshot(
 		for levelIdx, level := range book.Levels {
 			for orderIdx, order := range level.Orders {
 				orderCounter++
-				syntheticID := fmt.Sprintf("snapshot-%d-%d-%d", lineupIdx, levelIdx, orderIdx)
-				lineup.Orders[syntheticID] = &OrderState{
-					OrderID:           syntheticID,
+				orderID := order.OrderID
+				if orderID == "" {
+					orderID = fmt.Sprintf("snapshot-%d-%d-%d", lineupIdx, levelIdx, orderIdx)
+				}
+				lineup.Orders[orderID] = &OrderState{
+					OrderID:           orderID,
+					ClientOrderID:     order.ClientOrderID,
+					UserID:            order.UserID,
 					Portion:           level.Portion,
 					OriginalQuantity:  order.QuantityRemaining,
 					RemainingQuantity: order.QuantityRemaining,
@@ -392,6 +400,9 @@ type LevelSnapshot struct {
 // OrderSnapshot represents an order from an OrderPoolSnapshot
 type OrderSnapshot struct {
 	QuantityRemaining uint64
+	OrderID           string
+	ClientOrderID     uint64
+	UserID            string
 }
 
 // GetAllPoolsDisplay returns all pools formatted for display

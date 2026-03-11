@@ -17,15 +17,16 @@ type TrackedLeg struct {
 
 // TrackedOrder holds the pool-relevant state of a confirmed order.
 type TrackedOrder struct {
-	DBRecordID   utils.UUID
-	SlateID      utils.UUID
-	Legs         []TrackedLeg
-	Portion      uint64
-	RemainingQty uint64
-	OrderType    common.OrderType
-	UserID       utils.UUID
-	LineupIndex  uint64
-	LocalEventSequence uint64 // monotonic insertion sequence for FIFO ordering during resubmission
+	DBRecordID           utils.UUID
+	SlateID              utils.UUID
+	Legs                 []TrackedLeg
+	Portion              uint64
+	RemainingQty         uint64
+	OrderType            common.OrderType
+	UserID               utils.UUID
+	LineupIndex          uint64
+	LocalEventSequence   uint64 // monotonic insertion sequence for FIFO ordering during resubmission
+	BackendClientOrderID uint64 // uint64 client_order_id from the backend client
 }
 
 // OrderPoolTracker tracks all active orders grouped by slate for snapshot generation.
@@ -253,6 +254,9 @@ func buildLevels(orders []*TrackedOrder) []*gwpb.OrderPoolSnapshot_LineupBook_Le
 		for j, o := range portionOrders[portion] {
 			protoOrders[j] = &gwpb.OrderPoolSnapshot_LineupBook_Level_Order{
 				QuantityRemaining: o.RemainingQty,
+				OrderId:           &common.UUID{Upper: o.DBRecordID.Upper(), Lower: o.DBRecordID.Lower()},
+				ClientOrderId:     o.BackendClientOrderID,
+				UserId:            &common.UUID{Upper: o.UserID.Upper(), Lower: o.UserID.Lower()},
 			}
 		}
 		levels[i] = &gwpb.OrderPoolSnapshot_LineupBook_Level{

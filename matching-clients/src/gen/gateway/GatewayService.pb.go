@@ -1269,6 +1269,9 @@ func (x *OrderPoolSnapshot_LineupBook_Level) GetOrders() []*OrderPoolSnapshot_Li
 type OrderPoolSnapshot_LineupBook_Level_Order struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	QuantityRemaining uint64                 `protobuf:"varint,1,opt,name=quantity_remaining,json=quantityRemaining,proto3" json:"quantity_remaining,omitempty"`
+	OrderId           *gen.UUID              `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	ClientOrderId     uint64                 `protobuf:"varint,3,opt,name=client_order_id,json=clientOrderId,proto3" json:"client_order_id,omitempty"`
+	UserId            *gen.UUID              `protobuf:"bytes,4,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1308,6 +1311,27 @@ func (x *OrderPoolSnapshot_LineupBook_Level_Order) GetQuantityRemaining() uint64
 		return x.QuantityRemaining
 	}
 	return 0
+}
+
+func (x *OrderPoolSnapshot_LineupBook_Level_Order) GetOrderId() *gen.UUID {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
+func (x *OrderPoolSnapshot_LineupBook_Level_Order) GetClientOrderId() uint64 {
+	if x != nil {
+		return x.ClientOrderId
+	}
+	return 0
+}
+
+func (x *OrderPoolSnapshot_LineupBook_Level_Order) GetUserId() *gen.UUID {
+	if x != nil {
+		return x.UserId
+	}
+	return nil
 }
 
 var File_GatewayService_proto protoreflect.FileDescriptor
@@ -1379,20 +1403,23 @@ const file_GatewayService_proto_rawDesc = "" +
 	"\border_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aorderId\"m\n" +
 	"\x14OrderPoolSyncRequest\x12M\n" +
 	"\x04body\x18\x01 \x01(\v29.OpenBook.GatewayServicePackage.OrderPoolSyncRequest.BodyR\x04body\x1a\x06\n" +
-	"\x04Body\"\xb7\x04\n" +
+	"\x04Body\"\xd0\x05\n" +
 	"\x11OrderPoolSnapshot\x127\n" +
 	"\bslate_id\x18\x01 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aslateId\x12F\n" +
 	"\x10leg_security_ids\x18\x02 \x03(\v2\x1c.OpenBook.CommonPackage.UUIDR\x0elegSecurityIds\x12_\n" +
-	"\flineup_books\x18\x03 \x03(\v2<.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBookR\vlineupBooks\x1a\xbf\x02\n" +
+	"\flineup_books\x18\x03 \x03(\v2<.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBookR\vlineupBooks\x1a\xd8\x03\n" +
 	"\n" +
 	"LineupBook\x12\x17\n" +
 	"\ais_over\x18\x01 \x03(\bR\x06isOver\x12Z\n" +
-	"\x06levels\x18\x02 \x03(\v2B.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.LevelR\x06levels\x1a\xbb\x01\n" +
+	"\x06levels\x18\x02 \x03(\v2B.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.LevelR\x06levels\x1a\xd4\x02\n" +
 	"\x05Level\x12\x18\n" +
 	"\aportion\x18\x01 \x01(\x04R\aportion\x12`\n" +
-	"\x06orders\x18\x02 \x03(\v2H.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.OrderR\x06orders\x1a6\n" +
+	"\x06orders\x18\x02 \x03(\v2H.OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.OrderR\x06orders\x1a\xce\x01\n" +
 	"\x05Order\x12-\n" +
-	"\x12quantity_remaining\x18\x01 \x01(\x04R\x11quantityRemaining2\x8f\x01\n" +
+	"\x12quantity_remaining\x18\x01 \x01(\x04R\x11quantityRemaining\x127\n" +
+	"\border_id\x18\x02 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\aorderId\x12&\n" +
+	"\x0fclient_order_id\x18\x03 \x01(\x04R\rclientOrderId\x125\n" +
+	"\auser_id\x18\x04 \x01(\v2\x1c.OpenBook.CommonPackage.UUIDR\x06userId2\x8f\x01\n" +
 	"\x14GatewayServerService\x12w\n" +
 	"\x11CreateTradeStream\x12..OpenBook.GatewayServicePackage.BackendMessage\x1a..OpenBook.GatewayServicePackage.GatewayMessage(\x010\x01B\x1fZ\x1dOpenBook/GatewayService/protob\x06proto3"
 
@@ -1476,13 +1503,15 @@ var file_GatewayService_proto_depIdxs = []int32{
 	25, // 34: OpenBook.GatewayServicePackage.OrderElimination.Body.order_id:type_name -> OpenBook.CommonPackage.UUID
 	20, // 35: OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.levels:type_name -> OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level
 	21, // 36: OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.orders:type_name -> OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.Order
-	0,  // 37: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:input_type -> OpenBook.GatewayServicePackage.BackendMessage
-	1,  // 38: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:output_type -> OpenBook.GatewayServicePackage.GatewayMessage
-	38, // [38:39] is the sub-list for method output_type
-	37, // [37:38] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	25, // 37: OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.Order.order_id:type_name -> OpenBook.CommonPackage.UUID
+	25, // 38: OpenBook.GatewayServicePackage.OrderPoolSnapshot.LineupBook.Level.Order.user_id:type_name -> OpenBook.CommonPackage.UUID
+	0,  // 39: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:input_type -> OpenBook.GatewayServicePackage.BackendMessage
+	1,  // 40: OpenBook.GatewayServicePackage.GatewayServerService.CreateTradeStream:output_type -> OpenBook.GatewayServicePackage.GatewayMessage
+	40, // [40:41] is the sub-list for method output_type
+	39, // [39:40] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_GatewayService_proto_init() }

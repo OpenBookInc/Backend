@@ -121,7 +121,12 @@ message OrderPoolSyncRequest {
 message OrderPoolSnapshot {
   message LineupBook {
     message Level {
-      message Order { uint64 quantity_remaining = 1; }
+      message Order {
+        uint64 quantity_remaining = 1;
+        OpenBook.CommonPackage.UUID order_id = 2;
+        uint64 client_order_id = 3;
+        OpenBook.CommonPackage.UUID user_id = 4;
+      }
 
       uint64 portion = 1;
       repeated Order orders = 2;
