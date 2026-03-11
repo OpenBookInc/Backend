@@ -15,6 +15,7 @@ import (
 	decorator_nfl "github.com/openbook/population-scripts/decorator/nfl"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	persister_nfl "github.com/openbook/population-scripts/persister/nfl"
+	"github.com/openbook/shared/utils"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -58,7 +59,11 @@ func main() {
 
 	// Lookup game by database ID to get sportradar_id for API call
 	fmt.Println("\nLooking up game in database...")
-	game, err := dbStore.GetGameByID(ctx, cfg.NFLGameID)
+	gameUUID, err := utils.ParseUUID(cfg.NFLGameID)
+	if err != nil {
+		fatal("Failed to parse NFL game ID %s as UUID: %v", cfg.NFLGameID, err)
+	}
+	game, err := dbStore.GetGameByID(ctx, gameUUID)
 	if err != nil {
 		fatal("Failed to lookup game with id %s: %v\nEnsure the game exists in the database (run update_reference_data first)", cfg.NFLGameID, err)
 	}

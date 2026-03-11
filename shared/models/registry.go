@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/openbook/shared/models/gen"
+	"github.com/openbook/shared/utils"
 )
 
 // vendorLookupKey is used for reverse lookups: (entity_type, vendor, vendor_id) → entity_id
@@ -18,7 +19,7 @@ type vendorLookupKey struct {
 // entityVendorKey is used for forward lookups: (entity_type, entity_id, vendor) → vendor_id
 type entityVendorKey struct {
 	EntityType gen.Entity
-	EntityID   string
+	EntityID   utils.UUID
 	Vendor     gen.Vendor
 }
 
@@ -50,15 +51,15 @@ type ModelRegistry struct {
 	leaguesByID            map[int]*League
 	conferencesByID        map[int]*Conference
 	divisionsByID          map[int]*Division
-	teamsByID              map[string]*Team
-	individualsByID        map[string]*Individual
-	gamesByID              map[string]*Game
-	rostersByTeamID        map[string]*Roster
-	individualStatusesByIndividualID map[string]*IndividualStatus
+	teamsByID              map[utils.UUID]*Team
+	individualsByID        map[utils.UUID]*Individual
+	gamesByID              map[utils.UUID]*Game
+	rostersByTeamID        map[utils.UUID]*Roster
+	individualStatusesByIndividualID map[utils.UUID]*IndividualStatus
 
 	// Vendor ID maps for cross-referencing entities across vendors
-	vendorToEntityID map[vendorLookupKey]string // (entity_type, vendor, vendor_id) → entity_id
-	entityToVendorID map[entityVendorKey]string // (entity_type, entity_id, vendor) → vendor_id
+	vendorToEntityID map[vendorLookupKey]utils.UUID // (entity_type, vendor, vendor_id) → entity_id
+	entityToVendorID map[entityVendorKey]string     // (entity_type, entity_id, vendor) → vendor_id
 }
 
 // Registry is the global singleton for model instances.
@@ -70,12 +71,12 @@ func NewModelRegistry() *ModelRegistry {
 		leaguesByID:            make(map[int]*League),
 		conferencesByID:        make(map[int]*Conference),
 		divisionsByID:          make(map[int]*Division),
-		teamsByID:              make(map[string]*Team),
-		individualsByID:        make(map[string]*Individual),
-		gamesByID:              make(map[string]*Game),
-		rostersByTeamID:        make(map[string]*Roster),
-		individualStatusesByIndividualID: make(map[string]*IndividualStatus),
-		vendorToEntityID:       make(map[vendorLookupKey]string),
+		teamsByID:              make(map[utils.UUID]*Team),
+		individualsByID:        make(map[utils.UUID]*Individual),
+		gamesByID:              make(map[utils.UUID]*Game),
+		rostersByTeamID:        make(map[utils.UUID]*Roster),
+		individualStatusesByIndividualID: make(map[utils.UUID]*IndividualStatus),
+		vendorToEntityID:       make(map[vendorLookupKey]utils.UUID),
 		entityToVendorID:       make(map[entityVendorKey]string),
 	}
 }
@@ -97,12 +98,12 @@ func (r *ModelRegistry) Clear() {
 	r.leaguesByID = make(map[int]*League)
 	r.conferencesByID = make(map[int]*Conference)
 	r.divisionsByID = make(map[int]*Division)
-	r.teamsByID = make(map[string]*Team)
-	r.individualsByID = make(map[string]*Individual)
-	r.gamesByID = make(map[string]*Game)
-	r.rostersByTeamID = make(map[string]*Roster)
-	r.individualStatusesByIndividualID = make(map[string]*IndividualStatus)
-	r.vendorToEntityID = make(map[vendorLookupKey]string)
+	r.teamsByID = make(map[utils.UUID]*Team)
+	r.individualsByID = make(map[utils.UUID]*Individual)
+	r.gamesByID = make(map[utils.UUID]*Game)
+	r.rostersByTeamID = make(map[utils.UUID]*Roster)
+	r.individualStatusesByIndividualID = make(map[utils.UUID]*IndividualStatus)
+	r.vendorToEntityID = make(map[vendorLookupKey]utils.UUID)
 	r.entityToVendorID = make(map[entityVendorKey]string)
 }
 
@@ -192,7 +193,7 @@ func (r *ModelRegistry) RegisterDivision(division *Division) *Division {
 // =============================================================================
 
 // GetTeam returns a registered Team by database UUID, or nil if not found.
-func (r *ModelRegistry) GetTeam(id string) *Team {
+func (r *ModelRegistry) GetTeam(id utils.UUID) *Team {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.teamsByID[id]
@@ -203,7 +204,7 @@ func (r *ModelRegistry) GetTeam(id string) *Team {
 // Returns an error if SportradarID is empty.
 func (r *ModelRegistry) RegisterTeam(team *Team) (*Team, error) {
 	if team.SportradarID == "" {
-		return nil, fmt.Errorf("cannot register team %s: empty SportradarID", team.ID)
+		return nil, fmt.Errorf("cannot register team %s: empty SportradarID", team.ID.String())
 	}
 
 	r.mu.Lock()
@@ -225,7 +226,7 @@ func (r *ModelRegistry) RegisterTeam(team *Team) (*Team, error) {
 // =============================================================================
 
 // GetIndividual returns a registered Individual by database UUID, or nil if not found.
-func (r *ModelRegistry) GetIndividual(id string) *Individual {
+func (r *ModelRegistry) GetIndividual(id utils.UUID) *Individual {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.individualsByID[id]
@@ -236,7 +237,7 @@ func (r *ModelRegistry) GetIndividual(id string) *Individual {
 // Returns an error if SportradarID is empty.
 func (r *ModelRegistry) RegisterIndividual(individual *Individual) (*Individual, error) {
 	if individual.SportradarID == "" {
-		return nil, fmt.Errorf("cannot register individual %s: empty SportradarID", individual.ID)
+		return nil, fmt.Errorf("cannot register individual %s: empty SportradarID", individual.ID.String())
 	}
 
 	r.mu.Lock()
@@ -258,7 +259,7 @@ func (r *ModelRegistry) RegisterIndividual(individual *Individual) (*Individual,
 // =============================================================================
 
 // GetGame returns a registered Game by database UUID, or nil if not found.
-func (r *ModelRegistry) GetGame(id string) *Game {
+func (r *ModelRegistry) GetGame(id utils.UUID) *Game {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.gamesByID[id]
@@ -269,7 +270,7 @@ func (r *ModelRegistry) GetGame(id string) *Game {
 // Returns an error if SportradarID is empty.
 func (r *ModelRegistry) RegisterGame(game *Game) (*Game, error) {
 	if game.SportradarID == "" {
-		return nil, fmt.Errorf("cannot register game %s: empty SportradarID", game.ID)
+		return nil, fmt.Errorf("cannot register game %s: empty SportradarID", game.ID.String())
 	}
 
 	r.mu.Lock()
@@ -291,7 +292,7 @@ func (r *ModelRegistry) RegisterGame(game *Game) (*Game, error) {
 // =============================================================================
 
 // GetRoster returns a registered Roster by team UUID, or nil if not found.
-func (r *ModelRegistry) GetRoster(teamID string) *Roster {
+func (r *ModelRegistry) GetRoster(teamID utils.UUID) *Roster {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.rostersByTeamID[teamID]
@@ -318,7 +319,7 @@ func (r *ModelRegistry) RegisterRoster(roster *Roster) *Roster {
 // =============================================================================
 
 // GetIndividualStatus returns a registered IndividualStatus by individual UUID, or nil if not found.
-func (r *ModelRegistry) GetIndividualStatus(individualID string) *IndividualStatus {
+func (r *ModelRegistry) GetIndividualStatus(individualID utils.UUID) *IndividualStatus {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.individualStatusesByIndividualID[individualID]
@@ -345,20 +346,20 @@ func (r *ModelRegistry) RegisterIndividualStatus(status *IndividualStatus) *Indi
 // =============================================================================
 
 // registerVendorIDLocked adds a vendor ID mapping. Must be called with mu write-lock held.
-func (r *ModelRegistry) registerVendorIDLocked(entityType gen.Entity, entityID string, vendor gen.Vendor, vendorID string) {
+func (r *ModelRegistry) registerVendorIDLocked(entityType gen.Entity, entityID utils.UUID, vendor gen.Vendor, vendorID string) {
 	r.vendorToEntityID[vendorLookupKey{EntityType: entityType, Vendor: vendor, VendorID: vendorID}] = entityID
 	r.entityToVendorID[entityVendorKey{EntityType: entityType, EntityID: entityID, Vendor: vendor}] = vendorID
 }
 
 // RegisterVendorID adds a vendor ID mapping for an entity.
-func (r *ModelRegistry) RegisterVendorID(entityType gen.Entity, entityID string, vendor gen.Vendor, vendorID string) {
+func (r *ModelRegistry) RegisterVendorID(entityType gen.Entity, entityID utils.UUID, vendor gen.Vendor, vendorID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.registerVendorIDLocked(entityType, entityID, vendor, vendorID)
 }
 
-// GetEntityIDByVendorID returns the entity UUID for a given vendor ID, or empty string and false if not found.
-func (r *ModelRegistry) GetEntityIDByVendorID(entityType gen.Entity, vendor gen.Vendor, vendorID string) (string, bool) {
+// GetEntityIDByVendorID returns the entity UUID for a given vendor ID, or zero UUID and false if not found.
+func (r *ModelRegistry) GetEntityIDByVendorID(entityType gen.Entity, vendor gen.Vendor, vendorID string) (utils.UUID, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	id, ok := r.vendorToEntityID[vendorLookupKey{EntityType: entityType, Vendor: vendor, VendorID: vendorID}]
@@ -366,7 +367,7 @@ func (r *ModelRegistry) GetEntityIDByVendorID(entityType gen.Entity, vendor gen.
 }
 
 // GetVendorID returns the vendor ID for a given entity, or empty string and false if not found.
-func (r *ModelRegistry) GetVendorID(entityType gen.Entity, entityID string, vendor gen.Vendor) (string, bool) {
+func (r *ModelRegistry) GetVendorID(entityType gen.Entity, entityID utils.UUID, vendor gen.Vendor) (string, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	vid, ok := r.entityToVendorID[entityVendorKey{EntityType: entityType, EntityID: entityID, Vendor: vendor}]

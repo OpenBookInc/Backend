@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	models_nba "github.com/openbook/shared/models/nba"
+	"github.com/openbook/shared/utils"
 	"github.com/openbook/population-scripts/store"
 	"github.com/shopspring/decimal"
 )
@@ -123,7 +124,7 @@ func MarkNBABoxScoreDeleted(s *store.Store, ctx context.Context, tx pgx.Tx, game
 // Uses the registry for caching Game and Individual instances.
 // Only returns box scores where vendor_deleted = FALSE.
 // Returns a slice of IndividualBoxScore with player info and stats populated.
-func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID string) ([]*models_nba.IndividualBoxScore, error) {
+func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID utils.UUID) ([]*models_nba.IndividualBoxScore, error) {
 	// Get the game from registry (resolves teams automatically)
 	game, err := s.GetGameByID(ctx, gameID)
 	if err != nil {
@@ -152,7 +153,7 @@ func GetNBABoxScoresByGameID(s *store.Store, ctx context.Context, gameID string)
 	var results []*models_nba.IndividualBoxScore
 	for rows.Next() {
 		stats := &models_nba.NBAStats{}
-		var individualID string
+		var individualID utils.UUID
 
 		err := rows.Scan(
 			&individualID,

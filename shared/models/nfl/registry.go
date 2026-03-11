@@ -1,11 +1,15 @@
 package nfl
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/openbook/shared/utils"
+)
 
 // boxScoreKey is a composite key for NFL box scores (game_id, individual_id).
 type boxScoreKey struct {
-	GameID       string
-	IndividualID string
+	GameID       utils.UUID
+	IndividualID utils.UUID
 }
 
 // NFLRegistry provides thread-safe storage and retrieval of NFL-specific model instances.
@@ -40,7 +44,7 @@ func (r *NFLRegistry) Clear() {
 }
 
 // GetNFLStats returns a registered NFLStats by game and individual ID, or nil if not found.
-func (r *NFLRegistry) GetNFLStats(gameID, individualID string) *NFLStats {
+func (r *NFLRegistry) GetNFLStats(gameID, individualID utils.UUID) *NFLStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.nflStatsByKey[boxScoreKey{GameID: gameID, IndividualID: individualID}]

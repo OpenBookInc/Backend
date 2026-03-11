@@ -9,6 +9,7 @@ import (
 	"github.com/openbook/population-scripts/store"
 	store_nfl "github.com/openbook/population-scripts/store/nfl"
 	models_nfl "github.com/openbook/shared/models/nfl"
+	"github.com/openbook/shared/utils"
 	"github.com/shopspring/decimal"
 )
 
@@ -27,7 +28,7 @@ import (
 
 // playerStatsAccumulator holds running totals for a player's statistics
 type playerStatsAccumulator struct {
-	IndividualID        string
+	IndividualID        utils.UUID
 	PassingCompletions  decimal.Decimal
 	ReceivingReceptions decimal.Decimal
 	InterceptionsCaught decimal.Decimal
@@ -52,7 +53,7 @@ type playerStatsAccumulator struct {
 }
 
 // newPlayerStatsAccumulator creates a new accumulator initialized to zero values
-func newPlayerStatsAccumulator(individualID string) *playerStatsAccumulator {
+func newPlayerStatsAccumulator(individualID utils.UUID) *playerStatsAccumulator {
 	zero := decimal.NewFromInt(0)
 	return &playerStatsAccumulator{
 		IndividualID:        individualID,
@@ -96,7 +97,7 @@ func newPlayerStatsAccumulator(individualID string) *playerStatsAccumulator {
 // 3. Committing the transaction
 func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, data *reader_nfl.NFLPlayByPlayData) ([]*store_nfl.NFLBoxScoreForUpsert, error) {
 	// Step 1: Aggregate statistics by player
-	accumulators := make(map[string]*playerStatsAccumulator)
+	accumulators := make(map[utils.UUID]*playerStatsAccumulator)
 
 	for _, stat := range data.Statistics {
 		// Skip nullified statistics
@@ -145,7 +146,7 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, d
 	for _, acc := range accumulators {
 		boxScore := &store_nfl.NFLBoxScoreForUpsert{
 			GameID:              data.GameID,
-			IndividualID:        acc.IndividualID,
+			IndividualID:        acc.IndividualID.String(),
 			PassingCompletions:  acc.PassingCompletions,
 			ReceivingReceptions: acc.ReceivingReceptions,
 			InterceptionsCaught: acc.InterceptionsCaught,
@@ -181,7 +182,7 @@ func PersistNFLBoxScores(ctx context.Context, dbStore *store.Store, tx pgx.Tx, d
 // GetBoxScoreCount returns the number of box scores that would be generated
 // This is useful for printing summaries
 func GetBoxScoreCount(data *reader_nfl.NFLPlayByPlayData) int {
-	players := make(map[string]bool)
+	players := make(map[utils.UUID]bool)
 	for _, stat := range data.Statistics {
 		if !stat.Nullified {
 			players[stat.IndividualID] = true
@@ -210,9 +211,9 @@ func CheckAndUpdateNFLBoxScoreDeletions(ctx context.Context, dbStore *store.Stor
 
 	// Check each existing box score
 	for _, existing := range existingBoxScores {
-		if !upsertedIndividuals[existing.Individual.ID] {
+		if !upsertedIndividuals[existing.Individual.ID.String()] {
 			// This box score exists in the database but was not upserted - mark it as deleted
-			if err := store_nfl.MarkNFLBoxScoreDeleted(dbStore, ctx, tx, existing.Stats.Game.ID, existing.Individual.ID); err != nil {
+			if err := store_nfl.MarkNFLBoxScoreDeleted(dbStore, ctx, tx, existing.Stats.Game.ID.String(), existing.Individual.ID.String()); err != nil {
 				return fmt.Errorf("failed to mark box score as deleted (game_id: %s, individual_id: %s): %w", existing.Stats.Game.ID, existing.Individual.ID, err)
 			}
 		}

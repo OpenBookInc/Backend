@@ -6,11 +6,12 @@ import (
 
 	models "github.com/openbook/shared/models"
 	gen "github.com/openbook/shared/models/gen"
+	"github.com/openbook/shared/utils"
 )
 
 // IndividualStatusForUpsert contains the data needed to upsert an individual status
 type IndividualStatusForUpsert struct {
-	IndividualID string
+	IndividualID utils.UUID
 	Status       string // DB enum value as string (e.g., "active", "questionable")
 }
 
@@ -49,7 +50,7 @@ func (s *Store) UpsertIndividualStatus(ctx context.Context, status *IndividualSt
 
 // GetIndividualStatusByIndividualID retrieves an individual's status by individual_id.
 // Uses the registry for caching and resolves the nested Individual pointer.
-func (s *Store) GetIndividualStatusByIndividualID(ctx context.Context, individualID string) (*models.IndividualStatus, error) {
+func (s *Store) GetIndividualStatusByIndividualID(ctx context.Context, individualID utils.UUID) (*models.IndividualStatus, error) {
 	// Check registry first
 	if status := models.Registry.GetIndividualStatus(individualID); status != nil {
 		return status, nil

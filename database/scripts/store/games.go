@@ -7,13 +7,14 @@ import (
 
 	models "github.com/openbook/shared/models"
 	"github.com/openbook/shared/models/gen"
+	"github.com/openbook/shared/utils"
 )
 
 // GameForUpsert contains the data needed to upsert a game
 type GameForUpsert struct {
 	SportradarID       string
-	HomeTeamID         string
-	AwayTeamID         string
+	HomeTeamID         utils.UUID
+	AwayTeamID         utils.UUID
 	ScheduledStartTime time.Time
 }
 
@@ -32,7 +33,7 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 		RETURNING id
 	`
 
-	var id string
+	var id utils.UUID
 	err := s.pool.QueryRow(ctx, query,
 		game.HomeTeamID,
 		game.AwayTeamID,
@@ -69,7 +70,7 @@ func (s *Store) UpsertGame(ctx context.Context, game *GameForUpsert) error {
 
 // GetGameByID retrieves a game by database ID.
 // Uses the registry for caching and resolves the nested Team pointers.
-func (s *Store) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (s *Store) GetGameByID(ctx context.Context, gameID utils.UUID) (*models.Game, error) {
 	// Check registry first
 	if game := models.Registry.GetGame(gameID); game != nil {
 		return game, nil
@@ -157,7 +158,7 @@ func (s *Store) GetGameBySportradarID(ctx context.Context, sportradarID string) 
 
 // GetGameWithTeamsByID retrieves a game by database ID with TeamA and TeamB populated.
 // Delegates to GetGameByID which now automatically resolves team pointers via the registry.
-func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (s *Store) GetGameWithTeamsByID(ctx context.Context, gameID utils.UUID) (*models.Game, error) {
 	return s.GetGameByID(ctx, gameID)
 }
 
@@ -235,9 +236,9 @@ func (s *Store) GetGamesByLeagueAndDateRange(ctx context.Context, leagueName str
 	}
 	defer rows.Close()
 
-	var gameIDs []string
+	var gameIDs []utils.UUID
 	for rows.Next() {
-		var gameID string
+		var gameID utils.UUID
 		if err := rows.Scan(&gameID); err != nil {
 			return nil, fmt.Errorf("failed to scan game id: %w", err)
 		}
@@ -277,7 +278,7 @@ func (s *Store) GetGameByVendorID(ctx context.Context, vendor gen.Vendor, vendor
 		WHERE entity_type = $1 AND vendor = $2 AND vendor_id = $3
 	`
 
-	var entityID string
+	var entityID utils.UUID
 	err := s.pool.QueryRow(ctx, query, gen.EntityGame, vendor, vendorID).Scan(&entityID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find game with vendor_id %s (vendor=%s): %w", vendorID, vendor, err)

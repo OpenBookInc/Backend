@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	models_nba "github.com/openbook/shared/models/nba"
 	"github.com/openbook/population-scripts/store"
 	store_nba "github.com/openbook/population-scripts/store/nba"
+	models_nba "github.com/openbook/shared/models/nba"
+	"github.com/openbook/shared/utils"
 )
 
 // =============================================================================
@@ -26,7 +27,7 @@ import (
 // Fetches game info (with team details) and all player box scores.
 // The gameID is the database UUID, not the vendor UUID.
 // Returns all players in a flat list without roster validation.
-func ReadNBABoxScore(ctx context.Context, dbStore *store.Store, gameID string) (*models_nba.NBABoxScore, error) {
+func ReadNBABoxScore(ctx context.Context, dbStore *store.Store, gameID utils.UUID) (*models_nba.NBABoxScore, error) {
 	// Step 1: Get game with team information
 	game, err := dbStore.GetGameWithTeamsByID(ctx, gameID)
 	if err != nil {

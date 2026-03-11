@@ -12,6 +12,7 @@ import (
 	reader_nfl "github.com/openbook/population-scripts/reader/nfl"
 	"github.com/openbook/population-scripts/store"
 	store_nfl "github.com/openbook/population-scripts/store/nfl"
+	"github.com/openbook/shared/utils"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -71,7 +72,11 @@ func main() {
 
 	// Step 1: Get existing box scores before starting the transaction
 	fmt.Println("\nGetting existing box scores from database...")
-	existingBoxScores, err := store_nfl.GetNFLBoxScoresByGameID(dbStore, ctx, cfg.NFLGameID)
+	gameUUID, err := utils.ParseUUID(cfg.NFLGameID)
+	if err != nil {
+		fatal("Failed to parse NFL game ID %s as UUID: %v", cfg.NFLGameID, err)
+	}
+	existingBoxScores, err := store_nfl.GetNFLBoxScoresByGameID(dbStore, ctx, gameUUID)
 	if err != nil {
 		fatal("Failed to get existing box scores: %v", err)
 	}

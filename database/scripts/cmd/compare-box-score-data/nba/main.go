@@ -16,6 +16,7 @@ import (
 	reader_nba "github.com/openbook/population-scripts/reader/nba"
 	"github.com/openbook/population-scripts/store"
 	store_nba "github.com/openbook/population-scripts/store/nba"
+	"github.com/openbook/shared/utils"
 )
 
 // fatal prints an error message to stderr and exits with code 1
@@ -86,7 +87,11 @@ func main() {
 		fmt.Printf("\n[%d/%d] Comparing game ID %s...\n", i+1, len(gameIDs), gameID)
 
 		// Read database box score
-		dbBoxScore, err := reader_nba.ReadNBABoxScore(ctx, dbStore, gameID)
+		gameUUID, err := utils.ParseUUID(gameID)
+		if err != nil {
+			fatal("Failed to parse game ID %s as UUID: %v", gameID, err)
+		}
+		dbBoxScore, err := reader_nba.ReadNBABoxScore(ctx, dbStore, gameUUID)
 		if err != nil {
 			fatal("Failed to read database box score for game %s: %v", gameID, err)
 		}

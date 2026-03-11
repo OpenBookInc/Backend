@@ -7,6 +7,7 @@ import (
 
 	models "github.com/openbook/shared/models"
 	"github.com/openbook/shared/models/gen"
+	"github.com/openbook/shared/utils"
 )
 
 // IndividualForUpsert contains the data needed to upsert an individual
@@ -38,7 +39,7 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 		RETURNING id
 	`
 
-	var id string
+	var id utils.UUID
 	err := s.pool.QueryRow(ctx, query,
 		individual.DisplayName,
 		individual.AbbreviatedName,
@@ -73,7 +74,7 @@ func (s *Store) UpsertIndividual(ctx context.Context, individual *IndividualForU
 
 // GetIndividualByID retrieves an individual by database ID.
 // Uses the registry for caching and resolves the nested League pointer.
-func (s *Store) GetIndividualByID(ctx context.Context, id string) (*models.Individual, error) {
+func (s *Store) GetIndividualByID(ctx context.Context, id utils.UUID) (*models.Individual, error) {
 	// Check registry first
 	if individual := models.Registry.GetIndividual(id); individual != nil {
 		return individual, nil
@@ -216,7 +217,7 @@ func (s *Store) GetIndividualByVendorID(ctx context.Context, vendor gen.Vendor, 
 		WHERE entity_type = $1 AND vendor = $2 AND vendor_id = $3
 	`
 
-	var entityID string
+	var entityID utils.UUID
 	err := s.pool.QueryRow(ctx, query, gen.EntityIndividual, vendor, vendorID).Scan(&entityID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find individual with vendor_id %s (vendor=%s): %w", vendorID, vendor, err)

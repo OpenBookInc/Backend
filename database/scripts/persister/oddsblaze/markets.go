@@ -57,8 +57,8 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, marketEntity gen.
 			case gen.MarketEntityNbaMarket:
 				nbaProp := models_nba.PlayerProp(propType)
 				marketID, err = store_nba.UpsertNBAMarket(dbStore, ctx, &store_nba.NBAMarketForUpsert{
-					GameID:       game.ID,
-					IndividualID: individual.ID,
+					GameID:       game.ID.String(),
+					IndividualID: individual.ID.String(),
 					MarketType:   nbaProp,
 					MarketLine:   line,
 				})
@@ -68,8 +68,8 @@ func PersistMarkets(ctx context.Context, dbStore *store.Store, marketEntity gen.
 			case gen.MarketEntityNflMarket:
 				nflProp := models_nfl.PlayerProp(propType)
 				marketID, err = store_nfl.UpsertNFLMarket(dbStore, ctx, &store_nfl.NFLMarketForUpsert{
-					GameID:       game.ID,
-					IndividualID: individual.ID,
+					GameID:       game.ID.String(),
+					IndividualID: individual.ID.String(),
 					MarketType:   nflProp,
 					MarketLine:   line,
 				})

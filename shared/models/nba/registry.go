@@ -1,11 +1,15 @@
 package nba
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/openbook/shared/utils"
+)
 
 // boxScoreKey is a composite key for NBA box scores (game_id, individual_id).
 type boxScoreKey struct {
-	GameID       string
-	IndividualID string
+	GameID       utils.UUID
+	IndividualID utils.UUID
 }
 
 // NBARegistry provides thread-safe storage and retrieval of NBA-specific model instances.
@@ -40,7 +44,7 @@ func (r *NBARegistry) Clear() {
 }
 
 // GetNBAStats returns a registered NBAStats by game and individual ID, or nil if not found.
-func (r *NBARegistry) GetNBAStats(gameID, individualID string) *NBAStats {
+func (r *NBARegistry) GetNBAStats(gameID, individualID utils.UUID) *NBAStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.nbaStatsByKey[boxScoreKey{GameID: gameID, IndividualID: individualID}]

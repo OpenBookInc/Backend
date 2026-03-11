@@ -154,10 +154,10 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
 	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
-		if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+		if err := persister_nfl.PersistNFLPlayByPlay(ctx, dbStore, tx, game.ID.String(), playByPlay); err != nil {
 			return fmt.Errorf("failed to persist play-by-play: %w", err)
 		}
-		if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+		if err := persister_nfl.CheckAndUpdateNFLPlayByPlayDeletions(ctx, dbStore, tx, game.ID.String(), playByPlay); err != nil {
 			return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
 		}
 		return nil
@@ -168,7 +168,7 @@ func processNFLGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Read play-by-play data back for box score generation
 	fmt.Printf("  Reading play-by-play data for box score generation...\n")
-	pbpData, err := reader_nfl.ReadNFLPlayByPlay(ctx, dbStore, game.ID)
+	pbpData, err := reader_nfl.ReadNFLPlayByPlay(ctx, dbStore, game.ID.String())
 	if err != nil {
 		return fmt.Errorf("failed to read play-by-play: %w", err)
 	}
@@ -259,10 +259,10 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 	// Persist play-by-play data in a transaction
 	fmt.Printf("  Persisting play-by-play data...\n")
 	err = common.WithTransaction(ctx, dbStore, func(tx pgx.Tx) error {
-		if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+		if err := persister_nba.PersistNBAPlayByPlay(ctx, dbStore, tx, game.ID.String(), playByPlay); err != nil {
 			return fmt.Errorf("failed to persist play-by-play: %w", err)
 		}
-		if err := persister_nba.CheckAndUpdateNBAPlayByPlayDeletions(ctx, dbStore, tx, game.ID, playByPlay); err != nil {
+		if err := persister_nba.CheckAndUpdateNBAPlayByPlayDeletions(ctx, dbStore, tx, game.ID.String(), playByPlay); err != nil {
 			return fmt.Errorf("failed to check and update play-by-play deletions: %w", err)
 		}
 		return nil
@@ -273,7 +273,7 @@ func processNBAGame(ctx context.Context, dbStore *store.Store, apiClient *sportr
 
 	// Read play-by-play data back for box score generation
 	fmt.Printf("  Reading play-by-play data for box score generation...\n")
-	pbpData, err := reader_nba.ReadNBAPlayByPlay(ctx, dbStore, game.ID)
+	pbpData, err := reader_nba.ReadNBAPlayByPlay(ctx, dbStore, game.ID.String())
 	if err != nil {
 		return fmt.Errorf("failed to read play-by-play: %w", err)
 	}

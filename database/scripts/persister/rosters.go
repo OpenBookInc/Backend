@@ -8,6 +8,7 @@ import (
 	fetcher_nba "github.com/openbook/population-scripts/fetcher/nba"
 	fetcher_nfl "github.com/openbook/population-scripts/fetcher/nfl"
 	"github.com/openbook/population-scripts/store"
+	"github.com/openbook/shared/utils"
 )
 
 // PersistNFLRostersAndIndividuals persists all NFL individuals and rosters from roster responses.
@@ -28,7 +29,7 @@ func PersistNFLRostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		fmt.Printf("  Processing players for %s %s (%d players)...\n",
 			team.Market, team.Name, len(roster.Players))
 
-		var individualIDs []string
+		var individualIDs []utils.UUID
 		teamNewCount := 0
 		for i, player := range roster.Players {
 			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{
@@ -83,7 +84,7 @@ func PersistNBARostersAndIndividuals(ctx context.Context, dbStore *store.Store, 
 		fmt.Printf("  Processing players for %s %s (%d players)...\n",
 			team.Market, team.Name, len(roster.Players))
 
-		var individualIDs []string
+		var individualIDs []utils.UUID
 		teamNewCount := 0
 		for i, player := range roster.Players {
 			individual, fetched, err := UpsertIndividualIfMissingOrInvalid(ctx, dbStore, apiClient, player.ID, leagueName, RosterPlayerData{

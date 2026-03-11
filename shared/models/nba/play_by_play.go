@@ -1,6 +1,7 @@
 package nba
 
 import (
+	"github.com/openbook/shared/utils"
 	"github.com/shopspring/decimal"
 )
 
@@ -17,7 +18,7 @@ import (
 type PlayStatistic struct {
 	ID                     int             // Database ID (auto-increment)
 	PlayID                 int             // Foreign key to nba_plays table
-	IndividualID           string          // Foreign key to individuals table
+	IndividualID           utils.UUID      // Foreign key to individuals table
 	StatType               string          // Type of statistic (nba_stat_type enum)
 	TwoPointAttempts       decimal.Decimal // Two-point field goal attempts
 	TwoPointMakes          decimal.Decimal // Two-point field goals made

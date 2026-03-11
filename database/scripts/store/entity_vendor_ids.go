@@ -6,12 +6,13 @@ import (
 
 	models "github.com/openbook/shared/models"
 	"github.com/openbook/shared/models/gen"
+	"github.com/openbook/shared/utils"
 )
 
 // EntityVendorIDForUpsert contains the data needed to upsert an entity vendor ID mapping
 type EntityVendorIDForUpsert struct {
 	EntityType gen.Entity
-	EntityID   string
+	EntityID   utils.UUID
 	Vendor     gen.Vendor
 	VendorID   string
 }
@@ -55,7 +56,7 @@ func (s *Store) LoadEntityVendorIDs(ctx context.Context) (int, error) {
 	count := 0
 	for rows.Next() {
 		var entityType gen.Entity
-		var entityID string
+		var entityID utils.UUID
 		var vendor gen.Vendor
 		var vendorID string
 

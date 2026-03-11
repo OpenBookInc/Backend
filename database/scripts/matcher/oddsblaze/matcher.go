@@ -10,6 +10,7 @@ import (
 	reducer_oddsblaze "github.com/openbook/population-scripts/reducer/oddsblaze"
 	"github.com/openbook/population-scripts/store"
 	models "github.com/openbook/shared/models"
+	"github.com/openbook/shared/utils"
 )
 
 // MatchedTeam pairs an OddsBlaze team ID with the corresponding database team
@@ -39,14 +40,14 @@ type MatchedEntities struct {
 
 // gameKey is used to look up games by the team pair and scheduled start time
 type gameKey struct {
-	TeamIDA            string
-	TeamIDB            string
+	TeamIDA            utils.UUID
+	TeamIDB            utils.UUID
 	ScheduledStartTime time.Time
 }
 
 // makeGameKey creates a normalized game key with sorted team IDs so order doesn't matter
-func makeGameKey(teamIDA, teamIDB string, scheduledStartTime time.Time) gameKey {
-	if teamIDA > teamIDB {
+func makeGameKey(teamIDA, teamIDB utils.UUID, scheduledStartTime time.Time) gameKey {
+	if teamIDA.String() > teamIDB.String() {
 		teamIDA, teamIDB = teamIDB, teamIDA
 	}
 	return gameKey{
@@ -129,7 +130,7 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 	}
 
 	// Build individual ID → individual map
-	individualByID := make(map[string]*models.Individual, len(dbIndividuals))
+	individualByID := make(map[utils.UUID]*models.Individual, len(dbIndividuals))
 	for _, ind := range dbIndividuals {
 		individualByID[ind.ID] = ind
 	}
@@ -141,7 +142,7 @@ func matchIndividuals(ctx context.Context, dbStore *store.Store, leagueName stri
 	}
 
 	// Build per-team roster: team_id → []*Individual
-	teamRoster := make(map[string][]*models.Individual)
+	teamRoster := make(map[utils.UUID][]*models.Individual)
 	for _, roster := range rosters {
 		for _, individualID := range roster.IndividualIDs {
 			ind, ok := individualByID[individualID]
@@ -225,7 +226,7 @@ func matchGames(ctx context.Context, dbStore *store.Store, leagueName string, re
 		if !ok {
 			// Build a helpful error message showing available games for the same team pair
 			teamIDA, teamIDB := homeTeam.ID, awayTeam.ID
-			if teamIDA > teamIDB {
+			if teamIDA.String() > teamIDB.String() {
 				teamIDA, teamIDB = teamIDB, teamIDA
 			}
 			var availableTimes []string

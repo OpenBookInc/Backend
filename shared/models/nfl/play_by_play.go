@@ -5,6 +5,7 @@ import (
 
 	genEnums "github.com/openbook/shared/models/gen"
 	genNfl "github.com/openbook/shared/models/gen/nfl"
+	"github.com/openbook/shared/utils"
 	"github.com/shopspring/decimal"
 )
 
@@ -32,10 +33,10 @@ type GameStatusType = genEnums.GameStatus
 // Drive represents a drive in an NFL game (database entity)
 type Drive struct {
 	ID               int             // Database ID (auto-increment)
-	GameID           string          // Foreign key to games table
+	GameID           utils.UUID      // Foreign key to games table
 	SportradarID     string          // Sportradar drive UUID
 	VendorSequence   decimal.Decimal // Drive sequence for ordering
-	PossessionTeamID string          // Foreign key to teams table
+	PossessionTeamID utils.UUID      // Foreign key to teams table
 	CreatedAt        time.Time       // Record creation time
 	UpdatedAt        time.Time       // Record update time
 }
@@ -60,7 +61,7 @@ type Play struct {
 type PlayStatistic struct {
 	ID                  int             // Database ID (auto-increment)
 	PlayID              int             // Foreign key to nfl_plays table
-	IndividualID        string          // Foreign key to individuals table
+	IndividualID        utils.UUID      // Foreign key to individuals table
 	StatType            StatType        // Type of statistic
 	PassingAttempts     decimal.Decimal // Passing attempts
 	RushingAttempts     decimal.Decimal // Rushing attempts
@@ -88,7 +89,7 @@ type PlayStatistic struct {
 
 // GameStatus represents the status of a game (database entity)
 type GameStatus struct {
-	GameID    string              // Primary key, foreign key to games table
+	GameID    utils.UUID          // Primary key, foreign key to games table
 	Status    genEnums.GameStatus // Current game status
 	UpdatedAt time.Time           // Last update time
 }

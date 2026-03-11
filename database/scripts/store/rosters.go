@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	models "github.com/openbook/shared/models"
+	"github.com/openbook/shared/utils"
 )
 
 // RosterForUpsert contains the data needed to upsert a roster
 type RosterForUpsert struct {
-	TeamID        string
-	IndividualIDs []string
+	TeamID        utils.UUID
+	IndividualIDs []utils.UUID
 }
 
 // UpsertRoster inserts or updates a roster in the database.
@@ -83,7 +84,7 @@ func (s *Store) GetRostersByLeague(ctx context.Context, leagueName string) ([]*m
 
 // GetRosterByTeamID retrieves a roster by team_id.
 // Uses the registry for caching and resolves nested Team and Players pointers.
-func (s *Store) GetRosterByTeamID(ctx context.Context, teamID string) (*models.Roster, error) {
+func (s *Store) GetRosterByTeamID(ctx context.Context, teamID utils.UUID) (*models.Roster, error) {
 	// Check registry first
 	if roster := models.Registry.GetRoster(teamID); roster != nil {
 		return roster, nil
