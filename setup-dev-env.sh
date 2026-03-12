@@ -457,9 +457,8 @@ main() {
     echo ""
     echo "Next steps:"
     echo "  1. Ensure all tools are in your PATH"
-    echo "  2. Run 'go mod download' in Go module directories"
-    echo "  3. Run 'cargo fetch' in Rust project directories"
-    echo "  4. Run 'make codegen' in matching-clients to generate protobuf code"
+    echo "  2. Run 'go mod download' from the repo root to fetch Go dependencies (uses go.work)"
+    echo "  3. Run 'cd matching_server && cargo fetch' to fetch Rust dependencies"
     echo ""
 }
 
